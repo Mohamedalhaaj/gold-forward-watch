@@ -1,0 +1,85 @@
+# Cloud runner for the two pre-registered forward watches (replaces the macOS LaunchAgents
+# com.xauusd.forwardwick and com.xauusd.forwarddoubletop). This job is the only writer of the ledgers.
+# The tracker scripts are byte-identical copies of xauusd-quant HEAD e7ec199; see README.md for the hashes.
+name: forward-watch
+
+on:
+  # Same times as the old LaunchAgents, Africa/Tripoli (UTC+2, no DST) converted to UTC.
+  # Left off until the Mac agents are disabled, so the ledgers never have two writers.
+  # schedule:
+  #   - cron: "45 23 * * *"   # 01:45 Tripoli: records the day that just closed
+  #   - cron: "15 10 * * *"   # 12:15 Tripoli
+  #   - cron: "15 16 * * *"   # 18:15 Tripoli
+  workflow_dispatch:
+
+concurrency:
+  group: forward-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 940e834eb44c1584e99e270ab7a8df00
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # Wick first: the double-top tracker reads its ledger for the dashboard's wick card.
+      - name: Wick tracker
+        id: wick
+        continue-on-error: true
+        run: |
+          for i in 1 2 3; do
+            uv run --frozen --with matplotlib python -I analysis/forward_wick_tracker.py && exit 0
+            echo "attempt $i failed"; sleep 90
+          done
+          exit 1
+
+      - name: Double-top tracker
+        run: |
+          for i in 1 2 3; do
+            uv run --frozen python -I analysis/forward_doubletop_tracker.py && exit 0
+            echo "attempt $i failed"; sleep 90
+          done
+          exit 1
+
+      - name: Deploy dashboard
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@4.151.1 deploy --config reports/forward_deploy/wrangler.jsonc
+
+      - name: Commit ledgers and raw fetches
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "forward-watch run $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull -q --rebase && git push -q
+          fi
+          # The old agents uninstalled themselves after their verdicts; this does the same.
+          if { [ -f reports/forward_doubletop/VERDICT.md ] && [ -f reports/forward_wick/VERDICT.md ]; } \
+             || [ "$(date -u +%F)" \> "2026-12-15" ]; then
+            gh workflow disable forward-watch.yml
+          fi
+
+      - name: Fail the run if the wick tracker failed
+        if: ${{ steps.wick.outcome == 'failure' }}
+        run: exit 1

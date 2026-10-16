@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="color-scheme" content="dark light">
+<title>مراقبة القمة المزدوجة</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23151514'/%3E%3Cpath d='M5 23 L11 9 L16 17 L21 9 L27 23' fill='none' stroke='%23d9a43b' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0f0f0e;
+  --panel: #151514;
+  --panel-2: #1b1b19;
+  --line: #2a2a27;
+  --line-strong: #3a3a36;
+  --ink: #efece4;
+  --ink-2: #b9b5a8;
+  --ink-3: #8f8b80;
+  --gold: #d9a43b;
+  --gold-ink: #e6b85c;
+  --m15: #b9852a;
+  --m30: #5b8def;
+  --up: #26a69a;
+  --down: #ef5350;
+  --neutral: #383835;
+  --good: #0ca30c;
+  --critical: #e66767;
+  --wash: rgba(217, 164, 59, 0.10);
+  --shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 12px 32px -18px rgba(0,0,0,0.9);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --page: #f3f1eb; --panel: #fbfaf7; --panel-2: #f5f3ee; --line: #e3e0d6; --line-strong: #cfcbbf;
+    --ink: #141412; --ink-2: #4f4c45; --ink-3: #6c685f; --gold: #9a6b12; --gold-ink: #7d560c;
+    --m15: #9a6b12; --m30: #2a6fdb; --up: #00876a; --down: #d43c3a; --neutral: #e3e0d6;
+    --good: #006300; --critical: #c0392b; --wash: rgba(154, 107, 18, 0.08);
+    --shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 28px -20px rgba(40,30,10,0.35);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f3f1eb; --panel: #fbfaf7; --panel-2: #f5f3ee; --line: #e3e0d6; --line-strong: #cfcbbf;
+  --ink: #141412; --ink-2: #4f4c45; --ink-3: #6c685f; --gold: #9a6b12; --gold-ink: #7d560c;
+  --m15: #9a6b12; --m30: #2a6fdb; --up: #00876a; --down: #d43c3a; --neutral: #e3e0d6;
+  --good: #006300; --critical: #c0392b; --wash: rgba(154, 107, 18, 0.08);
+  --shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 28px -20px rgba(40,30,10,0.35);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font-family: "Plex Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px; line-height: 1.6;
+}
+::selection { background: var(--gold); color: #111; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
+* { scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+.num { font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; display: inline-block; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px 64px; }
+
+header.top {
+  display: flex; align-items: center; gap: 14px; justify-content: space-between;
+  padding: 22px 0 18px; border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand svg { flex: none; }
+.brand h1 { margin: 0; font-size: 1.32rem; font-weight: 700; letter-spacing: 0; line-height: 1.25; text-wrap: balance; }
+.brand p { margin: 2px 0 0; color: var(--ink-2); font-size: 0.86rem; }
+.iconbtn {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s;
+}
+.iconbtn:hover { color: var(--ink); border-color: var(--line-strong); }
+
+.lede { display: grid; gap: 18px; padding: 26px 0 10px; }
+.verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 11px; border-radius: 999px;
+  font-weight: 600; font-size: 0.88rem; border: 1px solid var(--line-strong); background: var(--panel);
+}
+.chip svg { width: 15px; height: 15px; }
+.chip[data-s="PASS"] { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.chip[data-s="FAIL"] { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 45%, var(--line)); }
+.chip[data-s="PENDING"] { color: var(--gold-ink); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
+.summary { margin: 0; font-size: 1.12rem; line-height: 1.7; max-width: 68ch; color: var(--ink); text-wrap: pretty; }
+.summary b { font-weight: 700; }
+
+.track { direction: ltr; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; }
+.day {
+  position: relative; height: 44px; border-radius: 6px; background: transparent;
+  border: 1px dashed var(--line-strong); cursor: default; padding: 0;
+  transform-origin: bottom; animation: settle .55s cubic-bezier(.16,1,.3,1) both;
+  animation-delay: calc(var(--i) * 22ms);
+}
+.day[data-k="up"] { background: var(--up); border: 0; }
+.day[data-k="down"] { background: var(--down); border: 0; }
+.day[data-k="flat"] { background: var(--neutral); border: 0; }
+.day:hover, .day:focus-visible { filter: brightness(1.12); }
+.track-axis { direction: ltr; display: flex; justify-content: space-between; color: var(--ink-3); font-size: 0.78rem; margin-top: 6px; }
+@keyframes settle { from { opacity: 0; transform: scaleY(.35); } to { opacity: 1; transform: none; } }
+
+section.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 20px 20px 18px; margin-top: 18px;
+}
+.panel h2 { margin: 0 0 4px; font-size: 1.04rem; font-weight: 700; }
+.panel .sub { margin: 0 0 14px; color: var(--ink-2); font-size: 0.86rem; max-width: 70ch; }
+.grid2 { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+.grid2 > * { min-width: 0; }
+@media (min-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--ink-3); font-weight: 500; font-size: 0.8rem; }
+tbody tr:last-child td { border-bottom: 0; }
+td.tn { font-variant-numeric: tabular-nums; direction: ltr; text-align: right; }
+td.pos { color: var(--up); font-weight: 600; }
+td.neg { color: var(--down); font-weight: 600; }
+.cmp td:first-child { color: var(--ink-2); white-space: normal; }
+.cmp td.now { font-weight: 700; color: var(--ink); }
+.scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.76rem; border: 1px solid var(--line-strong); color: var(--ink-2); }
+.badge.open { color: var(--gold-ink); border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+
+.chart { position: relative; direction: ltr; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; color: var(--ink-2); font-size: 0.84rem; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { width: 18px; height: 0; border-top: 2px solid; display: inline-block; }
+.legend i.dash { border-top-style: dashed; }
+.legend i.box { width: 11px; height: 11px; border: 0; border-radius: 3px; }
+.tip {
+  position: absolute; pointer-events: none; z-index: 5; min-width: 150px; direction: rtl;
+  background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 10px; padding: 9px 11px;
+  box-shadow: 0 14px 30px -14px rgba(0,0,0,.7); font-size: 0.84rem; opacity: 0; transform: translateY(4px);
+  transition: opacity .15s, transform .15s;
+}
+.tip.on { opacity: 1; transform: none; }
+.tip .t { color: var(--ink-3); font-size: 0.78rem; margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.tip .r b { font-weight: 700; }
+.tip .k { width: 14px; border-top: 2px solid; display: inline-block; }
+.empty { color: var(--ink-3); font-size: 0.9rem; padding: 26px 0; text-align: center; border: 1px dashed var(--line-strong); border-radius: 10px; }
+.mini { direction: ltr; display: grid; grid-template-columns: repeat(20, minmax(0,1fr)); gap: 3px; margin-top: 12px; }
+.mini i { height: 16px; border-radius: 4px; border: 1px dashed var(--line-strong); }
+.mini i[data-k="up"] { background: var(--up); border: 0; }
+.mini i[data-k="down"] { background: var(--down); border: 0; }
+.mini i[data-k="none"] { background: var(--neutral); border: 0; }
+footer { margin-top: 26px; color: var(--ink-3); font-size: 0.82rem; line-height: 1.8; max-width: 78ch; }
+footer code { font-size: 0.8rem; color: var(--ink-2); }
+.err { color: var(--critical); }
+.more { margin-top: 12px; background: transparent; color: var(--gold-ink); border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 0.88rem; cursor: pointer; }
+.more:hover { background: var(--wash); }
+@media (max-width: 560px) {
+  .brand h1 { font-size: 1.08rem; }
+  .brand svg { width: 34px; height: 34px; }
+  header.top { padding-top: 16px; }
+  .day { height: 34px; border-radius: 4px; }
+  .track { gap: 3px; }
+  section.panel { padding: 16px 14px; }
+  .summary { font-size: 1.02rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .day { animation: none; }
+  .tip { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--panel)" stroke="var(--line)"/><path d="M5 23 L11 9 L16 17 L21 9 L27 23" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>
+        <h1>مراقبة حيّة: بيع القمة المزدوجة على الذهب</h1>
+        <p id="meta">جارٍ التحميل…</p>
+      </div>
+    </div>
+    <button class="iconbtn" id="theme" type="button" aria-label="تبديل الوضع الفاتح والداكن">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+    </button>
+  </header>
+
+  <div class="lede">
+    <div class="verdict">
+      <span class="chip" id="chip" data-s="PENDING"></span>
+      <span id="dayof" class="num" style="color:var(--ink-2)"></span>
+    </div>
+    <p class="summary" id="summary"></p>
+    <div>
+      <div class="track" id="track" role="list" aria-label="الأيام العشرون للمراقبة"></div>
+      <div class="track-axis"><span id="ax0"></span><span id="ax1"></span></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <section class="panel" aria-labelledby="h-cum">
+      <h2 id="h-cum">الربح التراكمي</h2>
+      <p class="sub">دولار للأونصة بعد التكلفة، أونصة واحدة لكل صفقة. الخط المتقطع هو ما توقعته نتائج 2026 لنفس عدد الأيام.</p>
+      <div class="legend" id="lg-cum"></div>
+      <div class="chart" id="c-cum"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-cmp">
+      <h2 id="h-cmp">الآن مقابل المتوقع</h2>
+      <p class="sub">المتوقع مأخوذ من نتائج 2026 (يناير–أكتوبر). هذه نتائج داخل العينة، لذلك يُتوقَّع أن تأتي الأرقام الحية أضعف منها.</p>
+      <div class="scroll"><table class="cmp" id="cmp"></table></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-day">
+    <h2 id="h-day">ربح وخسارة كل يوم (M15)</h2>
+    <p class="sub">كل عمود يوم تداول. أخضر = يوم رابح، أحمر = يوم خاسر.</p>
+    <div class="chart" id="c-day"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-tr">
+    <h2 id="h-tr">الصفقات</h2>
+    <p class="sub">الدخول بيعًا بأمر معلّق عند منطقة القمة الأولى، والوقف فوق القمة بمقدار <span class="num">1 ATR</span>، والهدف <span class="num">1 ATR</span>، مع إغلاق إجباري الساعة 23:30. كل الأوقات بتوقيت سيرفر MT5 (نيويورك + 7 ساعات).</p>
+    <div class="scroll"><table id="trades"></table></div>
+    <button class="more" id="more" type="button" hidden></button>
+  </section>
+
+  <section class="panel" aria-labelledby="h-wick">
+    <h2 id="h-wick">مراقبة قاعدة ذيل ساعة الأخبار</h2>
+    <p class="sub">المراقبة الثانية الجارية: هل يتبع الذيلَ السفلي على شمعة الساعة 15:00 ارتفاعٌ حتى الإغلاق؟ 20 يوم تداول بدأت في 16 أكتوبر.</p>
+    <p id="wick-sum" style="margin:0"></p>
+    <div class="mini" id="wick-mini"></div>
+  </section>
+
+  <footer id="foot">
+    القواعد مجمّدة في git قبل أول يوم مراقبة (commit <code>e2a1012</code>)، ولا يُعدَّل شيء بعدها. البيانات: عقود الذهب الآجلة GC=F بفاصل 15 دقيقة. هذه صفحة بحث وليست توصية تداول. القرار النهائي بعد اليوم العشرين: ناجح إذا كان متوسط اليوم موجبًا بثقة إحصائية (p أقل من 0.10) و50% على الأقل من أيام التداول رابحة.
+  </footer>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const fmtMoney = (v, d = 2) => (v > 0 ? "+" : v < 0 ? "−" : "") + "$" + Math.abs(v).toFixed(d);
+  const fmtPct = (v) => v == null ? "—" : Math.round(v * 100) + "%";
+  const dayFmt = new Intl.DateTimeFormat("ar-LY-u-nu-latn", { day: "numeric", month: "short", timeZone: "UTC" });
+  const longFmt = new Intl.DateTimeFormat("ar-LY-u-nu-latn", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  const d0 = (s) => new Date(s + "T00:00:00Z");
+  const plural = (n, one, two, few, many) => n === 1 ? one : n === 2 ? two : n >= 3 && n <= 10 ? `${n} ${few}` : `${n} ${many}`;
+  const daysAr = (n) => plural(n, "يوم واحد", "يومين", "أيام", "يومًا");
+  const tradesAr = (n) => n === 0 ? "بلا صفقات" : plural(n, "صفقة واحدة", "صفقتين", "صفقات", "صفقة");
+  const el = (tag, attrs = {}, text) => {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const NS = "http://www.w3.org/2000/svg";
+  const sv = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+
+  // theme toggle (per-viewer convenience only)
+  const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("theme").addEventListener("click", () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    const next = cur === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("theme", next); } catch {}
+    if (window.__data) renderCharts(window.__data);
+  });
+
+  function tradingDays(start, n) {
+    const out = []; const d = d0(start);
+    while (out.length < n) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) out.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); }
+    return out;
+  }
+
+  function tipAt(box, tip, x, y) {
+    const r = box.getBoundingClientRect(); const tw = tip.offsetWidth; const th = tip.offsetHeight;
+    let left = x + 14; if (left + tw > r.width) left = x - tw - 14; if (left < 0) left = 0;
+    tip.style.left = left + "px"; tip.style.top = Math.max(0, y - th - 10) + "px"; tip.classList.add("on");
+  }
+
+  function niceTicks(min, max, count = 4) {
+    if (min === max) { min -= 1; max += 1; }
+    const span = max - min, step0 = span / count, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0);
+    const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step, t = [];
+    for (let v = lo; v <= hi + 1e-9; v += step) t.push(+v.toFixed(6));
+    return t;
+  }
+
+  function lineChart(box, days, series, legendEl) {
+    box.replaceChildren(); legendEl.replaceChildren();
+    for (const s of series) {
+      const sp = el("span"); const i = el("i"); if (s.dash) i.className = "dash"; i.style.borderTopColor = s.color;
+      sp.append(i, document.createTextNode(s.name)); legendEl.append(sp);
+    }
+    const n = days.length;
+    if (!n) { box.append(el("div", { class: "empty" }, "لا توجد أيام مكتملة بعد — تبدأ المراقبة الاثنين 19 أكتوبر.")); return; }
+    const W = Math.max(260, box.clientWidth), H = Math.round(Math.min(320, Math.max(220, W * 0.42)));
+    const m = { l: 48, r: 64, t: 12, b: 26 };
+    const all = series.flatMap(s => s.values).concat([0]);
+    const ticks = niceTicks(Math.min(...all), Math.max(...all));
+    const y0 = ticks[0], y1 = ticks[ticks.length - 1];
+    const X = (i) => m.l + (n === 1 ? (W - m.l - m.r) / 2 : i * (W - m.l - m.r) / (n - 1));
+    const Y = (v) => m.t + (1 - (v - y0) / (y1 - y0)) * (H - m.t - m.b);
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "الربح التراكمي يوميًا" });
+    for (const t of ticks) {
+      svg.append(sv("line", { x1: m.l, x2: W - m.r, y1: Y(t), y2: Y(t), stroke: t === 0 ? css("--line-strong") : css("--line"), "stroke-width": 1 }));
+      const tx = sv("text", { x: m.l - 8, y: Y(t) + 4, "text-anchor": "end", fill: css("--ink-3"), "font-size": 11, "font-variant-numeric": "tabular-nums" });
+      tx.textContent = (t > 0 ? "+" : "") + t; svg.append(tx);
+    }
+    const lab = [0, n - 1].filter((v, i, a) => a.indexOf(v) === i);
+    for (const i of lab) { const tx = sv("text", { x: X(i), y: H - 6, "text-anchor": i === 0 ? "start" : "end", fill: css("--ink-3"), "font-size": 11 }); tx.textContent = dayFmt.format(d0(days[i])); svg.append(tx); }
+    for (const s of series) {
+      const d = s.values.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+      svg.append(sv("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-dasharray": s.dash ? "5 5" : "none", opacity: s.dash ? 0.8 : 1 }));
+      const last = s.values[n - 1];
+      if (!s.dash) svg.append(sv("circle", { cx: X(n - 1), cy: Y(last), r: 4, fill: s.color, stroke: css("--panel"), "stroke-width": 2 }));
+      const tx = sv("text", { x: X(n - 1) + 8, y: Y(last) + 4, fill: css("--ink-2"), "font-size": 11, "font-weight": 600 });
+      tx.textContent = (last > 0 ? "+" : "") + last.toFixed(0); svg.append(tx);
+    }
+    const cross = sv("line", { y1: m.t, y2: H - m.b, stroke: css("--line-strong"), "stroke-width": 1, opacity: 0 });
+    svg.append(cross);
+    const tip = el("div", { class: "tip", role: "status" });
+    const hit = sv("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent", tabindex: 0 });
+    const show = (i, px, py) => {
+      cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("opacity", 1);
+      tip.replaceChildren(el("div", { class: "t" }, longFmt.format(d0(days[i]))));
+      for (const s of series) {
+        const r = el("div", { class: "r" }); const k = el("span", { class: "k" }); k.style.borderTopColor = s.color; if (s.dash) k.style.borderTopStyle = "dashed";
+        const name = el("span"); name.append(k, document.createTextNode(" " + s.name));
+        r.append(el("b", { class: "num" }, fmtMoney(s.values[i], 0)), name); tip.append(r);
+      }
+      tipAt(box, tip, px, py);
+    };
+    let focusI = n - 1;
+    hit.addEventListener("pointermove", (e) => { const r = svg.getBoundingClientRect(); const sx = (e.clientX - r.left) * W / r.width; const i = Math.max(0, Math.min(n - 1, Math.round((sx - m.l) / ((W - m.l - m.r) / Math.max(1, n - 1))))); show(i, X(i) * r.width / W, (e.clientY - r.top)); });
+    hit.addEventListener("pointerleave", () => { tip.classList.remove("on"); cross.setAttribute("opacity", 0); });
+    hit.addEventListener("focus", () => { const r = svg.getBoundingClientRect(); show(focusI, X(focusI) * r.width / W, 40); });
+    hit.addEventListener("blur", () => { tip.classList.remove("on"); cross.setAttribute("opacity", 0); });
+    hit.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { focusI = Math.max(0, Math.min(n - 1, focusI + (e.key === "ArrowRight" ? 1 : -1))); const r = svg.getBoundingClientRect(); show(focusI, X(focusI) * r.width / W, 40); e.preventDefault(); } });
+    svg.append(hit); box.append(svg, tip);
+  }
+
+  function barChart(box, rows) {
+    box.replaceChildren();
+    if (!rows.length) { box.append(el("div", { class: "empty" }, "ستظهر الأعمدة بعد أول يوم تداول مكتمل.")); return; }
+    const W = Math.max(260, box.clientWidth), H = 220, m = { l: 48, r: 12, t: 14, b: 26 };
+    const vals = rows.map(r => r.net); const ticks = niceTicks(Math.min(0, ...vals), Math.max(0, ...vals));
+    const y0 = ticks[0], y1 = ticks[ticks.length - 1];
+    const Y = (v) => m.t + (1 - (v - y0) / (y1 - y0)) * (H - m.t - m.b);
+    const band = (W - m.l - m.r) / 20, bw = Math.min(24, band - 2);
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "ربح وخسارة كل يوم" });
+    for (const t of ticks) {
+      svg.append(sv("line", { x1: m.l, x2: W - m.r, y1: Y(t), y2: Y(t), stroke: t === 0 ? css("--line-strong") : css("--line"), "stroke-width": 1 }));
+      const tx = sv("text", { x: m.l - 8, y: Y(t) + 4, "text-anchor": "end", fill: css("--ink-3"), "font-size": 11 }); tx.textContent = (t > 0 ? "+" : "") + t; svg.append(tx);
+    }
+    const tip = el("div", { class: "tip", role: "status" });
+    rows.forEach((r, i) => {
+      const cx = m.l + band * i + band / 2, top = Y(Math.max(0, r.net)), bot = Y(Math.min(0, r.net));
+      const h = Math.max(1, bot - top), x = cx - bw / 2, rad = Math.min(4, h / 2);
+      const up = r.net >= 0;
+      const d = up
+        ? `M${x} ${bot} V${top + rad} Q${x} ${top} ${x + rad} ${top} H${x + bw - rad} Q${x + bw} ${top} ${x + bw} ${top + rad} V${bot} Z`
+        : `M${x} ${top} V${bot - rad} Q${x} ${bot} ${x + rad} ${bot} H${x + bw - rad} Q${x + bw} ${bot} ${x + bw} ${bot - rad} V${top} Z`;
+      const g = sv("g", { tabindex: 0, role: "img", "aria-label": `${longFmt.format(d0(r.day))}: ${fmtMoney(r.net)}` });
+      g.append(sv("rect", { x: m.l + band * i, y: m.t, width: band, height: H - m.t - m.b, fill: "transparent" }));
+      g.append(sv("path", { d, fill: r.trades ? (up ? css("--up") : css("--down")) : css("--neutral") }));
+      const show = () => {
+        const rr = svg.getBoundingClientRect();
+        tip.replaceChildren(el("div", { class: "t" }, longFmt.format(d0(r.day))));
+        const a = el("div", { class: "r" }); a.append(el("b", { class: "num" }, fmtMoney(r.net)), el("span", {}, "صافي اليوم"));
+        const b = el("div", { class: "r" }); b.append(el("b", { class: "num" }, String(r.trades)), el("span", {}, "عدد الصفقات"));
+        tip.append(a, b); tipAt(box, tip, cx * rr.width / W, top * rr.height / H);
+      };
+      g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
+      g.addEventListener("pointerleave", () => tip.classList.remove("on")); g.addEventListener("blur", () => tip.classList.remove("on"));
+      svg.append(g);
+    });
+    const first = sv("text", { x: m.l + band / 2, y: H - 6, "text-anchor": "middle", fill: css("--ink-3"), "font-size": 11 }); first.textContent = dayFmt.format(d0(rows[0].day)); svg.append(first);
+    if (rows.length > 1) { const lt = sv("text", { x: m.l + band * (rows.length - 1) + band / 2, y: H - 6, "text-anchor": "middle", fill: css("--ink-3"), "font-size": 11 }); lt.textContent = dayFmt.format(d0(rows[rows.length - 1].day)); svg.append(lt); }
+    box.append(svg, tip);
+  }
+
+  function renderCharts(D) {
+    const p = D.configs.M15, s = D.configs.M30;
+    const days = p.daily.map(r => r.day);
+    let a = 0, b = 0;
+    const cumP = p.daily.map(r => (a += r.net)), cumS = s.daily.map(r => (b += r.net));
+    const exp = days.map((_, i) => +(D.in_sample.M15.avg_day * (i + 1)).toFixed(2));
+    lineChart($("c-cum"), days, [
+      { name: "M15 (الرئيسي)", values: cumP, color: css("--m15") },
+      { name: "M30", values: cumS, color: css("--m30") },
+      { name: "متوقع من 2026", values: exp, color: css("--ink-3"), dash: true },
+    ], $("lg-cum"));
+    barChart($("c-day"), p.daily);
+  }
+
+  function render(D) {
+    window.__data = D;
+    const P = D.configs[D.primary], st = P.stats, IS = D.in_sample;
+    const upd = new Date(D.updated_utc.replace("Z", ":00Z"));
+    $("meta").textContent = `آخر تحديث ${upd.toLocaleString("ar-LY-u-nu-latn", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · السعر ${D.last_price}`;
+    $("meta").title = `آخر سعر مسجل عند ${D.last_price_time_server} بتوقيت سيرفر MT5`;
+    const label = { PENDING: "قيد المراقبة", PASS: "ناجح حتى الآن", FAIL: "غير ناجح حتى الآن" }[D.verdict_so_far] || D.verdict_so_far;
+    const icon = { PENDING: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>', PASS: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', FAIL: '<path d="M7 7l10 10M17 7L7 17"/>' }[D.verdict_so_far] || "";
+    const chip = $("chip"); chip.dataset.s = D.verdict_so_far;
+    chip.replaceChildren(); chip.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg>`);
+    chip.append(document.createTextNode(D.final ? (D.verdict_so_far === "PASS" ? "النتيجة النهائية: ناجح" : "النتيجة النهائية: غير ناجح") : label));
+    $("dayof").textContent = `اليوم ${D.days_done} من ${D.n_days}`;
+    const sm = $("summary"); sm.replaceChildren();
+    if (!D.days_done) {
+      sm.append("القاعدة مجمّدة وجاهزة. تبدأ المراقبة ", el("b", {}, "الاثنين 19 أكتوبر"), " وتستمر 20 يوم تداول. كل ليلة بعد إغلاق الجلسة تُحسب صفقات اليوم وتُضاف هنا.");
+    } else {
+      sm.append(`بعد ${daysAr(D.days_done)}: `, el("b", { class: "num" }, fmtMoney(st.total)), ` للأونصة من ${tradesAr(st.trades)}. متوسط اليوم `, el("b", { class: "num" }, fmtMoney(st.avg_day)), ` مقابل `, el("span", { class: "num" }, fmtMoney(IS.M15.avg_day)), ` متوقعة، و`, el("b", {}, fmtPct(st.days_pos)), " من أيام التداول رابحة.");
+    }
+    const track = $("track"); track.replaceChildren();
+    const plan = tradingDays(D.start, D.n_days); const byDay = Object.fromEntries(P.daily.map(r => [r.day, r]));
+    plan.forEach((day, i) => {
+      const r = byDay[day]; const k = !r ? "pending" : !r.trades ? "flat" : r.net > 0 ? "up" : r.net < 0 ? "down" : "flat";
+      const b = el("button", { class: "day", type: "button", role: "listitem", "data-k": k, style: `--i:${i}`,
+        "aria-label": `${longFmt.format(d0(day))}: ${!r ? "لم يكتمل بعد" : fmtMoney(r.net) + "، " + tradesAr(r.trades)}`,
+        title: `${dayFmt.format(d0(day))} — ${!r ? "لم يكتمل بعد" : fmtMoney(r.net) + "، " + tradesAr(r.trades)}` });
+      track.append(b);
+    });
+    $("ax0").textContent = dayFmt.format(d0(plan[0])); $("ax1").textContent = dayFmt.format(d0(plan[plan.length - 1]));
+
+    const cmp = $("cmp"); cmp.replaceChildren();
+    const hd = el("thead"); const hr = el("tr"); ["", "الآن M15", "متوقع M15", "الآن M30"].forEach(t => hr.append(el("th", {}, t))); hd.append(hr);
+    const S2 = D.configs.M30.stats; const rows = [
+      ["متوسط اليوم", fmtMoney(st.avg_day), fmtMoney(IS.M15.avg_day), fmtMoney(S2.avg_day)],
+      ["الأيام الرابحة", fmtPct(st.days_pos), fmtPct(IS.M15.days_pos), fmtPct(S2.days_pos)],
+      ["الصفقات الرابحة", fmtPct(st.win), fmtPct(IS.M15.win), fmtPct(S2.win)],
+      ["صفقات في اليوم", D.days_done ? (st.trades / D.days_done).toFixed(1) : "—", IS.M15.trades_per_day.toFixed(1), D.days_done ? (S2.trades / D.days_done).toFixed(1) : "—"],
+      ["الإجمالي", fmtMoney(st.total), "—", fmtMoney(S2.total)],
+      ["أسوأ يوم", st.worst_day == null ? "—" : fmtMoney(st.worst_day), "−$71.30", S2.worst_day == null ? "—" : fmtMoney(S2.worst_day)],
+    ];
+    const tb = el("tbody"); for (const r of rows) { const tr = el("tr"); r.forEach((c, j) => { const td = el("td", j ? { class: j === 1 ? "now tn" : "tn" } : {}, c); tr.append(td); }); tb.append(tr); }
+    cmp.append(hd, tb);
+
+    const T = $("trades"); T.replaceChildren();
+    const th = el("thead"); const thr = el("tr"); ["وقت الدخول", "الإطار", "الدخول", "الوقف", "الهدف", "الخروج", "السبب", "الصافي"].forEach(t => thr.append(el("th", {}, t))); th.append(thr);
+    const tbd = el("tbody");
+    const reasons = { target: "الهدف", stop: "الوقف", "close 23:30": "إغلاق 23:30", open: "مفتوحة" };
+    const all = [...(D.open_trades || []).map(t => ({ ...t, reason: "open" })), ...Object.values(D.configs).flatMap(c => c.trades)]
+      .sort((x, y) => (y.fill_time > x.fill_time ? 1 : -1));
+    if (!all.length) { const tr = el("tr"); const td = el("td", { colspan: 8, style: "text-align:center;color:var(--ink-3);padding:22px" }, "لا توجد صفقات بعد."); tr.append(td); tbd.append(tr); }
+    const SHOW = 12; const more = $("more");
+    const shown = window.__allTrades ? all : all.slice(0, SHOW);
+    if (all.length > SHOW) { more.hidden = false; more.textContent = window.__allTrades ? "عرض آخر 12 صفقة فقط" : `عرض كل الصفقات (${all.length})`; more.onclick = () => { window.__allTrades = !window.__allTrades; render(D); }; } else { more.hidden = true; }
+    for (const t of shown) {
+      const tr = el("tr"); const net = +t.net;
+      tr.append(el("td", { class: "tn" }, t.fill_time), el("td", {}, t.tf), el("td", { class: "tn" }, (+t.fill).toFixed(2)), el("td", { class: "tn" }, (+t.stop).toFixed(2)), el("td", { class: "tn" }, (+t.target).toFixed(2)),
+        el("td", { class: "tn" }, t.reason === "open" ? "—" : (+t.exit).toFixed(2)));
+      const rs = el("td"); const bd = el("span", { class: "badge" + (t.reason === "open" ? " open" : "") }, reasons[t.reason] || t.reason); rs.append(bd); tr.append(rs);
+      tr.append(el("td", { class: "tn " + (t.reason === "open" ? "" : net > 0 ? "pos" : net < 0 ? "neg" : "") }, t.reason === "open" ? "—" : fmtMoney(net)));
+      tbd.append(tr);
+    }
+    T.append(th, tbd);
+
+    const W = D.wick; const ws = $("wick-sum"); ws.replaceChildren(); const mini = $("wick-mini"); mini.replaceChildren();
+    if (W) {
+      ws.append(`أيام مسجلة: `, el("b", { class: "num" }, `${W.days}/20`), ` · أيام ظهر فيها الذيل: `, el("b", { class: "num" }, String(W.triggers)), ` · منها ارتفعت حتى الإغلاق: `, el("b", { class: "num" }, String(W.up)));
+      const byW = Object.fromEntries(W.rows.map(r => [r.day, r]));
+      tradingDays("2026-10-16", 20).forEach(day => { const r = byW[day]; const k = !r ? "pending" : !r.trigger ? "none" : r.B_pts > 0 ? "up" : "down"; mini.append(el("i", { "data-k": k, title: `${dayFmt.format(d0(day))}: ${!r ? "لم يكتمل" : !r.trigger ? "لا ذيل" : (r.B_pts > 0 ? "ارتفع " : "انخفض ") + r.B_pts + " نقطة"}` })); });
+    }
+    renderCharts(D);
+  }
+
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => window.__data && renderCharts(window.__data), 120); });
+  fetch("data.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(render).catch((e) => {
+    $("meta").textContent = ""; $("summary").replaceChildren(el("span", { class: "err" }, "تعذّر تحميل البيانات (" + e.message + "). أعد تحميل الصفحة بعد قليل؛ تُحدَّث البيانات مرتين يوميًا."));
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  // Static dashboard for the double-top forward watch (reports/FORWARD_DOUBLETOP_PREREG.md).
+  "name": "gold-watch-mq1dqc",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "../forward_site" }
+}
