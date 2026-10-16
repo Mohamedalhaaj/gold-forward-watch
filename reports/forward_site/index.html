@@ -155,6 +155,12 @@ td.neg { color: var(--down); font-weight: 600; }
 footer { margin-top: 26px; color: var(--ink-3); font-size: 0.82rem; line-height: 1.8; max-width: 78ch; }
 footer code { font-size: 0.8rem; color: var(--ink-2); }
 .err { color: var(--critical); }
+.modes { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); margin-top: 4px; }
+@media (min-width: 760px) { .modes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; } }
+.modes h3 { margin: 0 0 4px; font-size: 0.96rem; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+.modes h3 i { width: 18px; height: 0; border-top: 3px solid; display: inline-block; border-radius: 2px; }
+.modes p { margin: 0; color: var(--ink-2); font-size: 0.88rem; max-width: 60ch; }
+.second { color: var(--ink-3); font-size: 0.86rem; }
 .more { margin-top: 12px; background: transparent; color: var(--gold-ink); border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 0.88rem; cursor: pointer; }
 .more:hover { background: var(--wash); }
 @media (max-width: 560px) {
@@ -191,6 +197,7 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     <div class="verdict">
       <span class="chip" id="chip" data-s="PENDING"></span>
       <span id="dayof" class="num" style="color:var(--ink-2)"></span>
+      <span id="second" class="second"></span>
     </div>
     <p class="summary" id="summary"></p>
     <div>
@@ -199,22 +206,36 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     </div>
   </div>
 
+  <section class="panel" aria-labelledby="h-modes">
+    <h2 id="h-modes">نسختان تحت المراقبة</h2>
+    <div class="modes">
+      <div>
+        <h3><i style="border-top-color:var(--m15)"></i>الفورية: الرئيسية</h3>
+        <p>ما يمكن تنفيذه فعلًا. كل أوامر البيع المعلّقة تبقى في السوق، وأول أمر يلمسه السعر يُنفَّذ. القرار النهائي يعتمد عليها وحدها، ونتائجها في 2026 كانت قريبة من الصفر.</p>
+      </div>
+      <div>
+        <h3><i style="border-top-color:var(--m30)"></i>المجمّدة: للمقارنة فقط</h3>
+        <p>كانت تختار بين الأوامر المتداخلة بمعلومة لا تُعرف إلا بعد اكتمال الحركة، فلا يمكن تنفيذها، وهي سبب نتيجة 2026 المبالغ فيها. تُعرض لنرى الفرق، ولا يُبنى عليها أي تداول حتى لو نجحت.</p>
+      </div>
+    </div>
+  </section>
+
   <div class="grid2">
     <section class="panel" aria-labelledby="h-cum">
       <h2 id="h-cum">الربح التراكمي</h2>
-      <p class="sub">دولار للأونصة بعد التكلفة، أونصة واحدة لكل صفقة. الخط المتقطع هو ما توقعته نتائج 2026 لنفس عدد الأيام.</p>
+      <p class="sub">دولار للأونصة بعد التكلفة، أونصة واحدة لكل صفقة، على إطار M15. الخط المتقطع هو ما توقعته نتائج 2026 للنسخة الفورية، وهو قريب من الصفر.</p>
       <div class="legend" id="lg-cum"></div>
       <div class="chart" id="c-cum"></div>
     </section>
     <section class="panel" aria-labelledby="h-cmp">
       <h2 id="h-cmp">الآن مقابل المتوقع</h2>
-      <p class="sub">المتوقع مأخوذ من نتائج 2026 (يناير–أكتوبر). هذه نتائج داخل العينة، لذلك يُتوقَّع أن تأتي الأرقام الحية أضعف منها.</p>
+      <p class="sub">المتوقع للنسخة الفورية مأخوذ من نتائج 2026 (يناير–أكتوبر). عمود المجمّدة للمقارنة فقط، لأنها غير قابلة للتنفيذ.</p>
       <div class="scroll"><table class="cmp" id="cmp"></table></div>
     </section>
   </div>
 
   <section class="panel" aria-labelledby="h-day">
-    <h2 id="h-day">ربح وخسارة كل يوم (M15)</h2>
+    <h2 id="h-day">ربح وخسارة كل يوم: النسخة الفورية M15</h2>
     <p class="sub">كل عمود يوم تداول. أخضر = يوم رابح، أحمر = يوم خاسر.</p>
     <div class="chart" id="c-day"></div>
   </section>
@@ -234,7 +255,7 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
   </section>
 
   <footer id="foot">
-    القواعد مجمّدة في git قبل أول يوم مراقبة (commit <code>e2a1012</code>)، ولا يُعدَّل شيء بعدها. البيانات: عقود الذهب الآجلة GC=F بفاصل 15 دقيقة. هذه صفحة بحث وليست توصية تداول. القرار النهائي بعد اليوم العشرين: ناجح إذا كان متوسط اليوم موجبًا بثقة إحصائية (p أقل من 0.10) و50% على الأقل من أيام التداول رابحة.
+    القواعد مجمّدة في git قبل أول يوم مراقبة: النسخة الفورية (commit <code>b369671</code>) والمجمّدة (commit <code>e2a1012</code>)، ولا يُعدَّل شيء بعدها. البيانات: عقود الذهب الآجلة GC=F بفاصل 15 دقيقة. هذه صفحة بحث وليست توصية تداول. القرار النهائي بعد اليوم العشرين يعتمد على النسخة الفورية: ناجح إذا كان متوسط اليوم موجبًا بثقة إحصائية (p أقل من 0.10) و50% على الأقل من أيام التداول رابحة.
   </footer>
 </div>
 
@@ -386,22 +407,22 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
   }
 
   function renderCharts(D) {
-    const p = D.configs.M15, s = D.configs.M30;
+    const p = D.configs[D.primary], s = D.configs[D.secondary];
     const days = p.daily.map(r => r.day);
     let a = 0, b = 0;
     const cumP = p.daily.map(r => (a += r.net)), cumS = s.daily.map(r => (b += r.net));
-    const exp = days.map((_, i) => +(D.in_sample.M15.avg_day * (i + 1)).toFixed(2));
+    const exp = days.map((_, i) => +(D.in_sample[D.primary].avg_day * (i + 1)).toFixed(2));
     lineChart($("c-cum"), days, [
-      { name: "M15 (الرئيسي)", values: cumP, color: css("--m15") },
-      { name: "M30", values: cumS, color: css("--m30") },
-      { name: "متوقع من 2026", values: exp, color: css("--ink-3"), dash: true },
+      { name: "الفورية (الرئيسية)", values: cumP, color: css("--m15") },
+      { name: "المجمّدة (غير قابلة للتنفيذ)", values: cumS, color: css("--m30") },
+      { name: "متوقع للفورية", values: exp, color: css("--ink-3"), dash: true },
     ], $("lg-cum"));
     barChart($("c-day"), p.daily);
   }
 
   function render(D) {
     window.__data = D;
-    const P = D.configs[D.primary], st = P.stats, IS = D.in_sample;
+    const P = D.configs[D.primary], st = P.stats, IS = D.in_sample[D.primary];
     const upd = new Date(D.updated_utc.replace("Z", ":00Z"));
     $("meta").textContent = `آخر تحديث ${upd.toLocaleString("ar-LY-u-nu-latn", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · السعر ${D.last_price}`;
     $("meta").title = `آخر سعر مسجل عند ${D.last_price_time_server} بتوقيت سيرفر MT5`;
@@ -410,12 +431,14 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     const chip = $("chip"); chip.dataset.s = D.verdict_so_far;
     chip.replaceChildren(); chip.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg>`);
     chip.append(document.createTextNode(D.final ? (D.verdict_so_far === "PASS" ? "النتيجة النهائية: ناجح" : "النتيجة النهائية: غير ناجح") : label));
+    const v2 = { PENDING: "قيد المراقبة", PASS: "ناجحة حتى الآن", FAIL: "غير ناجحة حتى الآن" }[D.verdict_secondary_so_far] || "";
+    $("second").textContent = v2 ? `· المجمّدة (للمقارنة): ${v2}` : "";
     $("dayof").textContent = `اليوم ${D.days_done} من ${D.n_days}`;
     const sm = $("summary"); sm.replaceChildren();
     if (!D.days_done) {
       sm.append("القاعدة مجمّدة وجاهزة. تبدأ المراقبة ", el("b", {}, "الاثنين 19 أكتوبر"), " وتستمر 20 يوم تداول. كل ليلة بعد إغلاق الجلسة تُحسب صفقات اليوم وتُضاف هنا.");
     } else {
-      sm.append(`بعد ${daysAr(D.days_done)}: `, el("b", { class: "num" }, fmtMoney(st.total)), ` للأونصة من ${tradesAr(st.trades)}. متوسط اليوم `, el("b", { class: "num" }, fmtMoney(st.avg_day)), ` مقابل `, el("span", { class: "num" }, fmtMoney(IS.M15.avg_day)), ` متوقعة، و`, el("b", {}, fmtPct(st.days_pos)), " من أيام التداول رابحة.");
+      sm.append(`بعد ${daysAr(D.days_done)}: `, el("b", { class: "num" }, fmtMoney(st.total)), ` للأونصة من ${tradesAr(st.trades)}. متوسط اليوم `, el("b", { class: "num" }, fmtMoney(st.avg_day)), ` مقابل `, el("span", { class: "num" }, fmtMoney(IS.avg_day)), ` متوقعة، و`, el("b", {}, fmtPct(st.days_pos)), " من أيام التداول رابحة.");
     }
     const track = $("track"); track.replaceChildren();
     const plan = tradingDays(D.start, D.n_days); const byDay = Object.fromEntries(P.daily.map(r => [r.day, r]));
@@ -429,23 +452,25 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     $("ax0").textContent = dayFmt.format(d0(plan[0])); $("ax1").textContent = dayFmt.format(d0(plan[plan.length - 1]));
 
     const cmp = $("cmp"); cmp.replaceChildren();
-    const hd = el("thead"); const hr = el("tr"); ["", "الآن M15", "متوقع M15", "الآن M30"].forEach(t => hr.append(el("th", {}, t))); hd.append(hr);
-    const S2 = D.configs.M30.stats; const rows = [
-      ["متوسط اليوم", fmtMoney(st.avg_day), fmtMoney(IS.M15.avg_day), fmtMoney(S2.avg_day)],
-      ["الأيام الرابحة", fmtPct(st.days_pos), fmtPct(IS.M15.days_pos), fmtPct(S2.days_pos)],
-      ["الصفقات الرابحة", fmtPct(st.win), fmtPct(IS.M15.win), fmtPct(S2.win)],
-      ["صفقات في اليوم", D.days_done ? (st.trades / D.days_done).toFixed(1) : "—", IS.M15.trades_per_day.toFixed(1), D.days_done ? (S2.trades / D.days_done).toFixed(1) : "—"],
+    const hd = el("thead"); const hr = el("tr"); ["", "الفورية الآن", "الفورية متوقع", "المجمّدة الآن"].forEach(t => hr.append(el("th", {}, t))); hd.append(hr);
+    const S2 = D.configs[D.secondary].stats; const rows = [
+      ["متوسط اليوم", fmtMoney(st.avg_day), fmtMoney(IS.avg_day), fmtMoney(S2.avg_day)],
+      ["الأيام الرابحة", fmtPct(st.days_pos), fmtPct(IS.days_pos), fmtPct(S2.days_pos)],
+      ["الصفقات الرابحة", fmtPct(st.win), fmtPct(IS.win), fmtPct(S2.win)],
+      ["صفقات في اليوم", D.days_done ? (st.trades / D.days_done).toFixed(1) : "—", IS.trades_per_day.toFixed(1), D.days_done ? (S2.trades / D.days_done).toFixed(1) : "—"],
       ["الإجمالي", fmtMoney(st.total), "—", fmtMoney(S2.total)],
-      ["أسوأ يوم", st.worst_day == null ? "—" : fmtMoney(st.worst_day), "−$71.30", S2.worst_day == null ? "—" : fmtMoney(S2.worst_day)],
+      ["أسوأ يوم", st.worst_day == null ? "—" : fmtMoney(st.worst_day), fmtMoney(IS.worst_day, 0), S2.worst_day == null ? "—" : fmtMoney(S2.worst_day)],
     ];
     const tb = el("tbody"); for (const r of rows) { const tr = el("tr"); r.forEach((c, j) => { const td = el("td", j ? { class: j === 1 ? "now tn" : "tn" } : {}, c); tr.append(td); }); tb.append(tr); }
     cmp.append(hd, tb);
 
     const T = $("trades"); T.replaceChildren();
-    const th = el("thead"); const thr = el("tr"); ["وقت الدخول", "الإطار", "الدخول", "الوقف", "الهدف", "الخروج", "السبب", "الصافي"].forEach(t => thr.append(el("th", {}, t))); th.append(thr);
+    const th = el("thead"); const thr = el("tr"); ["وقت الدخول", "النسخة", "الدخول", "الوقف", "الهدف", "الخروج", "السبب", "الصافي"].forEach(t => thr.append(el("th", {}, t))); th.append(thr);
     const tbd = el("tbody");
     const reasons = { target: "الهدف", stop: "الوقف", "close 23:30": "إغلاق 23:30", open: "مفتوحة" };
-    const all = [...(D.open_trades || []).map(t => ({ ...t, reason: "open" })), ...Object.values(D.configs).flatMap(c => c.trades)]
+    const modeAr = { causal: "الفورية", strict: "المجمّدة" };
+    const keep = (t) => t.tf === "M15";
+    const all = [...(D.open_trades || []).filter(keep).map(t => ({ ...t, reason: "open" })), ...[D.primary, D.secondary].flatMap(k => D.configs[k].trades)]
       .sort((x, y) => (y.fill_time > x.fill_time ? 1 : -1));
     if (!all.length) { const tr = el("tr"); const td = el("td", { colspan: 8, style: "text-align:center;color:var(--ink-3);padding:22px" }, "لا توجد صفقات بعد."); tr.append(td); tbd.append(tr); }
     const SHOW = 12; const more = $("more");
@@ -453,7 +478,7 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     if (all.length > SHOW) { more.hidden = false; more.textContent = window.__allTrades ? "عرض آخر 12 صفقة فقط" : `عرض كل الصفقات (${all.length})`; more.onclick = () => { window.__allTrades = !window.__allTrades; render(D); }; } else { more.hidden = true; }
     for (const t of shown) {
       const tr = el("tr"); const net = +t.net;
-      tr.append(el("td", { class: "tn" }, t.fill_time), el("td", {}, t.tf), el("td", { class: "tn" }, (+t.fill).toFixed(2)), el("td", { class: "tn" }, (+t.stop).toFixed(2)), el("td", { class: "tn" }, (+t.target).toFixed(2)),
+      tr.append(el("td", { class: "tn" }, t.fill_time), el("td", {}, modeAr[t.mode] || t.mode), el("td", { class: "tn" }, (+t.fill).toFixed(2)), el("td", { class: "tn" }, (+t.stop).toFixed(2)), el("td", { class: "tn" }, (+t.target).toFixed(2)),
         el("td", { class: "tn" }, t.reason === "open" ? "—" : (+t.exit).toFixed(2)));
       const rs = el("td"); const bd = el("span", { class: "badge" + (t.reason === "open" ? " open" : "") }, reasons[t.reason] || t.reason); rs.append(bd); tr.append(rs);
       tr.append(el("td", { class: "tn " + (t.reason === "open" ? "" : net > 0 ? "pos" : net < 0 ? "neg" : "") }, t.reason === "open" ? "—" : fmtMoney(net)));

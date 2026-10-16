@@ -4,17 +4,20 @@ Runs the two pre-registered forward watches on GitHub Actions and redeploys the 
 depends on the Mac being on.
 
 - Dashboard: https://gold-watch-mq1dqc.xauusd-quant.workers.dev
-- Rules: `reports/FORWARD_DOUBLETOP_PREREG.md` (frozen at xauusd-quant e2a1012) and
-  `reports/FORWARD_WICK_PREREG.md` (frozen at 07932d7). Nothing in this repo changes them.
+- Rules: `reports/FORWARD_DOUBLETOP_PREREG.md` (frozen at xauusd-quant e2a1012), amended by
+  `reports/FORWARD_DOUBLETOP_CAUSAL_PREREG.md` (b369671: the CAUSAL first-touch version is the primary,
+  STRICT is a labelled non-executable reference), and `reports/FORWARD_WICK_PREREG.md` (frozen at 07932d7).
+  Nothing in this repo changes them.
 
 ## The rule code is not edited
 
-`analysis/` holds byte-identical copies of the trackers at xauusd-quant HEAD `e7ec199`. Check with
+`analysis/` holds byte-identical copies of the trackers at xauusd-quant HEAD `c67ca11` (the double-top tracker
+last changed in b369671, the wick tracker in e7ec199). Check with
 `shasum -a 256 analysis/*.py`:
 
 | file | sha256 | git blob |
 |---|---|---|
-| `forward_doubletop_tracker.py` | `80724c0bc7d4b89f0c535adc90d8862a4d89f854cdc0bcba4fb8850a70fd091d` | `34158868af9a` |
+| `forward_doubletop_tracker.py` | `fb3db8659b1a525c55aeb2622a3bda732cbc5c198abe456593cc93e01ab8b834` | `f46e0a3e1072` |
 | `forward_wick_tracker.py` | `d1dc9d233cd95c929da192c07beefc66a3c2f9c529cad084e9eb4f4ad65b94b1` | `aab6618c044a` |
 
 `pyproject.toml` and `uv.lock` are the research repo's, and the job runs `uv run --frozen` on Python 3.14, so

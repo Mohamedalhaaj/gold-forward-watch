@@ -1,6 +1,6 @@
 # Cloud runner for the two pre-registered forward watches (replaces the macOS LaunchAgents
 # com.xauusd.forwardwick and com.xauusd.forwarddoubletop). This job is the only writer of the ledgers.
-# The tracker scripts are byte-identical copies of xauusd-quant HEAD e7ec199; see README.md for the hashes.
+# The tracker scripts are byte-identical copies of xauusd-quant HEAD c67ca11; see README.md for the hashes.
 name: forward-watch
 
 on:
