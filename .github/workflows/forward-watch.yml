@@ -5,11 +5,11 @@ name: forward-watch
 
 on:
   # Same times as the old LaunchAgents, Africa/Tripoli (UTC+2, no DST) converted to UTC.
-  # Left off until the Mac agents are disabled, so the ledgers never have two writers.
-  # schedule:
-  #   - cron: "45 23 * * *"   # 01:45 Tripoli: records the day that just closed
-  #   - cron: "15 10 * * *"   # 12:15 Tripoli
-  #   - cron: "15 16 * * *"   # 18:15 Tripoli
+  # Enabled 2026-10-16 after the Mac agents were unloaded, so the ledgers never have two writers.
+  schedule:
+    - cron: "45 23 * * *"   # 01:45 Tripoli: records the day that just closed
+    - cron: "15 10 * * *"   # 12:15 Tripoli
+    - cron: "15 16 * * *"   # 18:15 Tripoli
   workflow_dispatch:
 
 concurrency:

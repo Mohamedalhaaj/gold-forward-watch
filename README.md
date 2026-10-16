@@ -33,8 +33,9 @@ relative paths.
    require every fetch to be kept untouched).
 4. After both verdicts exist (or after 2026-12-15) it disables itself, as the old agents uninstalled themselves.
 
-This job is the only writer of the ledgers. The schedule stays commented out until the Mac LaunchAgents
-(`com.xauusd.forwardwick`, `com.xauusd.forwarddoubletop`) are disabled, so there are never two writers.
+This job is the only writer of the ledgers. The Mac LaunchAgents (`com.xauusd.forwardwick`,
+`com.xauusd.forwarddoubletop`) were unloaded on 2026-10-16 and their plists moved to
+`~/Library/LaunchAgents/disabled/`. The Mac's earlier raw fetches were copied into `data/forward_*/raw/`.
 
 ## Secrets
 
