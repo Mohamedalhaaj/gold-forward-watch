@@ -1,0 +1,68 @@
+{
+ "updated_utc": "2026-10-16T11:45Z",
+ "start": "2026-10-19",
+ "n_days": 20,
+ "primary": "M15",
+ "last_price_time_server": "2026-10-16 14:35",
+ "last_price": 4198.9,
+ "days_done": 0,
+ "in_sample": {
+  "M15": {
+   "avg_day": 8.23,
+   "days_pos": 0.64,
+   "net_trade": 1.9,
+   "win": 0.57,
+   "trades_per_day": 4.3
+  },
+  "M30": {
+   "avg_day": 6.03,
+   "days_pos": 0.58,
+   "net_trade": 2.58,
+   "win": 0.55,
+   "trades_per_day": 2.3
+  }
+ },
+ "configs": {
+  "M15": {
+   "daily": [],
+   "trades": [],
+   "stats": {
+    "days": 0,
+    "total": 0.0,
+    "avg_day": 0.0,
+    "days_pos": null,
+    "best_day": null,
+    "worst_day": null,
+    "t": 0.0,
+    "p": 1.0,
+    "trades": 0,
+    "win": null
+   }
+  },
+  "M30": {
+   "daily": [],
+   "trades": [],
+   "stats": {
+    "days": 0,
+    "total": 0.0,
+    "avg_day": 0.0,
+    "days_pos": null,
+    "best_day": null,
+    "worst_day": null,
+    "t": 0.0,
+    "p": 1.0,
+    "trades": 0,
+    "win": null
+   }
+  }
+ },
+ "open_trades": [],
+ "wick": {
+  "days": 0,
+  "triggers": 0,
+  "up": 0,
+  "rows": []
+ },
+ "verdict_so_far": "PENDING",
+ "final": false
+}
