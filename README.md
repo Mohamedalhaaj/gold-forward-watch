@@ -50,3 +50,19 @@ Secrets. It is never written to a file. The account ID in the workflow is not a 
 ```bash
 git -C ~/Documents/gold-forward-watch pull
 ```
+
+## Gold support system v1 (branch `system-v1`, not enabled yet)
+
+The binding spec is xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (commit 39a685d). The job is
+`.github/workflows/system.yml` (03:20 and 09:20 UTC, Tuesday to Saturday, concurrency group `forward-watch`), which
+runs `uv run --frozen python -I analysis/system/run.py`: Dukascopy M1 bid/ask fetch, the write-once forecast store,
+L3 calibration and the green suppression, the forward signal lab, publish, then the same wrangler deploy. It writes
+only `data/system/`, `reports/system/` and `reports/forward_site/system/`; the watches above are untouched.
+
+- Frozen semantics: `analysis/system/FROZEN.sha256` (check: `uv run --frozen python -I analysis/system/frozen_hashes.py`).
+- Vendored, byte-identical copies of xauusd-quant files: `analysis/system/vendor/SHA256SUMS`.
+- Tests: `uv run --frozen pytest tests/system` (the forecast parity against the client's HYCM log is blocking).
+- Local runs only with `--dry` (a temp folder; on market data the lab is never run before the freeze):
+  `run.py --dry --raw-from data/system` (real data: fetch, forecasts, L3, publish) and `run.py --dry --synthetic`
+  (the end-to-end lab dry run on a synthetic random walk).
+- Status file for the indicator: `/system/VolMapSystem.csv`; lab card: `/system/`.

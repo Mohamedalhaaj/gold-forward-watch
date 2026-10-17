@@ -1,0 +1,43 @@
+{
+ "D_at_arrival": 0,
+ "E_star": null,
+ "alpha": 0.04,
+ "alpha_j": 0.0,
+ "arrival": 2,
+ "cost": {
+  "allowance_usd": 0.1,
+  "stress_add_usd": 0.25
+ },
+ "entry_delay_min": 0,
+ "gamma": 0.0,
+ "grammar": 1,
+ "id": "S1R",
+ "lab_version": 1,
+ "promotable": false,
+ "question": "{\"T\":\"2300\",\"days\":15,\"hold\":2,\"side\":[\"DIR\",\"2245\",\"2300\"],\"skip_event\":0,\"stop\":\"H10\",\"when\":[[\"ABSMOVE\",\"2245\",\"2300\",\"GE\",\"0.50\"]]}",
+ "source": "L2 §8.2: S1 with entry at T (no delay); REF, never promotable",
+ "spec": {
+  "T": "2300",
+  "days": 15,
+  "hold": 2,
+  "side": [
+   "FADE",
+   "2245",
+   "2300"
+  ],
+  "skip_event": 0,
+  "stop": "H10",
+  "when": [
+   [
+    "ABSMOVE",
+    "2245",
+    "2300",
+    "GE",
+    "0.50"
+   ]
+  ]
+ },
+ "spec_sha256": "6ffaa67288d4725be2899d18ebcca0cf1eaae96e7d02959487867aecb67c6b08",
+ "tier": "REF",
+ "title_ar": "مرجع: الفكرة نفسها بدخول فوري"
+}

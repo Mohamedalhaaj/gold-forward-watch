@@ -1,0 +1,72 @@
+# Gold support system v1 (xauusd-quant research/system/SYSTEM_V1_PREREG.md §7): fetch Dukascopy M1 bid/ask, the
+# write-once forecast store, L3 calibration and the green suppression, the forward signal lab, publish, deploy.
+# It shares the concurrency group of forward-watch.yml, so the two jobs never push at the same time, and it never
+# writes the watch paths (checked below). No self-disable: the client stops it.
+name: system
+
+on:
+  schedule:
+    - cron: "20 3 * * 2-6"   # 05:20 Tripoli, Tue-Sat: settles the model day that closed overnight
+    - cron: "20 9 * * 2-6"   # 11:20 Tripoli, Tue-Sat (retries a late or failed fetch; Saturday = proposer day)
+  workflow_dispatch:
+
+concurrency:
+  group: forward-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 940e834eb44c1584e99e270ab7a8df00
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # fetch, store, forecasts, L3, lab, proposer (on its Saturday), publish, then wrangler deploy (same site and
+      # secret as forward-watch). A FROZEN mismatch or a tripwire difference halts the lab and fails this step.
+      - name: System run
+        id: run
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: uv run --frozen python -I analysis/system/run.py
+
+      - name: The watch paths are untouched
+        if: ${{ !cancelled() }}
+        run: |
+          git diff --quiet HEAD -- analysis/forward_doubletop_tracker.py analysis/forward_wick_tracker.py \
+            reports/forward_doubletop reports/forward_wick data/forward_doubletop data/forward_wick \
+            .github/workflows/forward-watch.yml reports/FORWARD_DOUBLETOP_PREREG.md \
+            reports/FORWARD_DOUBLETOP_CAUSAL_PREREG.md reports/FORWARD_WICK_PREREG.md
+
+      - name: Commit the system ledgers
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/system reports/system reports/forward_site/system
+          if ! git diff --cached --quiet; then
+            git commit -q -m "system run $(date -u +%Y-%m-%dT%H:%MZ)"
+            for i in 1 2 3 4 5; do
+              git pull -q --rebase && git push -q && exit 0
+              echo "push attempt $i failed"; sleep 20
+            done
+            exit 1
+          fi
+
+      - name: Fail the job if the run halted or failed
+        if: ${{ steps.run.outcome == 'failure' }}
+        run: exit 1
