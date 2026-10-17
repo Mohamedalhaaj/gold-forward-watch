@@ -16,8 +16,8 @@ starting at a; C(b) = close of the bar ending at b. Features are in units of U =
 
 Decision on day d at T (L2 §5.3 plus the v1 amendments): trigger iff the day is eligible (weekday in `days`, not an
 NYSE full closure or early close, not an event day when skip_event = 1, d >= first_day, and on a Friday T + 15h <=
-22:45, §3 item 4), every window bar and the bar ending at T is a valid M15 bar, U is defined, every predicate holds
-and side != 0. Outcomes: trigger, no_trigger, abstain_day, abstain_data, abstain_U.
+22:45, §3 item 4), every window bar and the bar ending at T is a valid M15 bar, U is defined and positive, the stop's
+forecast is finite and positive, every predicate holds and side != 0. Outcomes: trigger, no_trigger, abstain_day, abstain_data, abstain_U.
 """
 import hashlib
 import json
@@ -242,7 +242,7 @@ def decide(spec, db, day, weekday, first_day, holiday, event_day, F_H1, F_S):
     F_stop = F_H1 if s["stop"] == "H10" else F_S
     C_T = db.C(T)
     U = C_T * (np.exp(F_H1 / 1e4) - 1) if np.isfinite(F_H1) else np.nan
-    if not (np.isfinite(U) and U > 0 and np.isfinite(F_stop)):
+    if not (np.isfinite(U) and U > 0 and np.isfinite(F_stop) and F_stop > 0):
         rec["outcome"] = "abstain_U"
         return rec
     rec["U"] = U

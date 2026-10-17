@@ -8,7 +8,12 @@ minute through d 23:30 model is final; all its rows are written then and never c
 - reports/system/lab/eproc.csv        one row per trade: E, K and E* after it
 - reports/system/lab/twins.csv        long drift twin on the mid (no cost) per (T, hold, stop, delay) and day (P4)
 After the new days: promotions (registry order), demotions, retirements and suspensions, each an event row.
+A halted run suspends every LIVE rule (L2 §12.9, halt_suspensions).
 Lab outcomes are never computed for a day before START on real data (§0); synthetic dry runs set synthetic=True.
+
+Tripwire (Amendment A1 item 7): each run re-derives the last settled day from the store and the raw files. Numeric
+fields agree when their relative difference is at most 1e-12 (a runner's exp may differ in the last bit), categorical
+fields (outcome, side, reason, status) must be equal; a difference halts the lab.
 """
 import csv
 from dataclasses import dataclass
@@ -29,6 +34,9 @@ TWIN_COLS = ["key", "day", "R_twin", "recorded_utc"]
 DAY_COLS = ["day", "settled_utc"]
 SUSPEND_AFTER_DAYS = 5
 DEMOTED_SHOWN_DAYS = 5
+REL_TOL = 1e-12
+DECISION_NUM, DECISION_CAT = ("U", "feat1", "feat2", "F_RAW_H1", "F_RAW_S"), ("outcome", "side")
+TRADE_NUM, TRADE_CAT = ("P_e", "X", "D", "P_x", "net_usd", "R"), ("reason", "status")
 
 
 @dataclass
@@ -130,7 +138,7 @@ def twin_row(key, di, now_utc):
     T, h, delay = grammar.minutes(T_s), int(h), int(delay)
     slot = grammar.slot_of(T)
     F = di.F_H1[slot] if stop == "H10" else di.F_S[slot]
-    if di.holiday or not di.db.ok(T - 15) or not np.isfinite(F):
+    if di.holiday or not di.db.ok(T - 15) or not (np.isfinite(F) and F > 0):
         return None
     tr = execution.trade(di.md, 1, T, h, grammar.STOPS[stop], F, delay=delay, use_mid=True)
     if tr["status"] != "final" or not tr["D"] > 0:
@@ -312,6 +320,15 @@ def update_states(lab_dir, recs, sts, events, now_utc, lab_running, run_id, head
     return rows
 
 
+def same_number(a, b, rel_tol=REL_TOL):
+    """Ledger strings of two numbers agree: both empty, or both numbers within `rel_tol` relative (A1 item 7)."""
+    a, b = str(a), str(b)
+    if a == "" or b == "":
+        return a == b
+    x, y = float(a), float(b)
+    return x == y or abs(x - y) <= rel_tol * max(abs(x), abs(y))
+
+
 def tripwire(lab_dir, recs, sts, di, code_sha8):
     """Re-derive one settled day's decision and trade rows from the store; differences mean non-determinism."""
     lab_dir = Path(lab_dir)
@@ -325,13 +342,27 @@ def tripwire(lab_dir, recs, sts, di, code_sha8):
             continue
         st = dict(sts[rec["id"]])
         d2, t2 = rule_rows(rec, st, di, led_d[key]["recorded_utc"], code_sha8)
-        for c in ("outcome", "side", "U", "feat1", "feat2", "F_RAW_H1", "F_RAW_S"):
+        for c in DECISION_CAT:
             if str(d2[c]) != str(led_d[key][c]):
+                diffs.append(f"{key} decision {c}: ledger {led_d[key][c]!r} vs recomputed {d2[c]!r}")
+        for c in DECISION_NUM:
+            if not same_number(d2[c], led_d[key][c]):
                 diffs.append(f"{key} decision {c}: ledger {led_d[key][c]!r} vs recomputed {d2[c]!r}")
         if (t2 is None) != (key not in led_t):
             diffs.append(f"{key}: trade presence differs")
         elif t2 is not None:
-            for c in ("P_e", "X", "P_x", "reason", "net_usd", "R"):
+            for c in TRADE_CAT:
                 if str(t2.get(c, "")) != str(led_t[key][c]):
                     diffs.append(f"{key} trade {c}: ledger {led_t[key][c]!r} vs recomputed {t2.get(c)!r}")
+            for c in TRADE_NUM:
+                if not same_number(t2.get(c, ""), led_t[key][c]):
+                    diffs.append(f"{key} trade {c}: ledger {led_t[key][c]!r} vs recomputed {t2.get(c)!r}")
     return diffs
+
+
+def halt_suspensions(recs, sts, events, now_utc, run_id, head_sha):
+    """L2 §12.9: a halted run pauses the lab and suspends every LIVE rule (it resumes when the lab runs again)."""
+    D_total = registry.promotions_count(events)
+    return [{"utc": now_utc, "id": r["id"], "event": "SUSPENDED", "reason": "S-a: lab paused", "n": "", "E": "",
+             "K": "", "D_total": D_total, "run_id": run_id, "head_sha": head_sha}
+            for r in recs if sts[r["id"]]["state"] == "LIVE"]

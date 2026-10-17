@@ -103,13 +103,65 @@ def test_schedule():
     assert proposer.due("2027-02-02", 60, done + ["2027-01-30"]) is None
 
 
-def test_titles_fit_the_panel_row():
+def indicator_accepts(title):
+    """A1 item 3, as the indicator's CleanTitle applies it (xauusd-quant 6b5dc99): 1..31 characters, each an Arabic
+    letter (U+0621..U+064A without U+0640), a digit or a space; the first an Arabic letter, the last not a space."""
+    def letter(c):
+        return "\u0621" <= c <= "\u064a" and c != "\u0640"
+    if not 1 <= len(title) <= 31:
+        return False
+    if not all(letter(c) or c == " " or "0" <= c <= "9" or "\u0660" <= c <= "\u0669" for c in title):
+        return False
+    return letter(title[0]) and title[-1] != " "
+
+
+def test_every_title_passes_the_indicator_rule_and_names_its_hour():
+    """A1 item 3: every proposer title of the space, and every seed title, is shown by the indicator, and proposer
+    titles carry their decision time, so two rules at different times never share a title."""
     prefix = "قاعدة اتجاه اجتازت الاختبار: "
-    titles = list(proposer.TITLES.values()) + [r["title_ar"] for r in registry.seed_records()]
-    for t in titles:
-        assert len(prefix + t) <= 60, t
-        assert not any("a" <= ch.lower() <= "z" for ch in t)
-        assert t[0] not in ":.…)(%● " and t[-1] not in ":.…)(%● 0123456789"
+    sp = proposer.space()
+    by_title = {}
+    for s in sp:
+        t = proposer.title_for(s)
+        assert indicator_accepts(t) and registry.title_ok(t), t
+        assert len(prefix + t) <= 60 and not any("a" <= ch.lower() <= "z" for ch in t)
+        T = grammar.minutes(s["T"])
+        assert t.endswith(f"قبل {T // 60}" + (f" و{T % 60}" if T % 60 else "")), t
+        by_title.setdefault(t, set()).add((s["side"][0], s["side"][1], s["T"]))
+    assert len(by_title) == 246 and all(len(v) == 1 for v in by_title.values())     # 41 times x 3 windows x 2
+    assert proposer.title_for({"T": "1500", "side": ["FADE", "1445", "1500"]}) == "عكس حركة ربع الساعة قبل 15"
+    assert proposer.title_for({"T": "2230", "side": ["FOLLOW", "2200", "2230"]}) == "تتبع حركة نصف الساعة قبل 22 و30"
+    assert proposer.title_for({"T": "0300", "side": ["FADE", "0200", "0300"]}) == "عكس حركة الساعة قبل 3"
+    for r in registry.seed_records():
+        assert indicator_accepts(r["title_ar"]) and len(prefix + r["title_ar"]) <= 60, r["id"]
+
+
+def test_proposals_get_their_gamma_D_and_E_star_from_the_frozen_code(tmp_path):
+    """A1 item 9: numbering k, γ_k, D and E*_k of new proposals come from proposer.new_records."""
+    recs = registry.seed_records()
+    sp = proposer.space()
+    rep = {"run_date": "2027-01-02", "chosen_specs": [sp[0], sp[500]], "chosen_t": [4.1, 3.9], "q95": 3.5}
+    events = [{"event": "PROMOTED", "id": "S1"}]
+    new = proposer.new_records(rep, recs, events)
+    assert [r["id"] for r in new] == ["P001", "P002"]
+    assert [r["gamma"] for r in new] == [0.70 / 2, 0.70 / 6]
+    assert [r["D_at_arrival"] for r in new] == [1, 1]
+    assert new[0]["E_star"] == pytest.approx(1 / (0.04 * 0.35 * 2))
+    later = proposer.new_records(rep | {"chosen_specs": [sp[900]], "chosen_t": [5.0]}, recs + new, [])
+    assert later[0]["id"] == "P003" and later[0]["gamma"] == pytest.approx(0.70 / 12)
+
+
+def test_plan_schedule_and_training_days():
+    sts = {"S1": {"first_day": "2026-11-02", "state": "PAPER"}, "C1": {"first_day": "2026-11-02", "state": "REF"}}
+    days = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2026-11-02", periods=70)]
+    assert proposer.plan("2027-01-02", days[:39], sts, [], True) is None              # fewer than 40 days
+    pl = proposer.plan("2027-01-02", days[:45], sts, [], True)
+    assert pl["date"] == "2027-01-02" and pl["first"] == "2026-11-02" and pl["train_days"] == days[:45]
+    pl = proposer.plan("2027-01-30", days, sts, ["2027-01-02"], True)
+    assert pl["date"] == "2027-01-30" and len(pl["train_days"]) == 60
+    assert all(d < "2027-01-30" for d in pl["train_days"]) and pl["train_days"] == [
+        d for d in days if d < "2027-01-30"][-60:]
+    assert proposer.plan("2027-01-02", days[:45], sts, [], False) is None              # lab paused
 
 
 @pytest.mark.slow

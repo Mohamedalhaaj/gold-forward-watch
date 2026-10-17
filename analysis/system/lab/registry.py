@@ -9,6 +9,9 @@
 - States: PAPER -> LIVE -> (SUSPENDED <-> LIVE) -> DEMOTED -> RETIRED; PAPER -> RETIRED. REF streams stay REF.
 - START (§0) = the later of Monday 2026-11-02 and the first Monday at least 2 calendar days after the first
   successful cloud run of the frozen code (reports/system/START.json, written once by that run).
+- Titles (Amendment A1 item 3): the Arabic title of every record is at most 31 characters of Arabic letters, spaces
+  and ASCII digits, begins with an Arabic letter, does not end with a space and has no double space. It is what the
+  indicator shows after «قاعدة اتجاه اجتازت الاختبار: » for a LIVE rule; record() refuses any other title.
 """
 import csv
 import datetime as dt
@@ -26,6 +29,23 @@ EVENTS = ("REGISTERED", "PROMOTED", "DEMOTED", "SUSPENDED", "RESUMED", "RETIRED"
 EARLIEST_START = dt.date(2026, 11, 2)
 LAB_VERSION = 1
 COSTS = {"allowance_usd": 0.10, "stress_add_usd": 0.25}
+TITLE_MAX = 31
+START_RULE = ("later of 2026-11-02 and the first Monday >= 2 days after the first successful cloud run "
+              "(SYSTEM_V1_PREREG.md §0)")
+
+
+# ---------------------------------------------------------------- titles (A1 item 3)
+def _arabic_letter(ch):
+    return "ء" <= ch <= "ي" and ch != "ـ"                  # hamza .. yeh, without the tatweel
+
+
+def title_ok(s):
+    """True iff `s` is a valid record title (A1 item 3; see the module doc)."""
+    if not isinstance(s, str) or not 1 <= len(s) <= TITLE_MAX:
+        return False
+    if not _arabic_letter(s[0]) or s[-1] == " " or "  " in s:
+        return False
+    return all(_arabic_letter(c) or c == " " or "0" <= c <= "9" for c in s)
 
 
 # ---------------------------------------------------------------- START and first_day
@@ -33,6 +53,14 @@ def start_from_first_run(first_run_utc):
     d = pd.Timestamp(first_run_utc).date() + dt.timedelta(days=2)
     monday = d + dt.timedelta(days=(7 - d.weekday()) % 7)
     return max(EARLIEST_START, monday)
+
+
+def start_record(first_run_utc, run_id, head_sha):
+    """The content of reports/system/START.json, written once by the first non-halted cloud run (§0)."""
+    t = pd.Timestamp(first_run_utc)
+    t = t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
+    return {"first_cloud_run_utc": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "run_id": run_id, "head_sha": head_sha,
+            "start": str(start_from_first_run(t)), "rule": START_RULE}
 
 
 def first_day(registered_utc, start):
@@ -52,6 +80,8 @@ def first_day(registered_utc, start):
 def record(cid, spec, *, tier, promotable, gamma, D, title_ar, source, entry_delay_min=1, allow_coin=False,
            extra=None):
     s = grammar.validate(spec, allow_coin=allow_coin)
+    if not title_ok(title_ar):
+        raise ValueError(f"{cid}: title {title_ar!r} breaks the title rule (A1 item 3)")
     rec = {"id": cid, "lab_version": LAB_VERSION, "grammar": grammar.GRAMMAR_VERSION, "spec": s,
            "spec_sha256": grammar.spec_sha256(s, allow_coin=allow_coin), "question": grammar.question_key(s),
            "tier": tier, "promotable": bool(promotable), "gamma": gamma, "alpha": eproc.ALPHA_V1,
@@ -98,6 +128,8 @@ def verify(reg_dir):
             bad.append(f"{r['id']}: E_star does not follow from gamma and D")
         if not r["promotable"] and r["gamma"] != 0:
             bad.append(f"{r['id']}: a REF stream must have gamma 0")
+        if not title_ok(r.get("title_ar")):
+            bad.append(f"{r['id']}: title breaks the title rule (A1 item 3)")
     return bad
 
 
@@ -182,13 +214,13 @@ C1_SPEC = {"T": "1500", "side": ["COIN"], "when": [], "hold": 8, "stop": "H10", 
 def seed_records():
     return [
         record("S1", S1_SPEC, tier="SEED", promotable=True, gamma=eproc.GAMMA_S1, D=0,
-               title_ar="عكس حركة ما قبل إغلاق نيويورك",
+               title_ar="عكس حركة إغلاق نيويورك قبل 23",
                source="L2 §8.1 NY-close fade, days Mon-Thu, entry T+1 min at bid/ask, no penalty (SYSTEM_V1 §3.9)",
                extra={"arrival": 1}),
         record("S1R", S1_SPEC, tier="REF", promotable=False, gamma=0.0, D=0, entry_delay_min=0,
-               title_ar="مرجع: الفكرة نفسها بدخول فوري",
+               title_ar="الفكرة نفسها بدخول فوري عند 23",
                source="L2 §8.2: S1 with entry at T (no delay); REF, never promotable", extra={"arrival": 2}),
         record("C1", C1_SPEC, tier="REF", promotable=False, gamma=0.0, D=0, allow_coin=True,
-               title_ar="عملة عشوائية: لتعرف شكل الحظ",
+               title_ar="رمية عملة عند 15 لتعرف شكل الحظ",
                source="L2 §8.3 coin control; REF, never promotable, never published", extra={"arrival": 3}),
     ]

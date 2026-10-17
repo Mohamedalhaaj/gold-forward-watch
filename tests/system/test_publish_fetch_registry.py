@@ -32,29 +32,25 @@ def test_system_csv_exact_format():
     assert all(ln.isascii() and ln.count(",") == 1 for ln in lines)
 
 
-def test_live_rules_and_hex_title():
-    live = [{"title_ar": "عكس حركة ما قبل إغلاق نيويورك", "n_post": 7}]
+def test_live_rule_title_is_utf8_and_every_other_line_is_ascii():
+    """A1 item 3: the title value is UTF-8 Arabic; every other line is ASCII; the file is UTF-8 without a BOM."""
+    live = [{"id": "S1", "title_ar": "عكس حركة إغلاق نيويورك قبل 23", "n_post": 7}]
     lines = publish.system_csv("2027-05-01T03:20:00Z", L1, L3, LAB | {"n_live": 1, "live": live})
-    kv = publish.parse_system_csv("\n".join(lines) + "\n")
-    assert kv is not None and kv["lab_live_1_npost"] == "7"
-    assert publish.unhex_utf16(kv["lab_live_1_title_ar"]) == live[0]["title_ar"]
-    assert kv["lab_live_1_title_ar"].startswith("0639")                        # U+0639 ARABIC LETTER AIN
+    assert "lab_live_1_title_ar,عكس حركة إغلاق نيويورك قبل 23" in lines
+    assert all(ln.isascii() for ln in lines if not ln.startswith("lab_live_1_title_ar,"))
+    data = publish.encode_system_csv(lines)
+    assert not data.startswith(b"\xef\xbb\xbf") and b"\r" not in data and data.endswith(b"\n")
+    assert data.decode("utf-8") == "\n".join(lines) + "\n"
+    kv = publish.parse_system_csv(data)
+    assert kv is not None and kv["lab_live_1_npost"] == "7" and kv["lab_live_1_title_ar"] == live[0]["title_ar"]
 
 
-def test_reader_rejects_a_file_without_a_valid_end():
-    lines = publish.system_csv("2026-11-03T03:20:00Z", L1, L3, LAB)
-    text = "\n".join(lines) + "\n"
-    assert publish.parse_system_csv(text) is not None
-    assert publish.parse_system_csv("\n".join(lines[:-1]) + "\n") is None          # truncated
-    assert publish.parse_system_csv("\n".join(lines[:-1] + ["end,3"]) + "\n") is None
-    assert publish.parse_system_csv(text.replace("key,value", "k,v")) is None
-
-
-def test_written_file_is_ascii_with_lf(tmp_path):
-    p = tmp_path / "VolMapSystem.csv"
-    publish.write_system_csv(p, publish.system_csv("2026-11-03T03:20:00Z", L1, L3, LAB))
-    b = p.read_bytes()
-    assert b.isascii() and b"\r" not in b and b.endswith(b"\n")
+@pytest.mark.parametrize("bad", ["قاعدة: عكس", "rule عكس", "15 عكس حركة", "عكس حركة ", "عكس  حركة", "",
+                                 "عكس حركة ربع الساعة قبل الساعة 15", "عكس، حركة"])
+def test_the_writer_refuses_a_title_the_indicator_would_drop(bad):
+    with pytest.raises(ValueError):
+        publish.system_csv("2027-05-01T03:20:00Z", L1, L3,
+                           LAB | {"n_live": 1, "live": [{"id": "X", "title_ar": bad, "n_post": 1}]})
 
 
 # ---------------------------------------------------------------- fetch store
@@ -139,6 +135,71 @@ def test_revisions_are_logged_and_never_used(tmp_path):
     assert len(pd.read_csv(tmp_path / "revisions.csv")) == 2                  # each file is re-checked once
 
 
+def test_a_short_or_empty_body_is_a_failed_attempt(tmp_path):
+    """A1 item 11: a body is valid only with exactly 1,440 records; otherwise it is retried, then missing."""
+    import numpy as np
+    b = bodies_for(["2026-09-01"])
+    short = __import__("bi5").url("2026-09-01", "BID")
+    sec = np.arange(1439) * 60
+    p = np.full(1439, 4100000)
+    b[short] = synth.encode(sec, p, p, p, p, np.ones(1439, dtype=np.float32))
+    b[__import__("bi5").url("2026-09-01", "ASK")] = b""
+    fetch.run(tmp_path, now="2026-09-02T03:00:00Z", get=FakeFeed(b), sleep=lambda s: None, recheck=False)
+    assert fetch.ok_days(tmp_path) == []
+    att = pd.read_csv(tmp_path / "attempts.csv", dtype=str)
+    assert len(att) == 2 and all(r.startswith("bad body") for r in att.result)
+    assert not (tmp_path / "raw/2026/09/01/BID.bi5").exists()
+
+
+def test_the_row_is_appended_right_after_its_file(tmp_path):
+    """A run that dies after some files leaves a days.csv row for each file it wrote."""
+    days = pd.date_range("2026-09-01", "2026-09-02")
+    b = bodies_for(days)
+    calls = []
+
+    def dying(url):
+        calls.append(url)
+        if len(calls) == 3:
+            raise KeyboardInterrupt
+        return 200, b[url]
+    with pytest.raises(KeyboardInterrupt):
+        fetch.run(tmp_path, now="2026-09-03T03:00:00Z", get=dying, sleep=lambda s: None, recheck=False)
+    rows = pd.read_csv(tmp_path / "days.csv", dtype=str)
+    assert len(rows) == 2 and fetch.verify_store(tmp_path) == []
+
+
+def test_orphan_raw_files_are_adopted(tmp_path):
+    """A raw file without a days.csv row (a run that died in between) is adopted, never a permanent error."""
+    days = pd.date_range("2026-09-01", "2026-09-01")
+    b0, b1 = bodies_for(days), bodies_for(days, tag=3)
+    bid, ask = (__import__("bi5").url("2026-09-01", s) for s in ("BID", "ASK"))
+    pb, pa = tmp_path / "raw/2026/09/01/BID.bi5", tmp_path / "raw/2026/09/01/ASK.bi5"
+    pb.parent.mkdir(parents=True)
+    pb.write_bytes(b0[bid])                                   # same bytes as the feed: adopted as is
+    pa.write_bytes(b0[ask])                                   # valid, but the feed now sends other bytes
+    feed = FakeFeed({bid: b0[bid], ask: b1[ask]})
+    s = fetch.run(tmp_path, now="2026-09-02T03:00:00Z", get=feed, sleep=lambda s: None, recheck=False)
+    assert s["adopted"] == 2 and fetch.ok_days(tmp_path) == ["2026-09-01"]
+    assert pa.read_bytes() == b0[ask] and fetch.verify_store(tmp_path) == []      # the first fetch is kept
+    rev = pd.read_csv(tmp_path / "revisions.csv", dtype=str)
+    assert list(rev.side) == ["ASK"]
+    # an invalid orphan (a cut write) is replaced by the new body
+    t2 = tmp_path / "b"
+    (t2 / "raw/2026/09/01").mkdir(parents=True)
+    (t2 / "raw/2026/09/01/BID.bi5").write_bytes(b0[bid][:40])
+    fetch.run(t2, now="2026-09-02T03:00:00Z", get=FakeFeed(b0), sleep=lambda s: None, recheck=False)
+    assert (t2 / "raw/2026/09/01/BID.bi5").read_bytes() == b0[bid] and fetch.verify_store(t2) == []
+
+
+def test_lag_in_trading_days(tmp_path):
+    feed = FakeFeed(bodies_for(pd.date_range("2026-09-01", "2026-09-30")))
+    fetch.run(tmp_path, now="2026-09-04T03:00:00Z", get=feed, sleep=lambda s: None, recheck=False)
+    assert fetch.lag_trading_days(tmp_path, "2026-09-04T03:00:00Z") == 0
+    assert fetch.lag_trading_days(tmp_path, "2026-09-05T03:00:00Z") == 1            # Friday 09-04 not fetched yet
+    assert fetch.lag_trading_days(tmp_path, "2026-09-08T03:00:00Z") == 2            # + Monday (weekend not counted)
+    assert fetch.lag_trading_days(tmp_path, "2026-09-09T03:00:00Z") == 3
+
+
 def test_store_verification_catches_an_edited_raw_file(tmp_path):
     fetch.run(tmp_path, now="2026-09-02T03:00:00Z", get=FakeFeed(bodies_for(["2026-09-01"])),
               sleep=lambda s: None)
@@ -162,6 +223,33 @@ def test_forecast_store_is_write_once(tmp_path):
     assert [r["slot"] for r in rows2] == [1] and rows2[0]["F_H1"] == ""
     assert forecasts.tripwire(store, grid) == []
     assert forecasts.tripwire(store, grid.assign(F_H1=[10.5000001, float("nan")]))
+
+
+def test_a_slot_is_stored_only_once_its_origin_hour_is_final():
+    """A1 item 7: origin_utc < complete_utc, so the stored price is the origin's own open."""
+    grid = pd.DataFrame({"day": pd.to_datetime(["2026-11-03"]), "wd": 1, "slot": [1],
+                         "origin": pd.to_datetime(["2026-11-03 02:00"]), "F_H1": [10.0], "F_S": [20.0],
+                         "price": [4000.0], "y_bp": [1.0], "nfp": 0, "cpi": 0, "fomc": 0, "hol": 0, "y3_bp": 0.0})
+    store = forecasts.read_store("/nonexistent/f.csv")
+    at = pd.Timestamp("2026-11-03 00:00", tz="UTC")                           # 02:00 model (EST) = 00:00 UTC
+    assert forecasts.new_rows(grid, store, at, "x") == []
+    assert len(forecasts.new_rows(grid, store, at + pd.Timedelta(days=1), "x")) == 1
+
+
+def test_store_tripwire_checks_price_with_a_relative_tolerance(tmp_path):
+    """A1 item 7: F_H1, F_S and price are compared at 1e-12 relative; a last-bit difference is not a mismatch."""
+    import numpy as np
+    grid = pd.DataFrame({"day": pd.to_datetime(["2026-11-03"]), "wd": 1, "slot": [0],
+                         "origin": pd.to_datetime(["2026-11-03 01:00"]), "F_H1": [10.5], "F_S": [20.25],
+                         "price": [4372.66], "y_bp": [1.0], "nfp": 0, "cpi": 0, "fomc": 0, "hol": 0, "y3_bp": 0.0})
+    rows = forecasts.new_rows(grid, forecasts.read_store(tmp_path / "f.csv"), pd.Timestamp("2026-11-04", tz="UTC"), "x")
+    forecasts.append_store(tmp_path / "f.csv", rows)
+    store = forecasts.read_store(tmp_path / "f.csv")
+    assert forecasts.tripwire(store, grid) == []
+    ulp = grid.assign(F_H1=np.nextafter(10.5, 11.0), price=np.nextafter(4372.66, 5000.0))
+    assert forecasts.tripwire(store, ulp) == []
+    moved = forecasts.tripwire(store, grid.assign(price=4372.72))
+    assert len(moved) == 1 and "price" in moved[0]
 
 
 # ---------------------------------------------------------------- registry, START, first_day
@@ -201,6 +289,19 @@ def test_registry_files_verify_and_registration(tmp_path):
     assert registry.verify(tmp_path) == ["S1: spec_sha256 mismatch"]
 
 
+def test_title_rule():
+    """A1 item 3: <= 31 characters of Arabic letters, spaces and digits, beginning with an Arabic letter."""
+    ok = ["عكس حركة إغلاق نيويورك قبل 23", "تتبع حركة نصف الساعة قبل 22 و30", "ع"]
+    bad = ["", "ع" * 32, "1 عكس", " عكس", "عكس ", "عكس  حركة", "عكس: حركة", "عكس حركة a", "عكس حركةً",
+           "ـعكس", "عكس، حركة", None]
+    assert all(registry.title_ok(t) for t in ok)
+    assert not any(registry.title_ok(t) for t in bad)
+    assert registry.title_ok("ع" * 31)
+    with pytest.raises(ValueError):
+        registry.record("X1", registry.S1_SPEC, tier="SEED", promotable=True, gamma=0.3, D=0, title_ar="rule",
+                        source="test")
+
+
 def test_seed_registry_matches_the_spec():
     recs = {r["id"]: r for r in registry.load(pytest.ROOT / "reports/system/lab/registry")}
     s1 = recs["S1"]
@@ -211,3 +312,7 @@ def test_seed_registry_matches_the_spec():
     assert recs["C1"]["spec"]["side"] == ["COIN"] and recs["C1"]["spec"]["T"] == "1500"
     assert recs["C1"]["spec"]["hold"] == 8 and not recs["C1"]["promotable"]
     assert registry.verify(pytest.ROOT / "reports/system/lab/registry") == []
+    files = {p.stem: p.read_text() for p in (pytest.ROOT / "reports/system/lab/registry").glob("*.json")}
+    assert files == {r["id"]: registry.dumps(r) for r in registry.seed_records()}     # the files are the seeds
+    assert all(registry.title_ok(r["title_ar"]) for r in recs.values())
+    assert "23" in recs["S1"]["title_ar"] and "15" in recs["C1"]["title_ar"]          # the decision hour

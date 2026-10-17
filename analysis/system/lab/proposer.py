@@ -10,13 +10,18 @@
   all rules that day; R* = s·gross_R − cost_R; M_b = max_j t*_j; q95 = the 95th percentile of M.
 - Propose: rules with t >= q95 and mean R > 0, by t; at most 2, with distinct floor-hour(T); skip a rule whose
   question (spec without side mode) matches any existing candidate; never exceed 10 active proposer candidates.
-- γ of the k-th proposal = 0.70/(k(k+1)); α_k and E*_k with the current number of promotions D.
-- Schedule: first run on the first Saturday with >= 40 settled lab days, then every 28 days.
+- γ of the k-th proposal = 0.70/(k(k+1)); α_k and E*_k with the current number of promotions D (new_records).
+- Schedule: first run on the first Saturday with >= 40 settled lab days, then every 28 days (plan).
+- Amendment A1 item 9: the schedule, the training days, the active count, the proposal numbering k, γ_k, D and E*_k
+  are all computed here (plan, execute, new_records); run.py only reads and writes the files.
+- Titles (A1 item 3): at most 31 characters, with the decision time on the model (chart) clock, e.g.
+  «عكس حركة ربع الساعة قبل 15» (FADE, w = 1, T = 15:00) or «تتبع حركة نصف الساعة قبل 22 و30» (FOLLOW, w = 2,
+  T = 22:30); every title of the space passes registry.title_ok.
 """
 import numpy as np
 import pandas as pd
 
-from lab import eproc, execution, grammar
+from lab import eproc, execution, grammar, ledger, registry
 
 B_REPLICATES = 1000
 TRAIN_DAYS = 60
@@ -24,9 +29,9 @@ MIN_N = 12
 MAX_PER_RUN = 2
 FIRST_RUN_MIN_DAYS = 40
 EVERY_DAYS = 28
-TITLES = {("FADE", 1): "تعاكس حركة آخر ربع ساعة الكبيرة", ("FADE", 2): "تعاكس حركة آخر نصف ساعة الكبيرة",
-          ("FADE", 4): "تعاكس حركة آخر ساعة الكبيرة", ("FOLLOW", 1): "تتبع حركة آخر ربع ساعة الكبيرة",
-          ("FOLLOW", 2): "تتبع حركة آخر نصف ساعة الكبيرة", ("FOLLOW", 4): "تتبع حركة آخر ساعة الكبيرة"}
+TITLE_MODE = {"FADE": "عكس حركة", "FOLLOW": "تتبع حركة"}
+TITLE_WINDOW = {1: "ربع الساعة", 2: "نصف الساعة", 4: "الساعة"}
+LIVE_STATES = ("PENDING", "PAPER", "LIVE", "SUSPENDED")
 
 
 def space():
@@ -176,8 +181,61 @@ def run(days, run_date, lab_first_day, existing_questions, active_proposals, spe
 
 
 def title_for(spec):
-    w = (grammar.minutes(spec["T"]) - grammar.minutes(spec["side"][1])) // 15
-    return TITLES[(spec["side"][0], w)]
+    """The Arabic title: mode, window and decision time, e.g. «عكس حركة ربع الساعة قبل 15» (A1 item 3)."""
+    T = grammar.minutes(spec["T"])
+    w = (T - grammar.minutes(spec["side"][1])) // 15
+    when = f"{T // 60}" + (f" و{T % 60}" if T % 60 else "")
+    t = f"{TITLE_MODE[spec['side'][0]]} {TITLE_WINDOW[w]} قبل {when}"
+    if not registry.title_ok(t):
+        raise ValueError(f"title {t!r} breaks the title rule")
+    return t
+
+
+def active_proposals(recs, sts):
+    """Proposer candidates still in play (the cap of 10 counts these)."""
+    return sum(1 for r in recs if r["tier"] == "PROPOSER" and sts[r["id"]]["state"] in LIVE_STATES)
+
+
+def plan(run_date, settled_days, sts, done_dates, lab_running):
+    """The proposer run this lab run executes, or None (§3 item 10, A1 item 9).
+
+    settled_days: the settled lab days (YYYY-MM-DD); done_dates: dates of the proposer reports already written.
+    Returns {"date", "first", "train_days"}: the scheduled date, the lab's first first_day and the training days (the
+    last 60 settled lab days before the date, each on or after the lab's first first_day)."""
+    if not lab_running:
+        return None
+    first = ledger.lab_first_day(sts)
+    if first is None:
+        return None
+    n = sum(1 for d in settled_days if d >= first)
+    date = due(pd.Timestamp(run_date).date(), n, done_dates)
+    if date is None:
+        return None
+    train = [d for d in settled_days if first <= d < date][-TRAIN_DAYS:]
+    return {"date": date, "first": first, "train_days": train}
+
+
+def execute(day_inputs, pl, recs, sts, specs=None, B=B_REPLICATES):
+    """The proposer run of plan `pl` on the DayInputs of its training days; existing questions and the active count
+    come from the registry."""
+    return run(day_inputs, pl["date"], pl["first"], [r["question"] for r in recs], active_proposals(recs, sts),
+               specs=specs, B=B)
+
+
+def new_records(rep, recs, events):
+    """Registry records of the run's proposals: the k-th proposal overall gets γ_k = Γ_P/(k(k+1)), and α_k and E*_k
+    with D = the promotions so far (§3 item 7). Returns the records in order (ids P001, P002, ...)."""
+    D = registry.promotions_count(events)
+    k0 = sum(1 for r in recs if r["tier"] == "PROPOSER")
+    out = []
+    for i, spec in enumerate(rep["chosen_specs"]):
+        k = k0 + i + 1
+        out.append(registry.record(f"P{k:03d}", spec, tier="PROPOSER", promotable=True,
+                                   gamma=eproc.gamma_proposal(k), D=D, title_ar=title_for(spec),
+                                   source=f"proposer {rep['run_date']}: t {rep['chosen_t'][i]:.3f} >= q95 "
+                                          f"{rep['q95']:.3f}",
+                                   extra={"arrival": 100 + k, "proposal_k": k, "proposed_date": rep["run_date"]}))
+    return out
 
 
 def schedule_dates(anchor, upto):

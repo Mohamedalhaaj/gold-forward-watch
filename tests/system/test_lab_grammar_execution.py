@@ -278,3 +278,106 @@ def test_vectorised_trade_equals_the_minute_loop():
         t = execution.trade(md, side, T, h, K, F)
         P_e, X, px, reason, m = loop_trade(md, side, T, h, K, F)
         assert (t["P_e"], t["X"], t["P_x"], t["reason"], t["exit_min"]) == (P_e, X, px, reason, m)
+
+
+# ---------------------------------------------------------------- non-finite executable prices (A1 item 8)
+def one_sided(f, side, minutes):
+    """Blank one side (bid or ask) of the given minutes, as an outer join does when that side has no record."""
+    f = f.copy()
+    idx = f.index[list(minutes)]
+    for k in ("o", "h", "l", "c", "vol"):
+        f.loc[idx, f"{side}_{k}"] = np.nan
+    return f
+
+
+FINAL_NUMS = ("P_e", "X", "D", "P_x", "net_usd", "net_stress_usd", "cost_usd", "gross_usd", "R", "R_stress", "y")
+
+
+def assert_final_finite(t):
+    assert t["status"] == "final" and all(np.isfinite(t[c]) for c in FINAL_NUMS), t
+
+
+def test_the_review_probe_no_longer_yields_nan():
+    """The review's probe: ask missing from minute 181 on; a long at T = 180 (entry minute 181) used to be 'final'
+    with NaN P_e, R and y, and settle_days then crashed."""
+    f = one_sided(m1_day(), "ask", range(181, 1440))
+    md = execution.Minutes(f)
+    t = execution.trade(md, 1, 180, 4, K, 10.0)
+    assert_final_finite(t)
+    assert t["P_e"] == f.ask_c.iloc[180]                      # the last finite ask before T + 1 minute
+    s = execution.trade(md, -1, 180, 4, K, 10.0)              # a short exits on the ask: no quote on the path
+    assert_final_finite(s)
+    assert s["reason"] == "gap" and s["exit_min"] == 181 + 14 and s["P_x"] == pytest.approx(s["X"])
+
+
+def test_entry_skips_back_to_the_last_finite_quote():
+    f = one_sided(m1_day(), "ask", [899, 900, 901])
+    md = execution.Minutes(f)
+    t = execution.trade(md, 1, 900, 2, K, 10.0)
+    assert t["P_e"] == f.ask_c.iloc[898] and t["entry_min"] == 901
+    assert_final_finite(t)
+    gone = m1_day().drop(index=m1_day().index[[900, 901]])
+    gone = one_sided(gone, "ask", [898])                      # rows 900-901 missing, 899 present, 898 one-sided
+    t2 = execution.trade(execution.Minutes(gone), 1, 900, 2, K, 10.0)
+    assert t2["P_e"] == gone.ask_c.loc[m1_day().index[899]] and np.isfinite(t2["P_e"])
+
+
+def test_non_finite_path_minutes_count_toward_the_no_quote_run():
+    base = m1_day(mid=np.full(1440, 4000.0))
+    f = one_sided(base, "bid", range(905, 920))                # a long exits on the bid: 15 minutes without it
+    t = execution.trade(execution.Minutes(f), 1, 900, 2, K, 10.0)
+    assert_final_finite(t)
+    assert t["reason"] == "gap" and t["exit_min"] == 919 and t["P_x"] == pytest.approx(t["X"])
+    f14 = one_sided(base, "bid", range(905, 919))
+    assert execution.trade(execution.Minutes(f14), 1, 900, 2, K, 10.0)["reason"] == "time"
+    other = one_sided(base, "ask", range(905, 920))           # the other side only: counts too (no volume on both)
+    assert execution.trade(execution.Minutes(other), 1, 900, 2, K, 10.0)["reason"] == "gap"
+
+
+def test_time_exit_uses_the_last_finite_close():
+    f = one_sided(m1_day(mid=np.full(1440, 4000.0)), "bid", [928, 929])
+    t = execution.trade(execution.Minutes(f), 1, 900, 2, K, 10.0)
+    assert_final_finite(t)
+    assert t["reason"] == "time" and t["exit_min"] == 927 and t["P_x"] == f.bid_c.iloc[927]
+
+
+def test_no_quote_at_all_and_bad_inputs():
+    f = one_sided(m1_day(), "ask", range(0, 1440))
+    t = execution.trade(execution.Minutes(f), 1, 900, 2, K, 10.0)
+    assert t["status"] == "no_quote" and not np.isfinite(t["P_e"])
+    for F in (0.0, -1.0, np.nan, np.inf):
+        with pytest.raises(ValueError):
+            execution.trade(execution.Minutes(m1_day()), 1, 900, 2, K, F)
+    mid = np.full(1440, 4000.0)
+    mid[1365:1380] = np.linspace(4000.2, 4004.0, 15)
+    assert _decide(m1_day(mid=mid), F=10.0, FS=0.0, spec=dict(registry.S1_SPEC) | {"stop": "S10"})["outcome"] == \
+        "abstain_U"
+
+
+def test_settlement_never_writes_nan_on_a_one_sided_day(tmp_path):
+    """End to end through ledger.settle_days: one-sided minutes on the path settle, and the next run reads them."""
+    from lab import ledger
+    mid = np.full(1440, 4000.0)
+    mid[1365:1380] = np.linspace(4000.2, 4004.0, 15)          # S1 fades the 22:45 rise: a short, exits on the ask
+    f = one_sided(m1_day(mid=mid), "ask", range(1381, 1410))
+    lb = bars.lab_bars(f)
+    di = ledger.DayInputs(day=DAY, weekday=DAY.dayofweek, holiday=False, event_day=False,
+                          db=grammar.DayBars(lb[lb.day == DAY]), md=execution.Minutes(f),
+                          F_H1=np.full(23, 10.0), F_S=np.full(23, 12.0))
+    recs = registry.seed_records()[:1]
+    sts = {"S1": {"state": "PAPER", "first_day": "2026-11-02", "promoted_utc": None}}
+    ledger.settle_days(tmp_path, recs, sts, [di], "2026-11-05T03:20:00Z", "abcd1234", None, synthetic=True)
+    tr = ledger.read(tmp_path / "trades.csv")
+    assert len(tr) == 1 and tr[0]["status"] == "final" and tr[0]["reason"] == "gap"
+    assert all(tr[0][c] != "" for c in ("P_e", "X", "P_x", "net_usd", "R", "y"))
+    ledger.settle_days(tmp_path, recs, sts, [di], "2026-11-06T03:20:00Z", "abcd1234", None, synthetic=True)
+    assert ledger.tripwire(tmp_path, recs, sts, di, "abcd1234") == []
+
+
+def test_ledger_tripwire_tolerates_the_last_bit_only(tmp_path):
+    """A1 item 7: numeric fields agree within 1e-12 relative; categorical fields exactly."""
+    from lab import ledger
+    assert ledger.same_number("4000.123", repr(float(np.nextafter(4000.123, 5000.0))))
+    assert ledger.same_number("", "") and not ledger.same_number("", "1.0")
+    assert not ledger.same_number("4000.123", "4000.1230001")
+    assert ledger.same_number("0.0", "0.0") and not ledger.same_number("0.0", "1e-300")

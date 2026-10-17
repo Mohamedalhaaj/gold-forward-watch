@@ -129,14 +129,23 @@ li { margin: 2px 0; }
       (d.start ? '<p class="muted">يبدأ العدّ من يوم ' + ltr(d.start) + '، ولا تُحتسب أي صفقة قبله</p>' : "");
 
     document.getElementById("rules").innerHTML = rules.map(r => {
-      const p = r.progress === null || r.progress === undefined ? null : Math.max(0, Math.min(1, r.progress));
-      const ev = p === null ? '<span class="muted">مرجع</span>' :
-        '<span class="muted">‏' + Math.round(100 * p) + '% من المطلوب</span><div class="bar"><i style="width:' +
-        (100 * p).toFixed(1) + '%"></i></div>';
+      // a promoted rule shows only what happened after its promotion: its record and the evidence against it (K);
+      // a rule under test shows its evidence E against the bar E* it must reach, on the same linear scale
+      const promoted = r.K !== null && r.K !== undefined;
+      const p = promoted || r.progress === null || r.progress === undefined ? null :
+        Math.max(0, Math.min(1, r.progress));
+      const ev = promoted ?
+        '<span class="muted">ضدها بعد اعتمادها ' + ltr(fmt(r.K, 1)) + '، وتُسحب عند ' + ltr(fmt(r.K_demote, 0)) +
+        '</span>' :
+        (p === null ? '<span class="muted">مرجع</span>' :
+          '<span class="muted">' + ltr(fmt(r.E, 1)) + ' من ' + ltr(fmt(r.E_star, 0)) +
+          ' المطلوبة للاعتماد</span><div class="bar"><i style="width:' + (100 * p).toFixed(1) + '%"></i></div>');
       const cls = r.state === "LIVE" ? "pill live" : (r.state === "DEMOTED" ? "pill bad" : "pill");
-      const extra = r.state === "LIVE" && r.n_post < 20 ? '<div class="muted">سجلّها بعد اعتمادها ما زال قصيرًا</div>' : "";
+      const extra = (promoted ? '<div class="muted">الأرقام منذ اعتمادها فقط</div>' : "") +
+        (r.state === "LIVE" && r.n_post < 20 ? '<div class="muted">سجلّها بعد اعتمادها ما زال قصيرًا</div>' : "");
+      const since = promoted && r.promoted_utc ? String(r.promoted_utc).slice(0, 10) : (r.first_day || "—");
       return '<tr><td class="title">' + esc(r.title_ar) + extra + '</td><td data-label="منذ">' +
-        ltr(r.first_day || "—") + '</td><td data-label="الصفقات">' + ltr(r.n) +
+        ltr(since) + '</td><td data-label="الصفقات">' + ltr(r.n) +
         '</td><td data-label="متوسط الصافي (دولار للأونصة)">' + ltr(fmt(r.net_avg, 2)) +
         '</td><td class="ev" data-label="الدليل">' + ev + '</td><td data-label="الحالة"><span class="' + cls + '">' +
         esc(r.state_ar) + "</span></td></tr>";

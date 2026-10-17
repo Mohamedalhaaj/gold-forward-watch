@@ -6,7 +6,8 @@ r = y_bp / F_H1; bucket = system_common.bucket(slot, nfp, cpi, fomc) from the ho
 CPI, FOMC, NFP, REOPEN, then N_ASIA / N_LONDON / N_NY by core.session_of_hour).
 
 Monthly update for month M (from 2027-01; at the first run in M, or later, whose data before M are final; burn-in:
-observations before START never count), per bucket, over observations with model date < M:
+observations before START never count; monthly_updates chains the due months, each starting from the previous
+month's active states), per bucket, over observations with model date < M:
 - m = mean r; normal and REOPEN buckets: SE = sd of the ISO-week cluster means / √G (G weeks); event buckets
   (CPI, FOMC, NFP): SE = sd(r)/√n; z = (m − 1)/SE.
 - eligible: G >= 8 (normal, REOPEN), n >= 6 (events). An inactive bucket turns active iff eligible and |z| >= z*;
@@ -138,6 +139,32 @@ def due_months(today_model, done_months):
         if k not in done_months:
             out.append(k)
         m += pd.DateOffset(months=1)
+    return out
+
+
+def latest_active(updates):
+    """{bucket: active} after the latest update (the hysteresis state; empty before the first update)."""
+    if not len(updates):
+        return {}
+    last = updates[updates.month.astype(str) == str(updates.month.max())]
+    return {r.bucket: bool(int(r.active_after)) for r in last.itertuples()}
+
+
+def monthly_updates(obs, updates, today_model, complete_utc, zstar):
+    """The update rows due at this run, in month order (§4; A1 item 9: the chaining and its state live here).
+
+    updates: the l3_updates ledger so far. A due month is computed only once every minute before its first day is
+    final (complete_utc); the first month that is not stops the chain until a later run. Each month starts from the
+    previous month's active states."""
+    done = set(updates.month.astype(str)) if len(updates) else set()
+    before = latest_active(updates)
+    out = []
+    for month in due_months(today_model, done):
+        if bars.model_to_utc(pd.Timestamp(month + "-01")) > complete_utc:
+            break
+        rows = update(obs, month, before, zstar)
+        out += rows
+        before = {r["bucket"]: bool(r["active_after"]) for r in rows}
     return out
 
 

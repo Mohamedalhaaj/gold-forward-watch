@@ -111,10 +111,20 @@ def test_live_rule_shows_its_post_promotion_record_only(tmp_path):
              "net_usd": 0.5, "net_stress_usd": 0.25, "recorded_utc": "2027-03-05T03:20:00Z"} for i in (2, 3, 4)]
     ledger.append(P.lab / "trades.csv", ledger.TRADE_COLS, post)
     ev = registry.read_events(P.reg / "events.csv")
-    lab = run.lab_summary(P, recs, states_now(P, recs), ev, "RUNNING", "2026-11-02")
+    lab = __import__("publish").lab_summary(P.lab, recs, states_now(P, recs), ev, "RUNNING")
     s1 = next(r for r in lab["rules"] if r["id"] == "S1")
     assert s1["state"] == "LIVE" and s1["n"] == 3 and s1["net_sum"] == pytest.approx(1.5)
     assert s1["record"] == "post-promotion" and lab["n_live"] == 1 and lab["live"][0]["n_post"] == 3
+    # A1 item 12: no pre-promotion E or progress for a promoted rule; its evidence is K, from post-promotion trades
+    assert s1["E"] is None and s1["progress"] is None and s1["E_star"] is None
+    assert s1["K"] == pytest.approx(__import__("lab.eproc", fromlist=["x"]).k_value([0.1, 0.1, 0.1]))
+    site = __import__("publish").site_json({"asof_utc": "x", "halt": [], "start": "2026-11-02", "lab": lab,
+                                            "l1": {"green_ok": 1}, "l3": {"asof": None, "zstar": 7.75,
+                                                                          "mult": {"N_NY": (1.0, 0)}}, "data": {}})
+    s1j = next(r for r in site["rules"] if r["id"] == "S1")
+    assert s1j["E"] is None and s1j["progress"] is None and s1j["K"] is not None
+    paper = next(r for r in lab["rules"] if r["id"] == "C1")
+    assert paper["K"] is None
     lines = __import__("publish").system_csv("2027-03-05T03:20:00Z", {"green_ok": 1, "asof": "2027-03-05"},
                                              {"asof": None, "mult": {b: (1.0, 0) for b in
                                                                      __import__("system_common").BUCKETS}}, lab)

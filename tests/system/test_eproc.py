@@ -26,8 +26,9 @@ def test_e_star_values_of_the_spec():
     assert sum(eproc.gamma_proposal(k) for k in range(1, 100000)) == pytest.approx(0.70, abs=1e-5)
     assert eproc.GAMMA_S1 + 0.70 == pytest.approx(1.0)
     assert eproc.alpha_version(1) == 0.04
-    # the spec's future-version formula, literally (not used in v1; see the eproc.alpha_version note)
-    assert [eproc.alpha_version(v) for v in (2, 3, 4)] == [0.01, 0.005, 0.0025]
+    # A1 item 5: v >= 2 get 0.01·2^-(v-1), so the program total is 0.04 + 0.01 = 0.05
+    assert [eproc.alpha_version(v) for v in (2, 3, 4)] == [0.005, 0.0025, 0.00125]
+    assert sum(eproc.alpha_version(v) for v in range(1, 200)) == pytest.approx(0.05, abs=1e-15)
 
 
 def test_ville_bound_on_null_streams():

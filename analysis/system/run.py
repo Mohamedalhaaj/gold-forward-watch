@@ -1,20 +1,30 @@
-"""The system job (SYSTEM_V1_PREREG.md §7). OPS: orchestration.
+"""The system job (SYSTEM_V1_PREREG.md §7, Amendment A1 items 9-11). OPS: I/O orchestration only.
 
-One run, in order: FROZEN check, fetch, store check, forecasts (write-once) and their tripwire, L3 (monthly update and
-green suppression), lab (registration, settlement, e-processes, promotion/demotion, proposer on its Saturday),
-publish, then deploy with wrangler (same site and secret as forward-watch). The workflow commits the ledgers after.
+Every decision with lab or calibration semantics is made in a FROZEN module (A1 item 9): registration and states
+(lab/registry.py), settlement, suspensions and the tripwire (lab/ledger.py), α-spending, γ_k, D_j and E*_k
+(lab/eproc.py, lab/proposer.py), the proposer's schedule and training days (lab/proposer.py), the L3 monthly chain and
+its hysteresis state (l3.py), the store and the calendars (forecasts.py). This file reads and writes files, calls
+them in order and reports.
+
+One run, in order: FROZEN check, fetch, store check, calendars, forecasts (write-once) and their tripwire, L3 (monthly
+update and green suppression), lab (registration, settlement, e-processes, promotion/demotion, proposer on its
+Saturday), publish, then deploy with wrangler (same site and secret as forward-watch), then STATUS.md. The workflow
+commits the ledgers after.
 
 Modes:
-- cloud (default; only inside GitHub Actions): writes the repo's data/system, reports/system and
-  reports/forward_site/system. REGISTERED rows come from the registry files found at HEAD; the first successful run
-  writes reports/system/START.json.
+- cloud (default): only inside GitHub Actions and only on main (GITHUB_REF = refs/heads/main, and HEAD = origin/main
+  when that ref resolves; A1 item 11); anything else exits non-zero before writing. Writes the repo's data/system,
+  reports/system and reports/forward_site/system. REGISTERED rows come from the registry files found at HEAD; the
+  first non-halted run writes reports/system/START.json.
 - --dry: everything goes to a temporary folder (or --out), no git, no deploy. On real data the lab is NOT run: no lab
   outcome is computed on real data before the freeze (§0, §9). --raw-from seeds the temp store from a data folder.
 - --dry --synthetic: a synthetic random-walk world (synth.py) and a sequence of simulated runs (the first on a
   Tuesday, then every Saturday 03:20 UTC), with placeholder registration: the end-to-end lab dry run of §9.
 
-Exit code 1 when the run halted (FROZEN mismatch, raw-store mismatch, registry or tripwire difference), so GitHub
-emails the owner; the commit step still runs.
+Exit code: 1 when the run halted (FROZEN mismatch, raw-store mismatch, registry or tripwire difference: the lab is
+PAUSED); 2 when it did not halt but an operation failed (A1 item 11: the fetch raised, the deploy failed, the complete
+data lag more than 2 trading days, the calendars end within 60 days, or a calendar extension line was rejected or
+lost): the lab is not halted. Either way GitHub emails the owner; the commit step still runs.
 """
 import argparse
 import json
@@ -38,12 +48,14 @@ import forecasts  # noqa: E402
 import frozen_hashes  # noqa: E402
 import l3  # noqa: E402
 import publish  # noqa: E402
-import system_common as sc  # noqa: E402
-from lab import eproc, ledger, proposer, registry  # noqa: E402
+from lab import ledger, proposer, registry  # noqa: E402
 
 ROOT = syspath.ROOT
 WRANGLER = ["npx", "--yes", "wrangler@4.151.1", "deploy", "--config", "reports/forward_deploy/wrangler.jsonc"]
 SEED_FILES = ("S1.json", "S1R.json", "C1.json")
+LAG_MAX_TRADING_DAYS = 2
+CALENDAR_WARN_DAYS = 60
+EXIT_HALT, EXIT_OPS = 1, 2
 
 
 class Paths:
@@ -74,17 +86,14 @@ def read_start(P):
 
 def write_start(P, now, run_id, head):
     p = P.rep / "START.json"
-    if p.exists():
-        return
-    start = registry.start_from_first_run(now)
-    publish.write_json(p, {"first_cloud_run_utc": fetch.iso(now), "run_id": run_id, "head_sha": head,
-                           "start": str(start), "rule": "later of 2026-11-02 and the first Monday >= 2 days after "
-                                                        "the first successful cloud run (SYSTEM_V1_PREREG.md §0)"})
+    if not p.exists():
+        publish.write_json(p, registry.start_record(now, run_id, head))
 
 
 OPS_FILES = ["analysis/system/run.py", "analysis/system/fetch.py", "analysis/system/publish.py",
              "analysis/system/synth.py", "analysis/system/l3_sim.py", "analysis/system/frozen_hashes.py",
-             ".github/workflows/system.yml", "reports/forward_site/system/index.html"]
+             ".github/workflows/system.yml", "reports/forward_site/system/index.html",
+             "analysis/system/calendars_ext/events.csv"]
 
 
 def log_ops_changes(P, asof, head):
@@ -115,31 +124,68 @@ def write_csv(path, cols, rows):
     pd.DataFrame(rows, columns=cols).to_csv(path, index=False, lineterminator="\n")
 
 
+def append_csv(path, cols, rows):
+    if rows:
+        exists = Path(path).exists()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(rows, columns=cols).to_csv(path, mode="a", header=not exists, index=False,
+                                                lineterminator="\n")
+
+
+def calendars(P, now, asof, run_id, head, ops):
+    """Frozen calendars plus the accepted extension lines (forecasts.ext_review); horizon warning (A1 item 10)."""
+    seen_path = P.rep / "calendar_ext.csv"
+    seen = (pd.read_csv(seen_path, dtype=str, keep_default_na=False).to_dict("records")
+            if seen_path.exists() else [])
+    try:
+        lines = forecasts.read_ext_lines(forecasts.EXT_FILE)
+    except ValueError as e:
+        ops.append(f"calendar extension file unreadable, ignored: {e}")
+        lines = [r["line"] for r in seen]
+    new_seen, accepted, problems = forecasts.ext_review(lines, seen, now, run_id, head)
+    append_csv(seen_path, forecasts.EXT_SEEN_COLS, new_seen)
+    ops += problems
+    events = forecasts.load_events(ext=accepted)
+    horizon = forecasts.calendar_horizon(events)
+    today = pd.Timestamp(now).tz_convert("UTC").tz_localize(None).normalize()
+    if today >= horizon - pd.Timedelta(days=CALENDAR_WARN_DAYS):
+        ops.append(f"the event calendars end on {horizon.date()}: add the next official NFP/CPI/FOMC dates to "
+                   f"analysis/system/calendars_ext/events.csv (at least 14 days ahead)")
+    rows = seen + new_seen
+    info = {"horizon": str(horizon.date()), "ext_accepted": sum(1 for r in rows if r["status"] == "accepted"),
+            "ext_rejected": sum(1 for r in rows if r["status"] == "rejected")}
+    return events, forecasts.holidays(today.year + 1), forecasts.full_closures(today.year + 1), info
+
+
 def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
-    """One run of the job. mode: cloud | dry | synthetic. Returns (info dict, halted bool)."""
+    """One run of the job up to publishing (mode: cloud | dry | synthetic). Returns (info, halted).
+
+    info["ops"] lists the operational failures (A1 item 11); STATUS.md is written by write_status, after the deploy."""
     halt, ops = [], []
     asof = fetch.iso(now)
     halt += frozen_hashes.check(ROOT) + frozen_hashes.vendor_check(ROOT)
     frozen_ok = not halt
     log_ops_changes(P, asof, head)
 
-    # 1 fetch (OPS: a failure never stops the run; the next run backfills)
+    # 1 fetch (OPS: a failure fails the run but never stops it; the next run backfills)
     if fetch_on:
         try:
             s = fetch.run(P.data, now=now)
             log(f"fetch: {s}")
         except Exception:  # noqa: BLE001
-            ops.append("fetch failed: " + traceback.format_exc(limit=1).strip().splitlines()[-1])
+            ops.append("fetch raised: " + traceback.format_exc(limit=1).strip().splitlines()[-1])
     bad_raw = fetch.verify_store(P.data)
     if bad_raw:
         halt.append(f"raw store differs from days.csv: {', '.join(bad_raw[:5])}")
     complete = fetch.complete_through_utc(P.data, now)
+    lag = fetch.lag_trading_days(P.data, now)
+    if lag > LAG_MAX_TRADING_DAYS:
+        ops.append(f"complete data lag {lag} trading days (through {complete:%Y-%m-%d %H:%M} UTC)")
 
-    # 2 forecasts
+    # 2 calendars and forecasts
+    events, hol, closures, cal_info = calendars(P, now, asof, run_id, head, ops)
     store = forecasts.read_store(P.data / "forecasts.csv")
     grid, mf, n_new = None, None, 0
-    events = forecasts.load_events()
-    hol = forecasts.holidays()
     if frozen_ok and not bad_raw:
         days = fetch.ok_days(P.data, now, before=complete)
         m = bars.load_store(P.data / "raw", days) if days else None
@@ -170,34 +216,17 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
     if grid is not None and not halt:
         obs = l3.observations(store, grid, start, complete)
         n_obs = len(obs)
-        new_upd = []
-        for month in l3.due_months(today_model, set(updates.month)):
-            if bars.model_to_utc(pd.Timestamp(month + "-01")) > complete:
-                break                                        # data before the cut not final yet: next run
-            prev = updates[updates.month == updates.month.max()] if len(updates) else updates
-            before = {r.bucket: bool(r.active_after) for r in prev.itertuples()}
-            rows = l3.update(obs, month, before, zstar)
-            for r in rows:
-                r["computed_utc"] = asof
-            new_upd += rows
-            updates = pd.concat([updates, pd.DataFrame(rows)], ignore_index=True)
+        new_upd = [r | {"computed_utc": asof} for r in l3.monthly_updates(obs, updates, today_model, complete, zstar)]
+        append_csv(upd_path, l3.UPDATE_COLS, new_upd)
         if new_upd:
-            exists = upd_path.exists()
-            pd.DataFrame(new_upd, columns=l3.UPDATE_COLS).to_csv(upd_path, mode="a", header=not exists,
-                                                                index=False, lineterminator="\n")
+            updates = pd.read_csv(upd_path, dtype={"month": str})
         trials = l3.hour_trials(mf, store, start, complete)
-        blocks, green_ok = l3.green_blocks(trials, start, complete, forecasts.full_closures())
+        blocks, green_ok = l3.green_blocks(trials, start, complete, closures)
         write_csv(P.rep / "l1_blocks.csv", l3.BLOCK_COLS, blocks)
     mult, l3_month = l3.current_multipliers(updates)
     l1 = {"green_ok": green_ok, "asof": str(pd.Timestamp(now).date()),
           "blocks": [{k: (None if isinstance(v, float) and not np.isfinite(v) else v) for k, v in b.items()}
-                     for b in blocks]}
-    if len(trials):
-        st = []
-        for s_, g in trials[trials.entry == 1].groupby("state"):
-            hr = (g.hit_long.sum() + g.hit_short.sum()) / (2 * len(g))
-            st.append({"state": ["GREY", "GREEN", "YELLOW", "RED"][int(s_)], "n": len(g), "hit_rate": f"{hr:.3f}"})
-        l1["states"] = st
+                     for b in blocks], "states": publish.state_table(trials)}
     publish.write_json(P.rep / "l1_flags.json", {"l1_green_ok": green_ok, "l1_asof": l1["asof"], "blocks": l1["blocks"]})
     l3_info = {"asof": f"{l3_month}-01" if l3_month else None, "mult": mult, "zstar": zstar, "n_obs": n_obs}
 
@@ -213,17 +242,12 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
     run_lab = mode in ("cloud", "synthetic")
     if run_lab and frozen_ok:
         tracked = tracked_registry_ids() if mode == "cloud" else {r["id"] for r in recs}
-        new_ev = registry.register_new(recs, events_l, asof, run_id, head, tracked)
-        registry.append_events(ev_path, new_ev)
+        registry.append_events(ev_path, registry.register_new(recs, events_l, asof, run_id, head, tracked))
         events_l = registry.read_events(ev_path)
     sts = registry.states(recs, events_l, start)
     proposer_report = None
     if run_lab and not lab_running:
-        # L2 §12.9: a halt pauses the lab and suspends every LIVE rule (it resumes when the lab runs again)
-        rows = [{"utc": asof, "id": r["id"], "event": "SUSPENDED", "reason": "S-a: lab paused", "n": "", "E": "",
-                 "K": "", "D_total": registry.promotions_count(events_l), "run_id": run_id, "head_sha": head}
-                for r in recs if sts[r["id"]]["state"] == "LIVE"]
-        registry.append_events(ev_path, rows)
+        registry.append_events(ev_path, ledger.halt_suspensions(recs, sts, events_l, asof, run_id, head))
         events_l = registry.read_events(ev_path)
         sts = registry.states(recs, events_l, start)
     if run_lab and lab_running and mf is not None:
@@ -231,47 +255,38 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
         hol_set = {pd.Timestamp(h) for h in hol}
         evd = forecasts.event_days(events)
         code8 = frozen_hashes.code_sha8()
+
+        def inputs(d):
+            return ledger.day_inputs(d, mf, lbars, store, hol_set, evd)
+
         pend = ledger.pending_days(P.lab, sts, complete)
-        dis = [ledger.day_inputs(d, mf, lbars, store, hol_set, evd) for d in pend]
-        ledger.settle_days(P.lab, recs, sts, dis, asof, code8, start, synthetic=(mode == "synthetic"))
-        settled = ledger.read(P.lab / "lab_days.csv")
+        ledger.settle_days(P.lab, recs, sts, [inputs(d) for d in pend], asof, code8, start,
+                           synthetic=(mode == "synthetic"))
+        settled = [r["day"] for r in ledger.read(P.lab / "lab_days.csv")]
         if settled:
-            last = pd.Timestamp(settled[-1]["day"])
-            diffs = ledger.tripwire(P.lab, recs, sts, ledger.day_inputs(last, mf, lbars, store, hol_set, evd), code8)
+            diffs = ledger.tripwire(P.lab, recs, sts, inputs(pd.Timestamp(settled[-1])), code8)
             if diffs:
                 halt.append("lab tripwire: " + "; ".join(diffs[:3]))
                 lab_running = False
         ledger.update_states(P.lab, recs, sts, events_l, asof, lab_running, run_id, head, today_model)
         events_l = registry.read_events(ev_path)
         sts = registry.states(recs, events_l, start)
-        # proposer (on its Saturday)
+        # proposer (on its Saturday): schedule, training days, k, γ_k, D and E*_k all come from proposer.py
         done = sorted(p.stem for p in (P.lab / "proposer").glob("*.json"))
-        first = ledger.lab_first_day(sts)
-        n_settled = sum(1 for r in settled if first and r["day"] >= first)
-        pdate = proposer.due(pd.Timestamp(now).date(), n_settled, done) if lab_running else None
-        if pdate and first:
-            tdays = [r["day"] for r in settled if r["day"] >= first and r["day"] < pdate][-proposer.TRAIN_DAYS:]
-            tin = [ledger.day_inputs(d, mf, lbars, store, hol_set, evd) for d in tdays]
-            active = sum(1 for r in recs if r["tier"] == "PROPOSER" and sts[r["id"]]["state"] in
-                         ("PENDING", "PAPER", "LIVE", "SUSPENDED"))
-            rep = proposer.run(tin, pdate, first, [r["question"] for r in recs], active)
-            D_now = registry.promotions_count(events_l)
-            k0 = sum(1 for r in recs if r["tier"] == "PROPOSER")
-            for i, spec in enumerate(rep["chosen_specs"]):
-                k = k0 + i + 1
-                rec = registry.record(f"P{k:03d}", spec, tier="PROPOSER", promotable=True,
-                                      gamma=eproc.gamma_proposal(k), D=D_now, title_ar=proposer.title_for(spec),
-                                      source=f"proposer {pdate}: t {rep['chosen_t'][i]:.3f} >= q95 {rep['q95']:.3f}",
-                                      extra={"arrival": 100 + k, "proposal_k": k, "proposed_date": pdate})
+        pl = proposer.plan(pd.Timestamp(now).date(), settled, sts, done, lab_running)
+        if pl:
+            rep = proposer.execute([inputs(d) for d in pl["train_days"]], pl, recs, sts)
+            new = proposer.new_records(rep, recs, events_l)
+            for rec in new:
                 registry.write(P.reg, rec)
-            rep["registered_ids"] = [f"P{k0 + i + 1:03d}" for i in range(len(rep["chosen_specs"]))]
-            publish.write_json(P.lab / "proposer" / f"{pdate}.json", rep)
+            rep["registered_ids"] = [rec["id"] for rec in new]
+            publish.write_json(P.lab / "proposer" / f"{pl['date']}.json", rep)
             proposer_report = rep
             recs = registry.load(P.reg)
             sts = registry.states(recs, events_l, start)
 
     # 5 publish
-    lab_info = lab_summary(P, recs, sts, events_l, "RUNNING" if lab_running else "PAUSED", start)
+    lab_info = publish.lab_summary(P.lab, recs, sts, events_l, "RUNNING" if lab_running else "PAUSED")
     if proposer_report is None:
         done = sorted((P.lab / "proposer").glob("*.json"))
         if done:
@@ -280,86 +295,37 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
         lab_info["proposer"] = {k: proposer_report[k] for k in ("run_date", "n_scored", "q95", "chosen",
                                                                  "n_rules")}
         lab_info["proposer"]["n_train"] = len(proposer_report["train_days"])
-    lines = publish.system_csv(asof, l1, l3_info, lab_info)
-    publish.write_system_csv(P.site / "VolMapSystem.csv", lines)
+    publish.write_system_csv(P.site / "VolMapSystem.csv", publish.system_csv(asof, l1, l3_info, lab_info))
     st_store = forecasts.read_store(P.data / "forecasts.csv")
     info = {"asof_utc": asof, "halt": halt, "ops": ops, "start": start, "l1": l1, "l3": l3_info, "lab": lab_info,
+            "calendar": cal_info,
             "data": {"ok_days": len(fetch.ok_days(P.data, now)), "missing": fetch.missing(P.data),
-                     "complete_through_utc": complete.strftime("%Y-%m-%d %H:%M"),
+                     "complete_through_utc": complete.strftime("%Y-%m-%d %H:%M"), "lag_trading_days": lag,
                      "revisions": len(fetch.read_csv(P.data / "revisions.csv", fetch.REVISION_COLS)),
                      "store_rows": len(st_store), "store_defined": int(pd.notna(st_store.F_H1).sum()),
                      "store_new": n_new}}
-    publish.write_json(P.site / "lab.json", site_json(info))
-    (P.rep / "STATUS.md").write_text(publish.status_md(info))
+    publish.write_json(P.site / "lab.json", publish.site_json(info))
     if halt:
         (P.rep / "HALT.md").write_text("# HALT\n\n" + "\n".join(f"- {h}" for h in halt) + "\n")
     return info, bool(halt)
 
 
-def lab_summary(P, recs, sts, events_l, state, start):
-    twins = ledger.read(P.lab / "twins.csv")
-    days = ledger.read(P.lab / "lab_days.csv")
-    first = ledger.lab_first_day(sts)
-    rules, best, ever_promoted = [], 0.0, any(e["event"] == "PROMOTED" for e in events_l)
-    interp = ever_promoted
-    for r in recs:
-        s = sts[r["id"]]
-        stt = ledger.rule_stats(P.lab, r, s, twins)
-        E, Es = stt["E"], (r["E_star"] if r["E_star"] is not None else float("inf"))
-        prog = None
-        if r["promotable"] and np.isfinite(Es):
-            prog = float(min(max(np.log(max(E, 1e-300)) / np.log(Es), 0.0), 1.0))
-            if s["state"] == "PAPER":
-                best = max(best, E / Es)
-        interp = interp or eproc.interpreter_needed(E, Es, stt["n"], r["promotable"] and s["state"] == "PAPER",
-                                                    False)
-        # §3 item 11: a promoted rule's record is its post-promotion record only
-        if s["state"] in ("LIVE", "SUSPENDED"):
-            n_shown, net_shown = len(stt["post"]), float(sum(t["net_usd"] for t in stt["post"]))
-        else:
-            n_shown, net_shown = stt["n"], stt["sum_net"]
-        rules.append({"id": r["id"], "title_ar": r["title_ar"], "tier": r["tier"], "promotable": r["promotable"],
-                      "state": s["state"], "state_ar": publish.STATE_AR[s["state"]], "first_day": s["first_day"],
-                      "registered_utc": s["registered_utc"], "n": n_shown, "net_sum": net_shown,
-                      "net_avg": net_shown / n_shown if n_shown else None, "E": E,
-                      "record": "post-promotion" if s["state"] in ("LIVE", "SUSPENDED") else "since first_day",
-                      "E_star": Es if np.isfinite(Es) else None, "progress": prog, "n_post": len(stt["post"]),
-                      "spec": r["spec"]})
-    live = [x for x in rules if x["state"] == "LIVE"]
-    return {"state": state, "days": sum(1 for d in days if first and d["day"] >= first),
-            "n_paper": sum(1 for x in rules if x["promotable"] and x["state"] == "PAPER"), "n_live": len(live),
-            "best_progress": best, "live": live, "rules": rules, "interpreter_needed": bool(interp),
-            "first_day": first}
+def write_status(P, info):
+    """reports/system/STATUS.md, after the deploy, so that it lists every operational failure of the run."""
+    P.rep.mkdir(parents=True, exist_ok=True)
+    (P.rep / "STATUS.md").write_text(publish.status_md(info))
 
 
-def site_json(info):
-    """lab.json for the card page: no NaN, Arabic texts as they are."""
-    def clean(x):
-        if isinstance(x, float):
-            return None if not np.isfinite(x) else round(x, 6)
-        if isinstance(x, dict):
-            return {k: clean(v) for k, v in x.items()}
-        if isinstance(x, (list, tuple)):
-            return [clean(v) for v in x]
-        if isinstance(x, (np.integer,)):
-            return int(x)
-        if isinstance(x, (np.floating,)):
-            return clean(float(x))
-        return x
-    lab = info["lab"]
-    return clean({"generated_utc": info["asof_utc"], "lab_state": lab["state"], "halted": bool(info["halt"]),
-                  "start": info["start"], "lab_days": lab["days"], "n_paper": lab["n_paper"], "n_live": lab["n_live"],
-                  "interpreter_needed": lab["interpreter_needed"], "rules": [
-                      {k: v for k, v in r.items() if k != "spec"} | {"T": r["spec"]["T"], "hold": r["spec"]["hold"]}
-                      for r in lab["rules"]],
-                  "proposer": lab.get("proposer"), "l1_green_ok": info["l1"]["green_ok"],
-                  "l3": {"asof": info["l3"]["asof"], "zstar": info["l3"]["zstar"],
-                         "mult": {b: {"m": m, "n": n} for b, (m, n) in info["l3"]["mult"].items()}},
-                  "data": info["data"]})
+def exit_code(info, halted):
+    return EXIT_HALT if halted else (EXIT_OPS if info["ops"] else 0)
 
 
 def deploy(log=print):
-    r = subprocess.run(WRANGLER, cwd=ROOT, capture_output=True, text=True)
+    try:
+        r = subprocess.run(WRANGLER, cwd=ROOT, capture_output=True, text=True)
+    except OSError as e:
+        log(f"deploy could not start: {e}")
+        return False
     log(r.stdout[-2000:] + r.stderr[-2000:])
     return r.returncode == 0
 
@@ -370,13 +336,40 @@ def synthetic_runs(P, log=print):
     synth.world(P.data)
     times = [pd.Timestamp("2026-10-27 03:20", tz="UTC")] + list(
         pd.date_range("2026-10-31 03:20", "2027-02-27 03:20", freq="7D", tz="UTC"))
-    halted = False
+    halted, ops = False, []
     for t in times:
         info, h = one_run(P, t, "synthetic", "dry", "dry-placeholder", fetch_on=False, log=log)
+        write_status(P, info)
         halted = halted or h
+        ops += info["ops"]
         log(f"{t}: lab days {info['lab']['days']}, paper {info['lab']['n_paper']}, live {info['lab']['n_live']}, "
-            f"store {info['data']['store_rows']}, halt {info['halt']}")
+            f"store {info['data']['store_rows']}, halt {info['halt']}, ops {info['ops']}")
+    info["ops"] = ops
     return info, halted
+
+
+def cloud_run(P, now, run_id, head, fetch_on=True, deploy_fn=deploy):
+    """The cloud run: one_run, START.json (first non-halted run), the deploy, then STATUS.md with every failure."""
+    info, halted = one_run(P, now, "cloud", run_id, head, fetch_on=fetch_on)
+    if not halted:
+        write_start(P, now, run_id, head)
+    if deploy_fn is not None and not deploy_fn():
+        info["ops"].append("deploy failed (wrangler)")
+    write_status(P, info)
+    return info, halted
+
+
+def cloud_refusal(env=None):
+    """Why cloud mode must not run here (None = it may): GitHub Actions, on main only (A1 item 11)."""
+    env = os.environ if env is None else env
+    if env.get("GITHUB_ACTIONS") != "true":
+        return "the ledgers have one writer, the GitHub Actions job: run locally with --dry"
+    if env.get("GITHUB_REF") != "refs/heads/main":
+        return f"cloud mode runs only on main (GITHUB_REF = {env.get('GITHUB_REF')!r}); nothing was written"
+    head, origin = git("rev-parse", "HEAD"), git("rev-parse", "origin/main")
+    if head and origin and head != origin:
+        return f"HEAD {head[:8]} is not origin/main {origin[:8]}; nothing was written"
+    return None
 
 
 def main(argv=None):
@@ -391,9 +384,13 @@ def main(argv=None):
     a = ap.parse_args(argv)
     now = fetch.to_utc(a.now) if a.now else fetch.utcnow()
     if a.synthetic and not a.dry:
-        sys.exit("--synthetic needs --dry")
-    if not a.dry and os.environ.get("GITHUB_ACTIONS") != "true":
-        sys.exit("the ledgers have one writer, the GitHub Actions job: run locally with --dry")
+        print("--synthetic needs --dry", file=sys.stderr)
+        return 2
+    if not a.dry:
+        why = cloud_refusal()
+        if why:
+            print(why, file=sys.stderr)
+            return 1
     if a.dry:
         base = Path(a.out) if a.out else Path(tempfile.mkdtemp(prefix="system_dry_"))
         P = Paths(base)
@@ -410,18 +407,14 @@ def main(argv=None):
             info, halted = synthetic_runs(P)
         else:
             info, halted = one_run(P, now, "dry", "dry", "dry", fetch_on=not a.no_fetch)
+            write_status(P, info)
     else:
-        P = Paths(ROOT)
-        run_id = os.environ.get("GITHUB_RUN_ID", "unknown")
-        head = git("rev-parse", "HEAD") or "unknown"
-        info, halted = one_run(P, now, "cloud", run_id, head, fetch_on=not a.no_fetch)
-        if not a.no_deploy and not deploy():
-            info["ops"].append("deploy failed")
-        if not halted:
-            write_start(P, now, run_id, head)
+        info, halted = cloud_run(Paths(ROOT), now, os.environ.get("GITHUB_RUN_ID", "unknown"),
+                                 git("rev-parse", "HEAD") or "unknown", fetch_on=not a.no_fetch,
+                                 deploy_fn=None if a.no_deploy else deploy)
     print(json.dumps({"halt": info["halt"], "ops": info["ops"], "start": info["start"], "lab_days": info["lab"]["days"],
                       "data": info["data"], "l1_green_ok": info["l1"]["green_ok"]}, indent=1, ensure_ascii=False))
-    return 1 if halted else 0
+    return exit_code(info, halted)
 
 
 if __name__ == "__main__":

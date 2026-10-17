@@ -53,7 +53,7 @@
  },
  "weeks": 66,
  "estimator": "analysis/system/l3.py (bucket_stats, eligible)",
- "l3_sha256": "01062239338e87b89d4b62769149e9d78035a64819dbd199c5bb50c2ea4555fe",
+ "l3_sha256": "c4c5206bb434b1ca82aba68873184632623e20d0efa95de464bc77ea86d7d1f3",
  "sim_sha256": "6b219836ee51fe0249891c131ed35a00b3afaac048e7e7d1e8ae33c3ea208fa5",
  "cells": [
   {

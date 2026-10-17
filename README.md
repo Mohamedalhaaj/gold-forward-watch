@@ -53,16 +53,27 @@ git -C ~/Documents/gold-forward-watch pull
 
 ## Gold support system v1 (branch `system-v1`, not enabled yet)
 
-The binding spec is xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (commit 39a685d). The job is
-`.github/workflows/system.yml` (03:20 and 09:20 UTC, Tuesday to Saturday, concurrency group `forward-watch`), which
-runs `uv run --frozen python -I analysis/system/run.py`: Dukascopy M1 bid/ask fetch, the write-once forecast store,
-L3 calibration and the green suppression, the forward signal lab, publish, then the same wrangler deploy. It writes
-only `data/system/`, `reports/system/` and `reports/forward_site/system/`; the watches above are untouched.
+The binding spec is xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (commit 39a685d) with its Amendment A1
+(commit d1e8306). The job is `.github/workflows/system.yml` (03:20 and 09:20 UTC, Tuesday to Saturday, concurrency
+group `forward-watch`), which runs `uv run --frozen python -I analysis/system/run.py`: Dukascopy M1 bid/ask fetch, the
+write-once forecast store, L3 calibration and the green suppression, the forward signal lab, publish, then the same
+wrangler deploy. It writes only `data/system/`, `reports/system/` and `reports/forward_site/system/`; the watches above
+are untouched.
 
 - Frozen semantics: `analysis/system/FROZEN.sha256` (check: `uv run --frozen python -I analysis/system/frozen_hashes.py`).
+  `run.py` is I/O orchestration only; every lab and calibration decision is in a frozen module (A1 item 9).
 - Vendored, byte-identical copies of xauusd-quant files: `analysis/system/vendor/SHA256SUMS`.
+  `reports/system/L3_ZSTAR.json` is byte-identical to xauusd-quant `research/system/L3_ZSTAR.json` (a test pins them).
+- Cloud mode runs only on `main` (`GITHUB_REF = refs/heads/main`). Exit code 1 = halted (lab PAUSED); 2 = an
+  operation failed (the fetch raised, the deploy failed, complete data lag more than 2 trading days, the event
+  calendars end within 60 days, or a calendar extension line was rejected or lost). Either way GitHub emails the owner.
+- Event calendars after 2027: append official dates to `analysis/system/calendars_ext/events.csv`
+  (`event,ts_utc,source_url`, e.g. `NFP,2028-01-07 13:30:00+00:00,https://www.bls.gov/schedule/news_release/empsit.htm`),
+  at least 14 days ahead. The file is append-only and not frozen; each line is accepted or rejected for good the first
+  time a cloud run sees it (`reports/system/calendar_ext.csv`). NYSE closures come from pandas_market_calendars per year.
 - Tests: `uv run --frozen pytest tests/system` (the forecast parity against the client's HYCM log is blocking).
 - Local runs only with `--dry` (a temp folder; on market data the lab is never run before the freeze):
   `run.py --dry --raw-from data/system` (real data: fetch, forecasts, L3, publish) and `run.py --dry --synthetic`
   (the end-to-end lab dry run on a synthetic random walk).
-- Status file for the indicator: `/system/VolMapSystem.csv`; lab card: `/system/`.
+- Status file for the indicator: `/system/VolMapSystem.csv` (UTF-8 without a BOM; every line ASCII except a LIVE
+  rule's Arabic title); lab card: `/system/`.

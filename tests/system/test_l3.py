@@ -74,6 +74,27 @@ def test_activation_and_hysteresis():
     assert off["active_after"] == 0 and off["m"] == 1.0
 
 
+def test_monthly_updates_chain_the_hysteresis_state():
+    """A1 item 9: the monthly chain (due months, the completeness gate, each month starting from the previous month's
+    states) is l3.monthly_updates."""
+    mondays = pd.date_range("2026-11-02", "2027-03-29", freq="7D")
+    strong = week_obs(mondays, 1.3, 0.05)
+    empty = pd.DataFrame(columns=l3.UPDATE_COLS)
+    late = bars.model_to_utc(pd.Timestamp("2027-04-01"))
+    rows = l3.monthly_updates(strong, empty, pd.Timestamp("2027-03-02"), late, 3.5)
+    assert [r["month"] for r in rows[::7]] == ["2027-01", "2027-02", "2027-03"]
+    ny = [r for r in rows if r["bucket"] == "N_NY"]
+    assert [r["active_before"] for r in ny] == [0, 1, 1] and all(r["active_after"] == 1 for r in ny)
+    # data before 2027-02-01 not final yet: only January now
+    gate = bars.model_to_utc(pd.Timestamp("2027-02-01")) - pd.Timedelta(minutes=1)
+    assert {r["month"] for r in l3.monthly_updates(strong, empty, pd.Timestamp("2027-03-02"), gate, 3.5)} == {"2027-01"}
+    # a later run continues from the ledger's latest month
+    upd = pd.DataFrame([r | {"computed_utc": "x"} for r in rows[:7]])
+    more = l3.monthly_updates(strong, upd, pd.Timestamp("2027-02-03"), late, 3.5)
+    assert {r["month"] for r in more} == {"2027-02"}
+    assert next(r for r in more if r["bucket"] == "N_NY")["active_before"] == 1
+
+
 def test_ineligible_buckets_never_activate():
     few = week_obs(pd.date_range("2026-11-02", periods=5, freq="7D"), 1.5, 0.01)
     rows = l3.update(few, "2027-01", {"N_NY": True}, zstar=3.5)
@@ -151,3 +172,13 @@ def test_zstar_file_follows_the_rule():
         assert max(c["p_any_by_z"][below] for c in z["cells"]) > 0.10
     import hashlib
     assert z["l3_sha256"] == hashlib.sha256((pytest.ROOT / "analysis/system/l3.py").read_bytes()).hexdigest()
+    assert z["sim_sha256"] == hashlib.sha256((pytest.ROOT / "analysis/system/l3_sim.py").read_bytes()).hexdigest()
+
+
+ZSTAR_SIBLING = pytest.ROOT.parent / "xauusd-quant" / "research" / "system" / "L3_ZSTAR.json"
+
+
+@pytest.mark.skipif(not ZSTAR_SIBLING.exists(), reason="the xauusd-quant checkout is not next to this repo")
+def test_zstar_file_is_the_same_in_both_repos():
+    """A1 item 6: research/system/L3_ZSTAR.json in xauusd-quant is byte-identical to reports/system/L3_ZSTAR.json."""
+    assert ZSTAR_SIBLING.read_bytes() == (pytest.ROOT / "reports/system/L3_ZSTAR.json").read_bytes()

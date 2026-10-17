@@ -5,7 +5,8 @@
 - Demotion e-process: K(m) = mean over Λ of Π_{i<=m} (1 − λ·y_i), from the trade after promotion.
 - e-LOND (L2 §9.2) with the lab-v1 level α_v1 = 0.04 (§3 item 7): candidate j arriving after D_j promotions gets
   α_j = α_v1·γ_j·(D_j + 1) and E*_j = 1/α_j. γ: S1 0.30; the k-th proposal Γ_P/(k(k+1)) with Γ_P = 0.70; REF 0.
-  Future lab versions v get α_v = 0.01·2^−(v−2), so the program total stays <= 0.05.
+  Future lab versions v >= 2 get α_v = 0.01·2^−(v−1) (Amendment A1 item 5), so the program total is
+  0.04 + 0.01 = 0.05.
 - Promotion (all required): P1 E >= E*; P2 n >= 40 and the first and last counted trades >= 56 calendar days apart;
   P3 Σ net$ > 0 and Σ stress net$ > 0 (+$0.25 a trade, §3 item 2); P4 Σ(R_i − side_i·μ_ℓ) > 0 with μ_ℓ the rule's
   long drift-twin mean; P5 Σ R − max R > 0; P7 lab RUNNING. P6 is replaced by the INTERPRETER_NEEDED flag (§8).
@@ -30,11 +31,10 @@ MAX_ACTIVE_PROPOSALS = 10
 
 
 def alpha_version(v):
-    """Lifetime FDR level of lab version v (v1 = 0.04; v >= 2: 0.01·2^−(v−2), the spec's formula, literally).
-
-    Not used by v1. Note: summed over v >= 2 this formula gives 0.02, so 0.04 + 0.02 = 0.06, not the "<= 0.05" the
-    spec states; 0.01·2^−(v−1) would keep the total at 0.05. A later version must settle this before using it."""
-    return ALPHA_V1 if v == 1 else 0.01 * 2.0 ** -(v - 2)
+    """Lifetime FDR level of lab version v: v1 = 0.04; v >= 2: 0.01·2^−(v−1) (A1 item 5), summing to 0.01."""
+    if v < 1 or int(v) != v:
+        raise ValueError(v)
+    return ALPHA_V1 if v == 1 else 0.01 * 2.0 ** -(v - 1)
 
 
 def gamma_proposal(k):
