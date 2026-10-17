@@ -1,11 +1,11 @@
 {
- "updated_utc": "2026-10-16T19:32Z",
+ "updated_utc": "2026-10-17T01:31Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-10-16 22:22",
- "last_price": 4185.7,
+ "last_price_time_server": "2026-10-16 23:59",
+ "last_price": 4186.7,
  "days_done": 0,
  "in_sample": {
   "causal_M15": {
@@ -109,10 +109,16 @@
  },
  "open_trades": [],
  "wick": {
-  "days": 0,
+  "days": 1,
   "triggers": 0,
   "up": 0,
-  "rows": []
+  "rows": [
+   {
+    "day": "2026-10-16",
+    "trigger": 0,
+    "B_pts": -0.2
+   }
+  ]
  },
  "verdict_so_far": "PENDING",
  "verdict_secondary_so_far": "PENDING",
