@@ -1,0 +1,7 @@
+{
+ "first_cloud_run_utc": "2026-10-17T18:55:29Z",
+ "run_id": "39060202019",
+ "head_sha": "ca5e4bee2772d2acf302038ebed550ee56f1dbe7",
+ "start": "2026-11-02",
+ "rule": "later of 2026-11-02 and the first Monday >= 2 days after the first successful cloud run (SYSTEM_V1_PREREG.md §0)"
+}
