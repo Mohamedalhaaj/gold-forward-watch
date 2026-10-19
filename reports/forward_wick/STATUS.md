@@ -1,8 +1,8 @@
 # Forward watch status
 
-Updated 2026-10-19 16:58 UTC. Rule frozen in `reports/FORWARD_WICK_PREREG.md`.
+Updated 2026-10-19 21:01 UTC. Rule frozen in `reports/FORWARD_WICK_PREREG.md`.
 
-- Days recorded: 1 of 20
+- Days recorded: 2 of 20
 - Trigger days: 0; up at 24:00: 0
 - Non-trigger days up at 24:00: 0%
 - Verdict so far (final only at day 20): INCONCLUSIVE
