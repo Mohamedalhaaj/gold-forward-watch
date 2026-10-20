@@ -1,18 +1,18 @@
 # Gold support system v1: status
 
-Updated 2026-10-17T18:55:29Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
+Updated 2026-10-20T08:33:53Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
 
 ## Data and forecasts
 
-- Raw Dukascopy days stored: 46 (missing sides: 0); complete through 2026-10-17 00:00 UTC (exclusive); lag 0 trading day(s)
+- Raw Dukascopy days stored: 49 (missing sides: 0); complete through 2026-10-20 00:00 UTC (exclusive); lag 0 trading day(s)
 - Revisions logged (never used): 0
-- Forecast store: 782 slots (525 defined); 782 new this run
-- START: not set (no successful cloud run of the frozen code yet)
+- Forecast store: 807 slots (550 defined); 25 new this run
+- START: 2026-11-02
 - Event calendars cover through 2027-12-03 (the earliest of the last NFP, CPI and FOMC dates); extension lines accepted 0, rejected 0
 
 ## L1 green suppression (D1)
 
-- l1_green_ok = 1 (as of 2026-10-17)
+- l1_green_ok = 1 (as of 2026-10-20)
 
 ## L3 calibration
 
@@ -44,6 +44,6 @@ A promoted rule (LIVE, SUSPENDED, DEMOTED) shows its post-promotion record and i
 
 | id | state | first_day | record | trades | sum net $/oz | evidence |
 |---|---|---|---|---|---|---|
-| S1 | PAPER | - | since first_day | 0 | 0.00 | E 1.000 of E* 83.3 |
-| S1R | REF | - | since first_day | 0 | 0.00 | E 1.000 (REF) |
-| C1 | REF | - | since first_day | 0 | 0.00 | E 1.000 (REF) |
+| S1 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 of E* 83.3 |
+| S1R | REF | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 (REF) |
+| C1 | REF | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 (REF) |

@@ -1,8 +1,8 @@
 {
- "generated_utc": "2026-10-17T18:55:29Z",
+ "generated_utc": "2026-10-20T08:33:53Z",
  "lab_state": "RUNNING",
  "halted": false,
- "start": null,
+ "start": "2026-11-02",
  "lab_days": 0,
  "n_paper": 1,
  "n_live": 0,
@@ -15,7 +15,7 @@
    "promotable": true,
    "state": "PAPER",
    "state_ar": "قيد الاختبار",
-   "first_day": null,
+   "first_day": "2026-11-02",
    "registered_utc": "2026-10-17T18:55:29Z",
    "n_post": 0,
    "record": "since first_day",
@@ -36,7 +36,7 @@
    "promotable": false,
    "state": "REF",
    "state_ar": "مرجع للمقارنة",
-   "first_day": null,
+   "first_day": "2026-11-02",
    "registered_utc": "2026-10-17T18:55:29Z",
    "n_post": 0,
    "record": "since first_day",
@@ -57,7 +57,7 @@
    "promotable": false,
    "state": "REF",
    "state_ar": "مرجع للمقارنة",
-   "first_day": null,
+   "first_day": "2026-11-02",
    "registered_utc": "2026-10-17T18:55:29Z",
    "n_post": 0,
    "record": "since first_day",
@@ -109,13 +109,13 @@
   }
  },
  "data": {
-  "ok_days": 46,
+  "ok_days": 49,
   "missing": [],
-  "complete_through_utc": "2026-10-17 00:00",
+  "complete_through_utc": "2026-10-20 00:00",
   "lag_trading_days": 0,
   "revisions": 0,
-  "store_rows": 782,
-  "store_defined": 525,
-  "store_new": 782
+  "store_rows": 807,
+  "store_defined": 550,
+  "store_new": 25
  }
 }
