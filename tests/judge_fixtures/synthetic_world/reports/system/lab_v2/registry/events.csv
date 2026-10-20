@@ -1,0 +1,5 @@
+utc,id,event,reason,n,E,K,D_total,run_id,head_sha
+2026-11-03T03:20:00Z,S2,REGISTERED,found at HEAD,0,1.0,1.0,0,dry,dry-placeholder
+2026-11-03T03:20:00Z,S3,REGISTERED,found at HEAD,0,1.0,1.0,0,dry,dry-placeholder
+2026-11-03T03:20:00Z,S4,REGISTERED,found at HEAD,0,1.0,1.0,0,dry,dry-placeholder
+2026-11-03T03:20:00Z,S5,REGISTERED,found at HEAD,0,1.0,1.0,0,dry,dry-placeholder

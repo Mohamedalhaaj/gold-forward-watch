@@ -1,0 +1,8 @@
+{
+ "first_cloud_run_utc": "2026-11-03T03:20:00Z",
+ "run_id": "dry",
+ "head_sha": "dry-placeholder",
+ "v1_start": "2026-11-02",
+ "start": "2026-11-09",
+ "rule": "later of the v1 START and the first Monday >= 2 days after the first successful lab v2 cloud run (SYSTEM_V2_PREREG.md §0)"
+}

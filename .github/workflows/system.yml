@@ -67,6 +67,46 @@ jobs:
             exit 1
           fi
 
+      # Lab v2 (xauusd-quant research/system/SYSTEM_V2_PREREG.md §2.5; OPS edit logged in reports/system/ops_changes.csv).
+      # It runs only after v1's run, deploy and commit are done (and only if v1's commit step succeeded), with
+      # continue-on-error and its own timeout, and commits only its own three folders in a separate commit, so it
+      # never changes v1's exit code, publish, deploy or commit. A v2 failure halts v2 only (reports/system/lab_v2/HALT.md).
+      # `finished` is set only when run_v2.py returned (a halt included); a run killed by the timeout commits nothing.
+      - name: Lab v2 run
+        id: lab2
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          code=0
+          uv run --frozen python -I analysis/system/lab_v2/run_v2.py || code=$?
+          echo "finished=1" >> "$GITHUB_OUTPUT"
+          exit $code
+
+      - name: Commit the lab v2 ledgers
+        id: lab2_commit
+        if: ${{ !cancelled() && steps.lab2.outputs.finished == '1' }}
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet HEAD -- . ':(exclude)data/system/lab_v2' ':(exclude)reports/system/lab_v2' \
+              ':(exclude)reports/forward_site/system/lab_v2'; then
+            echo "lab v2 changed tracked files outside its folders; nothing is committed"; git diff --stat HEAD; exit 1
+          fi
+          for p in data/system/lab_v2 reports/system/lab_v2 reports/forward_site/system/lab_v2; do
+            if [ -e "$p" ] || git ls-files --error-unmatch "$p" >/dev/null 2>&1; then git add -- "$p"; fi
+          done
+          outside=$(git diff --cached --name-only | grep -v -E '^(data/system/lab_v2|reports/system/lab_v2|reports/forward_site/system/lab_v2)/' || true)
+          if [ -n "$outside" ]; then echo "staged outside the lab v2 folders: $outside"; git reset -q; exit 1; fi
+          if ! git diff --cached --quiet; then
+            git commit -q -m "lab v2 run $(date -u +%Y-%m-%dT%H:%MZ)"
+            for i in 1 2 3 4 5; do
+              git pull -q --rebase && git push -q && exit 0
+              echo "push attempt $i failed"; sleep 20
+            done
+            exit 1
+          fi
+
       - name: Fail the job if the run halted or failed
         if: ${{ steps.run.outcome == 'failure' }}
         run: exit 1

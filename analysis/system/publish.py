@@ -17,8 +17,17 @@ Lab counts in VolMapSystem.csv (the indicator's lab rows, A1 item 4):
   first_day;
 - lab_n_paper = the number of promotable rules in state PAPER (the seed S1 and proposer rules); REF streams (S1R, C1)
   and PENDING, LIVE, SUSPENDED, DEMOTED and RETIRED rules are not counted.
+
+Lab v2 keys (OPS edit, SYSTEM_V2_PREREG.md §2.5 items 4-5, logged in reports/system/ops_changes.csv): when
+write_system_csv writes the site file <base>/reports/forward_site/system/VolMapSystem.csv, it adds `lab2_state`,
+`lab2_days`, `lab2_n_paper` and `lab2_best_progress` (3 decimals) just before the `end` line, from
+<base>/reports/system/lab_v2/summary.json as it is when v1 publishes. In the workflow v1's step runs before the lab v2
+step, so that file is the last committed one (the previous run's). The keys are left out when the file is missing or
+invalid (not a JSON object with state RUNNING or PAUSED, days and n_paper non-negative integers, best_progress a
+finite number >= 0). `lab_n_paper` and the other v1 keys stay v1-only. The indicator ignores keys it does not know.
 """
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -103,8 +112,48 @@ def parse_system_csv(data):
     return out
 
 
+LAB2_SUMMARY = Path("reports") / "system" / "lab_v2" / "summary.json"
+LAB2_STATES = ("RUNNING", "PAUSED")
+
+
+def lab2_lines(summary_path):
+    """The four lab v2 lines from lab v2's summary.json, or [] when it is missing or invalid (§2.5 item 4)."""
+    try:
+        s = json.loads(Path(summary_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(s, dict) or s.get("state") not in LAB2_STATES:
+        return []
+    d, n, bp = s.get("days"), s.get("n_paper"), s.get("best_progress")
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in (d, n)):
+        return []
+    if isinstance(bp, bool) or not isinstance(bp, (int, float)) or not math.isfinite(bp) or bp < 0:
+        return []
+    return [f"lab2_state,{s['state']}", f"lab2_days,{d}", f"lab2_n_paper,{n}", f"lab2_best_progress,{float(bp):.3f}"]
+
+
+def with_lab2(lines, extra):
+    """`lines` (a system_csv result) with the lab v2 lines just before `end` and the end count recomputed."""
+    if not extra:
+        return list(lines)
+    out = [ln for ln in lines[:-1] if not ln.startswith("lab2_")] + list(extra)
+    return out + [f"end,{len(out)}"]
+
+
+def site_base(path):
+    """<base> when `path` is <base>/reports/forward_site/system/VolMapSystem.csv, else None."""
+    p = Path(path)
+    if (p.name == "VolMapSystem.csv" and p.parent.name == "system" and p.parent.parent.name == "forward_site"
+            and len(p.parents) > 3 and p.parents[2].name == "reports"):
+        return p.parents[3]
+    return None
+
+
 def write_system_csv(path, lines):
     path = Path(path)
+    base = site_base(path)
+    if base is not None:
+        lines = with_lab2(lines, lab2_lines(base / LAB2_SUMMARY))
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_bytes(encode_system_csv(lines))

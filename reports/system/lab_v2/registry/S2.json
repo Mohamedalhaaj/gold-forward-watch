@@ -1,0 +1,45 @@
+{
+ "D_at_arrival": 0,
+ "E_star": 666.6666666666666,
+ "E_star_exact": "2000/3",
+ "alpha": 0.005,
+ "alpha_exact": "1/200",
+ "alpha_j": 0.0015,
+ "arrival": 1,
+ "cost": {
+  "allowance_usd": 0.1,
+  "stress_add_usd": 0.25
+ },
+ "entry_delay_min": 1,
+ "gamma": 0.3,
+ "gamma_exact": "3/10",
+ "harness_file": "analysis/system/lab_v2/vendor/hunt/harness.py",
+ "harness_sha256": "f9208d01ae9fafd8c907d72fa26170bd48490c110c6b7a102ef9f71765ebb4fc",
+ "hold_bars": 24,
+ "hold_minutes": 120,
+ "hunt": {
+  "hunt_pass": false,
+  "q": 0.215,
+  "round": 1,
+  "val_years": "3/4",
+  "val_z": 1.775
+ },
+ "id": "S2",
+ "input_start_model": "2026-01-02 00:00",
+ "lab_version": 2,
+ "promotable": true,
+ "seed_file": "analysis/system/lab_v2/vendor/hunt/candidates/levels__watched_level_break.py",
+ "seed_name": "watched_level_break",
+ "seed_sha256": "b068c6d87ade2eda20e715d1ba5e4f75f0cf97042053ff22a3bbdf15a9465e7f",
+ "source": "xauusd-quant research/hunt/candidates/levels__watched_level_break.py at 074e6b8, byte-identical",
+ "stop": {
+  "k_S": 1.0540339626212611,
+  "kind": "disaster",
+  "mult": 3,
+  "unit": "S10 distance of the entry slot"
+ },
+ "tf": "M5",
+ "tf_minutes": 5,
+ "tier": "SEED",
+ "title_ar": "كسر المستويات المراقبة"
+}

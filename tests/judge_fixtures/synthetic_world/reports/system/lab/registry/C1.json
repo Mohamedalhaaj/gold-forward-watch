@@ -1,0 +1,33 @@
+{
+ "D_at_arrival": 0,
+ "E_star": null,
+ "alpha": 0.04,
+ "alpha_j": 0.0,
+ "arrival": 3,
+ "cost": {
+  "allowance_usd": 0.1,
+  "stress_add_usd": 0.25
+ },
+ "entry_delay_min": 1,
+ "gamma": 0.0,
+ "grammar": 1,
+ "id": "C1",
+ "lab_version": 1,
+ "promotable": false,
+ "question": "{\"T\":\"1500\",\"days\":31,\"hold\":8,\"side\":[\"FIXED\"],\"skip_event\":0,\"stop\":\"H10\",\"when\":[]}",
+ "source": "L2 §8.3 coin control; REF, never promotable, never published",
+ "spec": {
+  "T": "1500",
+  "days": 31,
+  "hold": 8,
+  "side": [
+   "COIN"
+  ],
+  "skip_event": 0,
+  "stop": "H10",
+  "when": []
+ },
+ "spec_sha256": "e44861d5d6e83ad9d622abfc181c4e87407f92be99a2ae1e6c0c2636abcebfe6",
+ "tier": "REF",
+ "title_ar": "رمية عملة عند 15 لتعرف شكل الحظ"
+}
