@@ -1,11 +1,11 @@
 {
- "updated_utc": "2026-10-20T02:04Z",
+ "updated_utc": "2026-10-20T15:03Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-10-20 04:54",
- "last_price": 4145.1,
+ "last_price_time_server": "2026-10-20 17:53",
+ "last_price": 4156.5,
  "days_done": 1,
  "in_sample": {
   "causal_M15": {
@@ -135,13 +135,13 @@
      "tf": "M30",
      "day": "2026-10-19",
      "fill_time": "2026-10-19 07:30",
-     "fill": 4204.59,
-     "stop": 4214.57,
-     "target": 4195.52,
+     "fill": "4204.59",
+     "stop": "4214.57",
+     "target": "4195.52",
      "exit_time": "2026-10-19 08:15",
-     "exit": 4195.52,
+     "exit": "4195.52",
      "reason": "target",
-     "net": 8.82,
+     "net": "8.82",
      "recorded_at": "2026-10-20T02:04Z"
     },
     {
