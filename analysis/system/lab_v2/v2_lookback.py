@@ -12,12 +12,13 @@ are v1 §1's.
 - An orphan raw file (written by a run that died before its row): a valid orphan is adopted (its own bytes, its own
   row; the new body is not used and the attempt is logged); an invalid one is replaced.
 - No re-check fetches (the days are history; the independent judge re-downloads them, J1).
-- Request budget: one request at a time, 1.5 s apart, up to 4 attempts with 5/20/60 s backoff on connection errors,
-  429 and 5xx; at most `max_requests` requests and `budget_s` seconds per call (cloud runs: 60 and 180 s; the next run
-  continues). A 404 is not retried within the call.
+- Request budget: one request at a time, 1.5 s apart (--pace-s for a slower manual fetch), up to 4 attempts with
+  5/20/60 s backoff on connection errors, 429 and 5xx; at most `max_requests` requests and `budget_s` seconds per call
+  (cloud runs: 60 and 180 s; the next run continues). A 404 is not retried within the call.
 
 Usage (the pre-freeze fetch, outside the sandbox):
   uv run --frozen python -I analysis/system/lab_v2/v2_lookback.py [--dir DIR] [--max-requests N] [--budget-s S]
+      [--pace-s S]
 """
 import argparse
 import csv
@@ -99,7 +100,7 @@ def _row(key, side, body, df, now):
 
 
 def run(lookback_dir=DEFAULT_DIR, now=None, max_requests=CLOUD_MAX_REQUESTS, budget_s=CLOUD_BUDGET_S, get=http_get,
-        sleep=time.sleep, clock=time.monotonic):
+        sleep=time.sleep, clock=time.monotonic, pace_s=PACE_S):
     """One fetch pass over the (day, side) pairs that are not final yet. Returns a summary."""
     d0 = Path(lookback_dir)
     t_end = clock() + budget_s
@@ -121,7 +122,7 @@ def run(lookback_dir=DEFAULT_DIR, now=None, max_requests=CLOUD_MAX_REQUESTS, bud
                 continue
             s["requests"] += 1
             code, body = get(bi5.url(d, side))
-            sleep(PACE_S)
+            sleep(pace_s)
             result = f"http {code}"
             if code == 200:
                 try:
@@ -191,8 +192,9 @@ def main(argv=None):
     ap.add_argument("--dir", default=str(DEFAULT_DIR))
     ap.add_argument("--max-requests", type=int, default=CLOUD_MAX_REQUESTS)
     ap.add_argument("--budget-s", type=float, default=CLOUD_BUDGET_S)
+    ap.add_argument("--pace-s", type=float, default=PACE_S)
     a = ap.parse_args(argv)
-    s = run(a.dir, max_requests=a.max_requests, budget_s=a.budget_s)
+    s = run(a.dir, max_requests=a.max_requests, budget_s=a.budget_s, pace_s=a.pace_s)
     print(s)
     print("complete:", complete(a.dir), "store problems:", verify(a.dir) or "none")
     return 0
