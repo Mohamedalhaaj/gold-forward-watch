@@ -192,3 +192,32 @@ def test_a_write_outside_the_site_path_never_adds_keys(tmp_path):
 def test_both_ops_edits_are_logged_by_v1():
     """§2.5 item 5: v1's run logs a row in reports/system/ops_changes.csv for each OPS file whose sha256 changed."""
     assert ".github/workflows/system.yml" in v1run.OPS_FILES and "analysis/system/publish.py" in v1run.OPS_FILES
+
+
+# ---------------------------------------------------------------- cloud mode guard (as v1)
+def test_cloud_mode_runs_only_on_main_at_origin(monkeypatch):
+    assert run_v2.cloud_refusal({}) is not None
+    assert "main" in run_v2.cloud_refusal({"GITHUB_ACTIONS": "true", "GITHUB_REF": "refs/heads/system-v2"})
+    monkeypatch.setattr(run_v2, "git", lambda *a: "abc")
+    assert run_v2.cloud_refusal({"GITHUB_ACTIONS": "true", "GITHUB_REF": "refs/heads/main"}) is None
+    monkeypatch.setattr(run_v2, "git", lambda *a: "abc" if a[-1] == "HEAD" else "def")
+    assert "origin/main" in run_v2.cloud_refusal({"GITHUB_ACTIONS": "true", "GITHUB_REF": "refs/heads/main"})
+
+
+def test_main_refuses_another_branch_before_writing_anything(monkeypatch):
+    def snap():
+        out = snapshot(ROOT / "reports", include_v2=True)
+        for f in ("data/system/days.csv", "data/system/forecasts.csv"):
+            p = ROOT / f
+            out[f] = hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
+        return out
+    before = snap()
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/feature")
+    assert run_v2.main(["--no-fetch"]) != 0
+    assert snap() == before
+
+
+def test_registration_reads_the_registry_files_tracked_at_head():
+    ids = run_v2.tracked_registry_ids()
+    assert ids == {"S2", "S3", "S4", "S5"}
