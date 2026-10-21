@@ -1,0 +1,49 @@
+# One-off, parallel: download the lab v2 input-only lookback (Dukascopy XAUUSD M1, 2026-01..08), one month per runner,
+# then merge and commit to this branch only. Never touches main or the live jobs.
+name: lookback-fetch2
+
+on:
+  push:
+    branches: [lookback-fetch2]
+    paths: [".github/workflows/lookback-fetch2.yml", "tools/lookback_fetch2.py"]
+
+permissions:
+  contents: write
+
+jobs:
+  month:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        month: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download one month
+        run: python3 -I tools/lookback_fetch2.py --month ${{ matrix.month }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: lookback-${{ matrix.month }}
+          path: data/system/lab_v2/lookback
+          if-no-files-found: ignore
+
+  merge:
+    needs: month
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lookback-*
+          path: data/system/lab_v2/lookback
+          merge-multiple: true
+      - name: Commit everything that was fetched
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/system/lab_v2/lookback
+          git commit -q -m "lookback raw files fetched on GitHub in parallel $(date -u +%Y-%m-%dT%H:%MZ)" || exit 0
+          git push -q origin HEAD:lookback-fetch2
