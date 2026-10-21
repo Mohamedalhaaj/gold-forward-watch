@@ -1,0 +1,45 @@
+{
+ "D_at_arrival": 0,
+ "E_star": 666.6666666666666,
+ "E_star_exact": "2000/3",
+ "alpha": 0.005,
+ "alpha_exact": "1/200",
+ "alpha_j": 0.0015,
+ "arrival": 2,
+ "cost": {
+  "allowance_usd": 0.1,
+  "stress_add_usd": 0.25
+ },
+ "entry_delay_min": 1,
+ "gamma": 0.3,
+ "gamma_exact": "3/10",
+ "harness_file": "analysis/system/lab_v2/vendor/hunt/harness.py",
+ "harness_sha256": "f9208d01ae9fafd8c907d72fa26170bd48490c110c6b7a102ef9f71765ebb4fc",
+ "hold_bars": 8,
+ "hold_minutes": 120,
+ "hunt": {
+  "hunt_pass": false,
+  "q": 0.215,
+  "round": 3,
+  "val_years": "4/4",
+  "val_z": 1.941
+ },
+ "id": "S3",
+ "input_start_model": "2026-01-02 00:00",
+ "lab_version": 2,
+ "promotable": true,
+ "seed_file": "analysis/system/lab_v2/vendor/hunt/candidates/r3_ctaflow__cta_flip_flow_usmorning.py",
+ "seed_name": "cta_flip_flow_usmorning",
+ "seed_sha256": "5a17b57dd2a34d62a276fff87a66426e4727dbd9dae5d3e715c9548f33812800",
+ "source": "xauusd-quant research/hunt/candidates/r3_ctaflow__cta_flip_flow_usmorning.py at 074e6b8, byte-identical",
+ "stop": {
+  "k_S": 1.0540339626212611,
+  "kind": "disaster",
+  "mult": 3,
+  "unit": "S10 distance of the entry slot"
+ },
+ "tf": "M15",
+ "tf_minutes": 15,
+ "tier": "SEED",
+ "title_ar": "تدفق صناديق الاتجاه في الصباح"
+}

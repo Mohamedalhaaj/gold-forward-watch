@@ -1,0 +1,123 @@
+{
+ "generated_utc": "2026-12-05T03:20:00Z",
+ "lab_state": "RUNNING",
+ "halted": false,
+ "start": "2026-11-02",
+ "lab_days": 25,
+ "n_paper": 1,
+ "n_live": 0,
+ "interpreter_needed": false,
+ "rules": [
+  {
+   "id": "S1",
+   "title_ar": "عكس حركة إغلاق نيويورك قبل 23",
+   "tier": "SEED",
+   "promotable": true,
+   "state": "PAPER",
+   "state_ar": "قيد الاختبار",
+   "first_day": "2026-11-02",
+   "registered_utc": "2026-10-27T03:20:00Z",
+   "n_post": 0,
+   "record": "since first_day",
+   "E": 1.027129,
+   "E_star": 83.333333,
+   "progress": 0.012326,
+   "K": null,
+   "n": 5,
+   "net_sum": 1.736724,
+   "net_avg": 0.347345,
+   "T": "2300",
+   "hold": 2
+  },
+  {
+   "id": "S1R",
+   "title_ar": "الفكرة نفسها بدخول فوري عند 23",
+   "tier": "REF",
+   "promotable": false,
+   "state": "REF",
+   "state_ar": "مرجع للمقارنة",
+   "first_day": "2026-11-02",
+   "registered_utc": "2026-10-27T03:20:00Z",
+   "n_post": 0,
+   "record": "since first_day",
+   "E": 1.004523,
+   "E_star": null,
+   "progress": null,
+   "K": null,
+   "n": 5,
+   "net_sum": 0.787545,
+   "net_avg": 0.157509,
+   "T": "2300",
+   "hold": 2
+  },
+  {
+   "id": "C1",
+   "title_ar": "رمية عملة عند 15 لتعرف شكل الحظ",
+   "tier": "REF",
+   "promotable": false,
+   "state": "REF",
+   "state_ar": "مرجع للمقارنة",
+   "first_day": "2026-11-02",
+   "registered_utc": "2026-10-27T03:20:00Z",
+   "n_post": 0,
+   "record": "since first_day",
+   "E": 1.072009,
+   "E_star": null,
+   "progress": null,
+   "K": null,
+   "n": 22,
+   "net_sum": 0.376225,
+   "net_avg": 0.017101,
+   "T": "1500",
+   "hold": 8
+  }
+ ],
+ "proposer": null,
+ "l1_green_ok": 1,
+ "l3": {
+  "asof": null,
+  "zstar": 7.75,
+  "mult": {
+   "CPI": {
+    "m": 1.0,
+    "n": 0
+   },
+   "FOMC": {
+    "m": 1.0,
+    "n": 0
+   },
+   "NFP": {
+    "m": 1.0,
+    "n": 0
+   },
+   "REOPEN": {
+    "m": 1.0,
+    "n": 0
+   },
+   "N_ASIA": {
+    "m": 1.0,
+    "n": 0
+   },
+   "N_LONDON": {
+    "m": 1.0,
+    "n": 0
+   },
+   "N_NY": {
+    "m": 1.0,
+    "n": 0
+   }
+  }
+ },
+ "data": {
+  "ok_days": 95,
+  "missing": [
+   "2026-12-01 ASK"
+  ],
+  "complete_through_utc": "2026-12-05 00:00",
+  "lag_trading_days": 0,
+  "revisions": 0,
+  "store_rows": 1587,
+  "store_defined": 1309,
+  "store_new": 115
+ }
+}

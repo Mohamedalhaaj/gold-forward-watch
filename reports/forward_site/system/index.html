@@ -62,6 +62,7 @@ ul { margin: 0; padding-inline-start: 1.2em; }
 li { margin: 2px 0; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-inline-end: 6px; }
 .err { color: var(--bad); }
+.card a { color: var(--gold); }
 @media (max-width: 620px) {
   table { min-width: 0; }
   thead { display: none; }
@@ -91,6 +92,12 @@ li { margin: 2px 0; }
         <tbody id="rules"></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="card" id="lab2">
+    <h2>المختبر، الإصدار الثاني</h2>
+    <p>أربع أفكار إضافية من بحثنا السابق تُختبر على البيانات القادمة فقط، ويُقارَن سجلها بالعملة العشوائية في الأيام نفسها.</p>
+    <p><a href="lab_v2/">افتح صفحة المختبر، الإصدار الثاني</a></p>
   </section>
 
   <section class="card" id="proposer"></section>
@@ -154,7 +161,11 @@ li { margin: 2px 0; }
     const pr = d.proposer;
     document.getElementById("proposer").innerHTML = "<h2>البحث عن قواعد جديدة</h2>" + (pr ?
       "<p>آخر جولة بحث " + ltr(pr.run_date) + ". فُحصت " + fmt(pr.n_rules, 0) + " قاعدة على آخر " + pr.n_train +
-      " يومًا من بيانات المختبر، " + (pr.chosen.length ? "وأُضيفت " + pr.chosen.length +
+      " يومًا من بيانات المختبر، " + (pr.chosen.length === 1 ?
+        "وأُضيفت قاعدة واحدة منها لأنها تجاوزت ما تعطيه الصدفة. تُحاسَب على الأيام التالية لتسجيلها فقط." :
+        pr.chosen.length === 2 ?
+        "وأُضيفت قاعدتان منها لأنهما تجاوزتا ما تعطيه الصدفة. تُحاسَبان على الأيام التالية لتسجيلهما فقط." :
+        pr.chosen.length ? "وأُضيفت " + pr.chosen.length +
         " منها لأنها تجاوزت ما تعطيه الصدفة. تُحاسَب على الأيام التالية لتسجيلها فقط." :
         "ولم تتجاوز أفضل نتيجة ما تعطيه الصدفة، فلم تُضف قاعدة.") + "</p>" :
       '<p class="muted">لم تبدأ جولات البحث بعد. تبدأ بعد أن يجمع المختبر 40 يومًا من بياناته، ثم تتكرر كل أربعة أسابيع</p>');

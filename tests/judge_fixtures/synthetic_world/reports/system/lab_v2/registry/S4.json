@@ -1,0 +1,45 @@
+{
+ "D_at_arrival": 0,
+ "E_star": 1000.0,
+ "E_star_exact": "1000",
+ "alpha": 0.005,
+ "alpha_exact": "1/200",
+ "alpha_j": 0.001,
+ "arrival": 3,
+ "cost": {
+  "allowance_usd": 0.1,
+  "stress_add_usd": 0.25
+ },
+ "entry_delay_min": 1,
+ "gamma": 0.2,
+ "gamma_exact": "1/5",
+ "harness_file": "analysis/system/lab_v2/vendor/hunt/harness.py",
+ "harness_sha256": "f9208d01ae9fafd8c907d72fa26170bd48490c110c6b7a102ef9f71765ebb4fc",
+ "hold_bars": 48,
+ "hold_minutes": 240,
+ "hunt": {
+  "hunt_pass": false,
+  "q": 0.61,
+  "round": 2,
+  "val_years": "3/4",
+  "val_z": 0.913
+ },
+ "id": "S4",
+ "input_start_model": "2026-01-02 00:00",
+ "lab_version": 2,
+ "promotable": true,
+ "seed_file": "analysis/system/lab_v2/vendor/hunt/candidates/r2_orb__inplay_comex_orb60.py",
+ "seed_name": "inplay_comex_orb60",
+ "seed_sha256": "99e5426f9a520ee9cb41b18b914c1671f4fc5fe75b517097901f159508361c1c",
+ "source": "xauusd-quant research/hunt/candidates/r2_orb__inplay_comex_orb60.py at 074e6b8, byte-identical",
+ "stop": {
+  "k_S": 1.0540339626212611,
+  "kind": "disaster",
+  "mult": 3,
+  "unit": "S10 distance of the entry slot"
+ },
+ "tf": "M5",
+ "tf_minutes": 5,
+ "tier": "SEED",
+ "title_ar": "كسر نطاق افتتاح كومكس"
+}

@@ -268,9 +268,9 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
   const dayFmt = new Intl.DateTimeFormat("ar-LY-u-nu-latn", { day: "numeric", month: "short", timeZone: "UTC" });
   const longFmt = new Intl.DateTimeFormat("ar-LY-u-nu-latn", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   const d0 = (s) => new Date(s + "T00:00:00Z");
-  const plural = (n, one, two, few, many) => n === 1 ? one : n === 2 ? two : n >= 3 && n <= 10 ? `${n} ${few}` : `${n} ${many}`;
+  const plural = (n, one, two, few, many) => { const r = n % 100; return n === 1 ? one : n === 2 ? two : r >= 3 && r <= 10 ? `${n} ${few}` : `${n} ${many}`; };
   const daysAr = (n) => plural(n, "يوم واحد", "يومين", "أيام", "يومًا");
-  const tradesAr = (n) => n === 0 ? "بلا صفقات" : plural(n, "صفقة واحدة", "صفقتين", "صفقات", "صفقة");
+  const tradesAr = (n, nom) => n === 0 ? "بلا صفقات" : plural(n, "صفقة واحدة", nom ? "صفقتان" : "صفقتين", "صفقات", "صفقة");
   const el = (tag, attrs = {}, text) => {
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
@@ -438,15 +438,15 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     if (!D.days_done) {
       sm.append("القاعدة مجمّدة وجاهزة. تبدأ المراقبة ", el("b", {}, "الاثنين 19 أكتوبر"), " وتستمر 20 يوم تداول. كل ليلة بعد إغلاق الجلسة تُحسب صفقات اليوم وتُضاف هنا.");
     } else {
-      sm.append(`بعد ${daysAr(D.days_done)}: `, el("b", { class: "num" }, fmtMoney(st.total)), ` للأونصة من ${tradesAr(st.trades)}. متوسط اليوم `, el("b", { class: "num" }, fmtMoney(st.avg_day)), ` مقابل `, el("span", { class: "num" }, fmtMoney(IS.avg_day)), ` متوقعة، و`, el("b", {}, fmtPct(st.days_pos)), " من أيام التداول رابحة.");
+      sm.append(`بعد ${daysAr(D.days_done)}: `, el("b", { class: "num" }, fmtMoney(st.total)), ` للأونصة من ${tradesAr(st.trades)}. متوسط اليوم `, el("b", { class: "num" }, fmtMoney(st.avg_day)), ` مقابل `, el("span", { class: "num" }, fmtMoney(IS.avg_day)), ` متوقع، و`, el("b", {}, fmtPct(st.days_pos)), " من أيام التداول رابحة.");
     }
     const track = $("track"); track.replaceChildren();
     const plan = tradingDays(D.start, D.n_days); const byDay = Object.fromEntries(P.daily.map(r => [r.day, r]));
     plan.forEach((day, i) => {
       const r = byDay[day]; const k = !r ? "pending" : !r.trades ? "flat" : r.net > 0 ? "up" : r.net < 0 ? "down" : "flat";
       const b = el("button", { class: "day", type: "button", role: "listitem", "data-k": k, style: `--i:${i}`,
-        "aria-label": `${longFmt.format(d0(day))}: ${!r ? "لم يكتمل بعد" : fmtMoney(r.net) + "، " + tradesAr(r.trades)}`,
-        title: `${dayFmt.format(d0(day))} — ${!r ? "لم يكتمل بعد" : fmtMoney(r.net) + "، " + tradesAr(r.trades)}` });
+        "aria-label": `${longFmt.format(d0(day))}: ${!r ? "لم يكتمل بعد" : fmtMoney(r.net) + "، " + tradesAr(r.trades, true)}`,
+        title: `${dayFmt.format(d0(day))} — ${!r ? "لم يكتمل بعد" : fmtMoney(r.net) + "، " + tradesAr(r.trades, true)}` });
       track.append(b);
     });
     $("ax0").textContent = dayFmt.format(d0(plan[0])); $("ax1").textContent = dayFmt.format(d0(plan[plan.length - 1]));
@@ -490,7 +490,7 @@ footer code { font-size: 0.8rem; color: var(--ink-2); }
     if (W) {
       ws.append(`أيام مسجلة: `, el("b", { class: "num" }, `${W.days}/20`), ` · أيام ظهر فيها الذيل: `, el("b", { class: "num" }, String(W.triggers)), ` · منها ارتفعت حتى الإغلاق: `, el("b", { class: "num" }, String(W.up)));
       const byW = Object.fromEntries(W.rows.map(r => [r.day, r]));
-      tradingDays("2026-10-16", 20).forEach(day => { const r = byW[day]; const k = !r ? "pending" : !r.trigger ? "none" : r.B_pts > 0 ? "up" : "down"; mini.append(el("i", { "data-k": k, title: `${dayFmt.format(d0(day))}: ${!r ? "لم يكتمل" : !r.trigger ? "لا ذيل" : (r.B_pts > 0 ? "ارتفع " : "انخفض ") + r.B_pts + " نقطة"}` })); });
+      tradingDays("2026-10-16", 20).forEach(day => { const r = byW[day]; const k = !r ? "pending" : !r.trigger ? "none" : r.B_pts > 0 ? "up" : "down"; mini.append(el("i", { "data-k": k, title: `${dayFmt.format(d0(day))}: ${!r ? "لم يكتمل" : !r.trigger ? "لا ذيل" : (r.B_pts > 0 ? "ارتفع " : r.B_pts < 0 ? "انخفض " : "") + (r.B_pts ? Math.abs(r.B_pts).toFixed(1) + " نقطة" : "بلا تغيير")}` })); });
     }
     renderCharts(D);
   }
