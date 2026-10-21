@@ -53,7 +53,9 @@ class SeedRun:
 
 
 def audit_day(sr, day, hold_min):
-    """R-V2-13 for one (day, seed): (audit fields, [(bar position, online value)])."""
+    """R-V2-13 (strict, Amendment B2 item 4) for one (day, seed): (audit fields, [(bar position, online value)]).
+    ANY bar whose online value differs from the full-data value fails the audit, in the window or outside it;
+    first_mismatch is the bar start HH:MM of the first differing bar of the day."""
     a, b = sr.day_positions(day)
     d0 = pd.Timestamp(day)
     friday = d0.dayofweek == 4
@@ -71,12 +73,13 @@ def audit_day(sr, day, hold_min):
         if v != sr.full[i]:
             if win:
                 mw += 1
-                if not first_mm:
-                    first_mm = hhmm(T - sr.tf)
             else:
                 mo += 1
+            if not first_mm:
+                first_mm = hhmm(T - sr.tf)
     return {"n_bars": b - a, "n_window": n_window, "n_signals": n_sig, "n_mismatch_window": mw,
-            "n_mismatch_outside": mo, "first_mismatch": first_mm, "result": "ok" if mw == 0 else "FAIL"}, onl
+            "n_mismatch_outside": mo, "first_mismatch": first_mm,
+            "result": "ok" if mw == 0 and mo == 0 else "FAIL"}, onl
 
 
 def decisions_day(sr, day, onl, hold_min, hol, fs_of_slot):

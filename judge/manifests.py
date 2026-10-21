@@ -36,21 +36,35 @@ def resolve(repo, rel_manifest, path):
     return None
 
 
+def entry_rel(repo, rel_manifest, path):
+    """The repository path of a manifest entry (relative to the root, else to the manifest's folder)."""
+    repo = Path(repo)
+    f = resolve(repo, rel_manifest, path)
+    if f is not None:
+        try:
+            return f.resolve().relative_to(repo.resolve()).as_posix()
+        except ValueError:
+            pass
+    return path if (repo / path).parent.exists() else ((Path(rel_manifest).parent / path).as_posix())
+
+
 def verify(repo, rel_manifest, pinned):
     """J4 for one pinned manifest: (problems, n_entries). Every pinned entry is unchanged in the current manifest,
-    none was removed, and every named file exists with that sha256."""
+    none was removed, and every named file exists with that sha256. A problem is (kind, repository path, text):
+    kind "manifest" (the manifest file itself) or "file" (a named file, with its pinned sha256 as kind[1])."""
     probs = []
     cur = read_manifest(repo, None, rel_manifest)
     if cur is None:
-        return [f"{rel_manifest}: missing"], len(pinned)
+        return [(("manifest",), rel_manifest, f"{rel_manifest}: missing")], len(pinned)
     for p, h in pinned.items():
         if p not in cur:
-            probs.append(f"{rel_manifest}: entry {p} was removed")
+            probs.append((("manifest",), rel_manifest, f"{rel_manifest}: entry {p} was removed"))
         elif cur[p] != h:
-            probs.append(f"{rel_manifest}: entry {p} changed")
+            probs.append((("manifest",), rel_manifest, f"{rel_manifest}: entry {p} changed"))
         f = resolve(repo, rel_manifest, p)
         if f is None:
-            probs.append(f"{p}: missing")
+            probs.append((("file", h), entry_rel(repo, rel_manifest, p), f"{p}: missing"))
         elif sha256_file(f) != h:
-            probs.append(f"{p}: sha256 differs from the pinned manifest")
+            probs.append((("file", h), entry_rel(repo, rel_manifest, p),
+                          f"{p}: sha256 differs from the pinned manifest"))
     return probs, len(pinned)

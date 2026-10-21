@@ -1,9 +1,13 @@
-# Independent judge v1 (xauusd-quant research/system/SYSTEM_V2_PREREG.md §3.1 with Amendment B1 item 2).
-# Runs after every completed `system` run, once a day as a backstop, and on manual dispatch, in the shared concurrency
-# group, so it never pushes or deploys at the same time as the system or the forward watches. It reads the full
-# history (fetch-depth 0, tags), commits ONLY reports/judge/** and reports/forward_site/judge/** (never `git add -A`;
-# a step fails the job if its commit touches anything else), then deploys reports/forward_site/ from its own
-# post-commit checkout. The Twelve Data key reaches the judge step only, as an environment variable.
+# Independent judge v1 (xauusd-quant research/system/SYSTEM_V2_PREREG.md §3.1 with Amendment B1 item 2 and Amendment
+# B2 item 7; IMPLEMENTATION_REGISTER R-JC-1, R-JC-2). Runs after every completed `system` run, once a day as a
+# backstop, and on manual dispatch.
+# Concurrency: the workflow runs in its own group `judge`, so judge runs never overlap. Only the short `publish` job
+# takes the shared group `forward-watch` (job level), for its commit and deploy, so the judge never pushes or deploys at
+# the same time as the system or the forward watches and never holds that group while its checks run.
+# The `judge` job reads the full history (fetch-depth 0, tags) and hands ONLY reports/judge/** and
+# reports/forward_site/judge/** to `publish` as an artifact. `publish` commits only those folders (never `git add -A`;
+# the step fails if its commit touches anything else), then deploys reports/forward_site/ from its own post-commit
+# checkout. The Twelve Data key reaches the judge step only, as an environment variable.
 name: judge
 
 on:
@@ -15,19 +19,18 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: forward-watch
+  group: judge
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   judge:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      CLOUDFLARE_ACCOUNT_ID: 940e834eb44c1584e99e270ab7a8df00
-      WRANGLER_SEND_METRICS: "false"
+    outputs:
+      finished: ${{ steps.judge.outputs.finished }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,23 +42,71 @@ jobs:
         with:
           version: "0.11.26"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
       # J1-J9, the verdict and its outputs. `finished` is set only when the judge returned normally.
       - name: Judge run
         id: judge
         continue-on-error: true
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          JUDGE_SITE_URL: https://gold-watch-mq1dqc.xauusd-quant.workers.dev
         run: |
           uv run --frozen python -I judge/run.py
           echo "finished=1" >> "$GITHUB_OUTPUT"
 
+      - name: Check that the judge wrote only its folders
+        if: ${{ steps.judge.outputs.finished == '1' }}
+        run: |
+          if ! git diff --quiet HEAD -- . ':(exclude)reports/judge' ':(exclude)reports/forward_site/judge'; then
+            echo "the judge changed tracked files outside its folders; nothing is published"; git diff --stat HEAD; exit 1
+          fi
+
+      - name: Upload the judge records
+        if: ${{ steps.judge.outputs.finished == '1' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: judge-records
+          path: |
+            reports/judge
+            reports/forward_site/judge
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail the job if the judge did not finish
+        if: ${{ steps.judge.outcome == 'failure' }}
+        run: exit 1
+
+  publish:
+    needs: judge
+    if: ${{ needs.judge.result == 'success' && needs.judge.outputs.finished == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: forward-watch
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 940e834eb44c1584e99e270ab7a8df00
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # The judge's folders as the judge job left them (only the judge writes them; judge runs never overlap).
+      - name: Restore the judge records
+        uses: actions/download-artifact@v4
+        with:
+          name: judge-records
+          path: reports
+
       - name: Commit the judge records
         id: commit
-        if: ${{ !cancelled() && steps.judge.outputs.finished == '1' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,7 +142,3 @@ jobs:
             echo "reports/forward_site differs from the checked-out commit; not deployed"; git status --short; exit 1
           fi
           npx --yes wrangler@4.151.1 deploy --config reports/forward_deploy/wrangler.jsonc
-
-      - name: Fail the job if the judge did not finish
-        if: ${{ steps.judge.outcome == 'failure' }}
-        run: exit 1

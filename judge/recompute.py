@@ -107,10 +107,28 @@ def check_forecasts(ctx, out):
         return {"store_rows": 0}
     g = ctx.grid()
     gi = {(r.day, int(r.slot)): r for r in g.itertuples()}
+    # R-V1-15/R-V1-17: a row was computed with the accepted extension lines first seen by its run time; rows whose
+    # set differs from the full set are compared with a grid built from their own set
+    ext = forecasts.ext_lines(ctx.root)
+    gi_at = {}
+    if ext:
+        full = frozenset(ext)
+        for r in rows:
+            ct = parse_utc(r.get("computed_utc", "")) if r.get("computed_utc") else None
+            mine = frozenset(e for e in ext if ct is not None and e[0] is not None and e[0] <= ct)
+            if mine != full and mine not in gi_at:
+                ev = forecasts.load_events(ctx.repo, ctx.root, at=ct)
+                ga = forecasts.grid(ctx.mf(), ev, ctx.hol())
+                gi_at[mine] = {(x.day, int(x.slot)): x for x in ga.itertuples()}
     n = 0
     for r in rows:
         key = (r["day"], int(r["slot"]))
         x = gi.get(key)
+        if gi_at:
+            ct = parse_utc(r.get("computed_utc", "")) if r.get("computed_utc") else None
+            mine = frozenset(e for e in ext if ct is not None and e[0] is not None and e[0] <= ct)
+            if mine in gi_at:
+                x = gi_at[mine].get(key)
         subj = f"forecasts {r['day']}"
         if x is None:
             out.append(Finding("forecasts", subj, f"slot {r['slot']} is not in the recomputed grid"))
@@ -362,7 +380,22 @@ def check_v1_lab(ctx, out, cover=None):
     return info
 
 
+def _px_is_quote(t):
+    """R-J5-3: P_x was read from a quote (a time exit, or a stop filled at a minute's open) by the judge's own
+    recomputation of the exit; a stop reached inside the minute and a gap exit at X are computed prices."""
+    return t["reason"] == "time" or (t["reason"] == "stop" and t["P_x"] != t["X"])
+
+
+def _exact_eq(text, x):
+    try:
+        return text != "" and float(text) == x
+    except ValueError:
+        return False
+
+
 def _cmp_trade(out, area, subj, t, g, numk, exactk):
+    """Amendment B2 item 5, R-J5-1 .. R-J5-3: P_e and a quote-derived P_x exact; D, X, P_x at X and every derived
+    number at rel <= 1e-9; categorical fields exact."""
     if t.get("status") != g.get("status"):
         out.append(Finding(area, subj, f"status {g.get('status')!r} != {t.get('status')!r}"))
         return
@@ -372,11 +405,10 @@ def _cmp_trade(out, area, subj, t, g, numk, exactk):
     if t.get("status") != "final":
         return
     for k in EXACT_PRICE:
-        if not (g[k] != "" and float(g[k]) == t[k]):
-            out.append(Finding(area, subj, f"{k} {g[k]!r} != {t[k]!r} (prices exact)"))
-    if t["reason"] == "time" or (t["reason"] == "stop" and t["P_x"] != t["X"]):
-        if not (g["P_x"] != "" and float(g["P_x"]) == t["P_x"]):
-            out.append(Finding(area, subj, f"P_x {g['P_x']!r} != {t['P_x']!r} (prices exact)"))
+        if not _exact_eq(g.get(k, ""), t[k]):
+            out.append(Finding(area, subj, f"{k} {g.get(k)!r} != {t[k]!r} (prices exact)"))
+    if _px_is_quote(t) and not _exact_eq(g.get("P_x", ""), t["P_x"]):
+        out.append(Finding(area, subj, f"P_x {g.get('P_x')!r} != {t['P_x']!r} (prices exact)"))
     for k in numk:
         if k in t and not _num_eq(t[k], g.get(k, "")):
             out.append(Finding(area, subj, f"{k} {g.get(k)!r} != {t[k]!r}"))
@@ -457,6 +489,75 @@ class V2Inputs:
         return mf[mf["_utc"].values < np.datetime64(cu.tz_convert("UTC").tz_localize(None))], cu
 
 
+def _rows_at(store_rows, s):
+    """The forecast-store rows a run at time s read: computed_utc <= s (R-V2-27, R-C5)."""
+    out = []
+    for r in store_rows:
+        try:
+            t = parse_utc(r.get("computed_utc", ""))
+        except (ValueError, TypeError):
+            t = None
+        if t is not None and t <= s:
+            out.append(r)
+    return out
+
+
+def store_map_at(store_rows, s):
+    return forecasts.store_map(_rows_at(store_rows, s))
+
+
+def store_covers(keys, d):
+    """R-V2-27 (b): the store keys {(day, slot)} cover model day d: all 23 slot rows of d, or no row of d at all while
+    a row of a later model day exists (a day v1 passed over)."""
+    if all((d, sl) in keys for sl in range(23)):
+        return True
+    return not any(k[0] == d for k in keys) and any(k[0] > d for k in keys)
+
+
+def _check_v2_settlement(ctx, out, lab_days, store_rows):
+    """R-V2-27: every settled day d (settled_utc s) was covered by v1's forecast store as the run at s read it, every
+    earlier model weekday from the lab's first first_day was settled at or before s (the scan never skips a day), and
+    a run settled at most 10 days."""
+    lab = ctx.lab2
+    lab_first = lab.lab_first_day()
+    settled_at = {}
+    per_run = {}
+    for ld in lab_days:
+        settled_at.setdefault(ld["day"], parse_utc(ld["settled_utc"]))
+        per_run[ld["settled_utc"]] = per_run.get(ld["settled_utc"], 0) + 1
+    for s_text, n in per_run.items():
+        if n > 10:
+            out.append(Finding("v2", f"v2 lab_days {s_text}", f"{n} days settled by one run (at most 10)"))
+    keys_cache = {}
+    for ld in lab_days:
+        day, s_text = ld["day"], ld["settled_utc"]
+        s = parse_utc(s_text)
+        if s_text not in keys_cache:
+            keys_cache[s_text] = {(r["day"], int(r["slot"])) for r in _rows_at(store_rows, s)}
+        if not store_covers(keys_cache[s_text], day):
+            out.append(Finding("v2", f"v2 lab_days {day}", "settled before v1's forecast store held all 23 rows of "
+                                                         "the day with computed_utc <= settled_utc (R-V2-27)"))
+        if pd.Timestamp(day).dayofweek >= 5:
+            out.append(Finding("v2", f"v2 lab_days {day}", "settled day is not a model weekday"))
+    if lab_first is None or not settled_at:
+        return
+    # no gap and no overtaking: along the model weekdays from the lab's first first_day, each is settled, and never
+    # before an earlier one
+    latest = max(settled_at)
+    run_max = None
+    for w in pd.bdate_range(lab_first, latest):
+        ws = w.strftime("%Y-%m-%d")
+        if ws not in settled_at:
+            nxt = min(d for d in settled_at if d > ws)
+            out.append(Finding("v2", f"v2 lab_days {nxt}", f"settled while the earlier weekday {ws} was not settled "
+                                                         "(R-V2-27: the scan stops at the first day it cannot "
+                                                         "settle)"))
+            return
+        if run_max is not None and settled_at[ws] < run_max:
+            out.append(Finding("v2", f"v2 lab_days {ws}", "settled before an earlier weekday was settled (R-V2-27)"))
+        run_max = settled_at[ws] if run_max is None else max(run_max, settled_at[ws])
+
+
 def check_v2_lab(ctx, out, cover_days=None):
     """cover_days: set of days to recompute signals and trades for (None = every settled day)."""
     lab = ctx.lab2
@@ -473,7 +574,8 @@ def check_v2_lab(ctx, out, cover_days=None):
     if not lab_days and not dec and not trd and not aud:
         _check_eproc(ctx, out, lab, trd, epr, lab_days, version=2)
         return info
-    sm = ctx.store_map()
+    store_rows = forecasts.store_rows(ctx.root)
+    _check_v2_settlement(ctx, out, lab_days, store_rows)
     hol = ctx.hol()
     ai = {(r["day"], r["id"]): r for r in aud if r["result"] == "ok"}
     di = {}
@@ -498,6 +600,7 @@ def check_v2_lab(ctx, out, cover_days=None):
                 out.append(Finding("v2", f"v2 lab_days {day}", "settled day before the lab's first first_day"))
         if not todo:
             continue
+        sm = store_map_at(store_rows, s)          # R-V2-27: the run at s read the rows with computed_utc <= s
         mf, cu = inputs.frame_for(s)
         inp = bars.seed_input(mf)
         mc = bars.MinuteCache(mf)
@@ -536,7 +639,7 @@ def check_v2_lab(ctx, out, cover_days=None):
                     if g["recorded_utc"] != s_text or g["tf"] != sr.mod.TF:
                         out.append(Finding("v2", subj, "tf or recorded_utc differs"))
                 rows = lab_v2.decisions_day(sr, day, onl, hm, hol,
-                                            lambda sl, _d=day: sm.get((_d, sl), {}).get("F_S", float("nan")))
+                                            lambda sl, _d=day, _sm=sm: _sm.get((_d, sl), {}).get("F_S", float("nan")))
                 got = di.get((sid, day), [])
                 subj = f"v2 decisions {sid} {day}"
                 if len(got) != len(rows):
@@ -584,8 +687,13 @@ def check_v2_lab(ctx, out, cover_days=None):
                         for k in ("entry_model", "exit_model", "reason"):
                             if gw[k] != w[k]:
                                 out.append(Finding("v2", subj, f"{k} {gw[k]!r} != {w[k]!r}"))
-                        for k in ("P_e", "D", "X", "P_x", "R_twin"):
-                            if not _num_eq(w[k], gw[k]):
+                        # R-J5-1: the twin's P_e (a mid of exact quotes) and a quote-derived P_x are exact
+                        exact = ["P_e"] + (["P_x"] if _px_is_quote(w) else [])
+                        for k in exact:
+                            if not _exact_eq(gw.get(k, ""), w[k]):
+                                out.append(Finding("v2", subj, f"{k} {gw.get(k)!r} != {w[k]!r} (prices exact)"))
+                        for k in ("D", "X", "P_x", "R_twin"):
+                            if k not in exact and not _num_eq(w[k], gw[k]):
                                 out.append(Finding("v2", subj, f"{k} {gw[k]!r} != {w[k]!r}"))
     # rows of days that are not settled (only FAIL audit rows may be, R-V2-35)
     settled = {ld["day"] for ld in lab_days}
@@ -922,6 +1030,8 @@ def check_vendor(ctx, out):
     probs = vendored.check()
     for p in probs:
         out.append(Finding("vendor", "judge vendor", p))
+    for p in forecasts.system_calendar_problems(ctx.repo):
+        out.append(Finding("vendor", "system calendars", p))
     from . import manifests
     man = manifests.read_manifest(ctx.repo, ctx.pins.get("lab-v1-freeze"), "analysis/system/FROZEN.sha256")
     if not man:

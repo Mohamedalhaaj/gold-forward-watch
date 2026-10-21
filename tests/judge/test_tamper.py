@@ -39,15 +39,14 @@ def manifest(repo, rel, files):
     (repo / rel).write_text("\n".join(lines) + "\n")
 
 
-@pytest.fixture(scope="session")
-def base_repo(tmp_path_factory, fixture_world):
-    """A repository whose history mimics the system's: the freeze, v1 registration, v2 registration, the runs."""
-    repo = tmp_path_factory.mktemp("tamper") / "base"
+def build_repo(repo, W, v2_start_text=None, v2_start_date=None):
+    """A repository whose history mimics the system's: the freeze, v1 registration, v2 registration, the runs.
+    v2_start_text replaces reports/system/lab_v2/START.json in its first commit; v2_start_date commits that file on its
+    own, at that date, after the v2 registration commit."""
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     git(repo, "config", "gc.auto", "0")              # no background gc while the tests copy the repository
     git(repo, "config", "maintenance.auto", "false")
-    W = fixture_world
     shutil.copytree(W / "reports/system/lab/registry", repo / "reports/system/lab/registry")
     shutil.copytree(W / "reports/system/lab_v2/registry", repo / "reports/system/lab_v2/registry")
     ev1 = repo / "reports/system/lab/registry/events.csv"
@@ -67,15 +66,29 @@ def base_repo(tmp_path_factory, fixture_world):
     shutil.copy(W / "reports/system/START.json", repo / "reports/system/START.json")
     shutil.copy(W / "reports/system/lab/registry/events.csv", ev1)
     c1 = commit(repo, ["reports"], "system run 2026-10-27T03:25Z", "2026-10-27T03:25:00Z")
-    shutil.copy(W / "reports/system/lab_v2/START.json", repo / "reports/system/lab_v2/START.json")
+    v2s = repo / "reports/system/lab_v2/START.json"
     shutil.copy(W / "reports/system/lab_v2/registry/events.csv", ev2)
+    if v2_start_date is None:
+        shutil.copy(W / "reports/system/lab_v2/START.json", v2s)
+        if v2_start_text is not None:
+            v2s.write_text(v2_start_text)
     c2 = commit(repo, ["reports"], "lab v2 run 2026-11-03T03:25Z", "2026-11-03T03:25:00Z")
+    if v2_start_date is not None:
+        shutil.copy(W / "reports/system/lab_v2/START.json", v2s)
+        commit(repo, ["reports"], "lab v2 START", v2_start_date)
     shutil.copytree(W / "data", repo / "data")
     shutil.copytree(W / "reports", repo / "reports", dirs_exist_ok=True)
+    if v2_start_text is not None:
+        v2s.write_text(v2_start_text)
     c3 = commit(repo, ["data", "reports"], "system run 2026-12-05T03:25Z", "2026-12-05T03:25:00Z")
     git(repo, "repack", "-a", "-d", "-q")
     return {"repo": repo, "c0": c0, "c1": c1, "c2": c2, "c3": c3,
             "pins": {"lab-v1-freeze": c0, "lab-v2-freeze": c0, "judge-v1-freeze": None}}
+
+
+@pytest.fixture(scope="session")
+def base_repo(tmp_path_factory, fixture_world):
+    return build_repo(tmp_path_factory.mktemp("tamper") / "base", fixture_world)
 
 
 @pytest.fixture()
@@ -95,7 +108,7 @@ def judge_history(repo, pins, now=NOW, record=True):
         head = git(repo, "rev-parse", "HEAD")
         verdict.record(repo, now, head, v, code, ok, 9, since, "x" * 64, cs)
         publish.write_all(repo, now, head, v, code, ok, 9, cs + [checks.Check(i) for i in ("J1", "J5", "J6", "J9")],
-                          [], "x" * 64)
+                          lines, "x" * 64)
     return v, code, {c.id: c for c in cs}
 
 
@@ -219,6 +232,10 @@ def test_force_push_rewritten_history_is_a_violation(repo, base_repo):
     v, code, cs = judge_history(repo, base_repo["pins"])
     assert v == "VIOLATION" and code == "j8_rewritten", cs["J8"].evidence
     assert sum("not an ancestor" in e for e in cs["J8"].evidence) == 2   # VERDICTS.csv and VolMapJudge.csv
+    c3 = base_repo["c3"][:12]
+    assert sorted(k for k, _, _ in cs["J8"].findings) == [
+        f"J8|j8_rewritten|reports/forward_site/judge/VolMapJudge.csv|{c3}",
+        f"J8|j8_rewritten|reports/judge/VERDICTS.csv|{c3}"]
 
 
 def test_force_push_that_drops_the_judge_records_is_caught_by_the_deployed_file(repo, base_repo, tmp_path,
@@ -233,6 +250,20 @@ def test_force_push_that_drops_the_judge_records_is_caught_by_the_deployed_file(
     monkeypatch.setenv("JUDGE_SITE_URL", f"file://{site}")
     v, code, cs = judge_history(repo, base_repo["pins"], record=False)
     assert v == "VIOLATION" and code == "j8_rewritten", cs["J8"].evidence
+    assert [k for k, _, _ in cs["J8"].findings] == [f"J8|j8_rewritten|/judge/VolMapJudge.csv|{base_repo['c3'][:12]}"]
+
+
+def test_the_deployed_file_unreachable_or_without_head_is_unverified(repo, base_repo, tmp_path, monkeypatch):
+    judge_history(repo, base_repo["pins"])
+    monkeypatch.setenv("JUDGE_SITE_URL", f"file://{tmp_path / 'nothing-here'}")
+    _, _, cs = judge_history(repo, base_repo["pins"], record=False)
+    assert cs["J8"].status == "ok" and any("could not be fetched" in u for u in cs["J8"].unverified)
+    site = tmp_path / "site"
+    (site / "judge").mkdir(parents=True)
+    (site / "judge/VolMapJudge.csv").write_text("<html>not the file</html>\n")
+    monkeypatch.setenv("JUDGE_SITE_URL", f"file://{site}")
+    _, _, cs = judge_history(repo, base_repo["pins"], record=False)
+    assert cs["J8"].status == "ok" and any("no valid head_sha" in u for u in cs["J8"].unverified)
 
 
 def test_shallow_checkout_is_a_warning_never_sound(tmp_path, base_repo):
@@ -281,23 +312,134 @@ def test_judge_records_rewrite_is_a_violation(repo, base_repo):
     assert v == "VIOLATION" and "j3_judge" in cs["J3"].reasons
 
 
-# ---------------------------------------------------------------- latch and adjudications
-def test_violation_latches_until_a_dated_clear_row(repo, base_repo):
+# ---------------------------------------------------------------- latch, finding keys and clearing (B2 item 6)
+def clear_row(repo, t, key, ref="latch", check=None):
+    write_csv_append(repo / verdict.ADJ, verdict.ADJ_HEAD,
+                     [[iso_s(t), ref, check or key.split("|")[0], key, "clear", "adjudicated"]])
+
+
+def _rewrite_trade_row(repo, i, date):
+    p = repo / "reports/system/lab/trades.csv"
+    lines = p.read_text().splitlines()
+    lines[i] = lines[i].replace(",time,", ",stop,", 1) if ",time," in lines[i] else lines[i].replace(",stop,", ",time,",
+                                                                                                     1)
+    p.write_text("\n".join(lines) + "\n")
+    return commit(repo, ["reports"], f"system run {date}", date)
+
+
+def test_a_committed_violation_is_cleared_only_by_rows_naming_its_keys(repo, base_repo):
+    """B2 item 6, R-JV-1 .. R-JV-4 (review MF3): a committed ledger rewrite is found again by every run; only dated
+    ADJUDICATIONS.csv rows naming its keys clear it; the clearing is listed in REPORT.md; a new rewrite on a new commit
+    is a new finding."""
+    sha = _rewrite_trade_row(repo, 2, "2026-12-06T03:25:00Z")
+    v, code, cs = judge_history(repo, base_repo["pins"])
+    keys = [k for k, _, _ in cs["J3"].findings]
+    assert v == "VIOLATION" and code == "j3_ledger"
+    assert keys == [f"J3|j3_ledger|reports/system/lab/trades.csv|{sha[:12]}"], keys
+    assert any(f"[finding {keys[0]}]" in e for e in cs["J3"].evidence)
+    assert keys[0] in (repo / "reports/judge/REPORT.md").read_text()
+    assert [r["key"] for r in verdict.finding_log(repo).values()] == keys
+    # a generic `clear,latch` row (no key) clears nothing
+    t2 = NOW + pd.Timedelta(hours=1)
+    clear_row(repo, t2, "trades.csv", check="J3")
+    v, code, cs = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(hours=1))
+    assert v == "VIOLATION" and code == "j3_ledger"
+    # a row naming the key but dated before the key was first found clears nothing either
+    clear_row(repo, NOW - pd.Timedelta(minutes=1), keys[0])
+    v, code, cs = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(hours=2))
+    assert v == "VIOLATION"
+    # the row naming the key clears it: SOUND although the rewrite is still found
+    clear_row(repo, t2 + pd.Timedelta(hours=3), keys[0])
+    v, code, cs = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(hours=4))
+    assert (v, code) == ("SOUND", "sound") and cs["J3"].status == "ok"
+    assert [k for k, _, _ in cs["J3"].findings] == keys
+    rep = (repo / "reports/judge/REPORT.md").read_text()
+    assert f"cleared finding key {keys[0]}" in rep and "still found by this run" in rep
+    v, code, _ = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(days=30))
+    assert v != "VIOLATION" and code == "j7_stale"            # a month later only the status file's age warns
+    assert f"cleared finding key {keys[0]}" in (repo / "reports/judge/REPORT.md").read_text()   # R-JV-3
+    # the same kind of rewrite on a NEW commit: a new key, VIOLATION again until it is cleared in turn
+    sha2 = _rewrite_trade_row(repo, 3, "2027-01-06T03:25:00Z")
+    v, code, cs = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(days=32))
+    new = f"J3|j3_ledger|reports/system/lab/trades.csv|{sha2[:12]}"
+    assert v == "VIOLATION" and sorted(k for k, _, _ in cs["J3"].findings) == sorted(keys + [new])
+    clear_row(repo, t2 + pd.Timedelta(days=33), new)
+    v, code, _ = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(days=34))
+    assert v != "VIOLATION" and code == "j7_stale"
+
+
+def test_a_finding_that_disappears_stays_latched_until_its_key_is_cleared(repo, base_repo):
     p = repo / "reports/system/lab/eproc.csv"
     orig = p.read_text()
     lines = orig.splitlines()
     lines[1] = lines[1].replace(",REF", ",PAPER")
     p.write_text("\n".join(lines) + "\n")                        # tampered (working tree)
-    v, code, _ = judge_history(repo, base_repo["pins"])
-    assert v == "VIOLATION" and code == "j3_ledger"
+    v, code, cs = judge_history(repo, base_repo["pins"])
+    key = "J3|j3_ledger|reports/system/lab/eproc.csv|worktree"
+    assert v == "VIOLATION" and code == "j3_ledger" and [k for k, _, _ in cs["J3"].findings] == [key]
     p.write_text(orig)                                           # the tamper is undone
     t2 = NOW + pd.Timedelta(hours=1)
-    v, code, _ = judge_history(repo, base_repo["pins"], now=t2)
-    assert v == "VIOLATION" and code == "j3_ledger"              # latched
-    write_csv_append(repo / verdict.ADJ, verdict.ADJ_HEAD,
-                     [[iso_s(t2 + pd.Timedelta(minutes=5)), "latch", "J3", "eproc.csv", "clear", "restored"]])
+    v, code, cs = judge_history(repo, base_repo["pins"], now=t2)
+    assert v == "VIOLATION" and code == "j3_ledger" and cs["J3"].status == "ok"      # latched by its key
+    assert f"open finding key {key}" in (repo / "reports/judge/REPORT.md").read_text()
+    prev = verdict.read_dicts(repo / verdict.VERDICTS)
+    assert prev[-1]["latched_since"] == prev[-2]["latched_since"] == iso_s(NOW)
+    clear_row(repo, t2 + pd.Timedelta(minutes=5), key)
     v, code, _ = judge_history(repo, base_repo["pins"], now=t2 + pd.Timedelta(hours=1))
     assert v == "SOUND"
+
+
+def test_a_cleared_finding_of_one_check_does_not_clear_another(repo, base_repo):
+    sha = _rewrite_trade_row(repo, 2, "2026-12-06T03:25:00Z")
+    (repo / "analysis/system/x.py").write_text("X = 3\n")
+    c4 = commit(repo, ["analysis"], "edit frozen", "2026-12-06T04:25:00Z")
+    v, code, cs = judge_history(repo, base_repo["pins"])
+    assert v == "VIOLATION" and code == "j4_frozen"
+    assert [k for k, _, _ in cs["J4"].findings] == [f"J4|j4_frozen|analysis/system/x.py|{c4[:12]}"]
+    clear_row(repo, NOW + pd.Timedelta(hours=1), f"J3|j3_ledger|reports/system/lab/trades.csv|{sha[:12]}")
+    v, code, cs = judge_history(repo, base_repo["pins"], now=NOW + pd.Timedelta(hours=2))
+    assert (v, code) == ("VIOLATION", "j4_frozen") and cs["J3"].status == "ok"
+    # a row with the right key but another check clears nothing
+    clear_row(repo, NOW + pd.Timedelta(hours=3), f"J4|j4_frozen|analysis/system/x.py|{c4[:12]}", check="J3")
+    v, code, _ = judge_history(repo, base_repo["pins"], now=NOW + pd.Timedelta(hours=4))
+    assert v == "VIOLATION"
+
+
+def test_finding_key_of_a_moved_tag(repo, base_repo):
+    git(repo, "tag", "-f", "lab-v1-freeze", base_repo["c1"])
+    _, _, cs = judge_history(repo, base_repo["pins"], record=False)
+    assert f"J4|j4_tag|refs/tags/lab-v1-freeze|{base_repo['c1'][:12]}" in [k for k, _, _ in cs["J4"].findings]
+
+
+# ---------------------------------------------------------------- START.json follows its rule (review MF5)
+def _start_text(fixture_world, **kw):
+    import json
+    j = json.loads((fixture_world / "reports/system/lab_v2/START.json").read_text())
+    j.update(kw)
+    return json.dumps(j, indent=1, ensure_ascii=False) + "\n"
+
+
+def test_a_start_first_committed_one_week_later_is_a_violation(tmp_path, fixture_world):
+    b = build_repo(tmp_path / "late_start", fixture_world, v2_start_text=_start_text(fixture_world, start="2026-11-16"))
+    v, code, cs = judge_history(b["repo"], b["pins"], record=False)
+    assert v == "VIOLATION" and "j2_start" in cs["J2"].reasons, cs["J2"].evidence
+    assert any("start 2026-11-16 != 2026-11-09, the rule's value" in e for e in cs["J2"].evidence)
+    assert f"J2|j2_start|reports/system/lab_v2/START.json|{b['c2'][:12]}" in [k for k, _, _ in cs["J2"].findings]
+
+
+def test_a_start_first_committed_two_days_after_its_first_run_is_a_violation(tmp_path, fixture_world):
+    b = build_repo(tmp_path / "late_commit", fixture_world, v2_start_date="2026-11-05T03:25:00Z")
+    v, code, cs = judge_history(b["repo"], b["pins"], record=False)
+    assert v == "VIOLATION" and code == "j2_start", cs["J2"].evidence
+    assert set(cs["J2"].reasons) == {"j2_start"}
+    assert any("more than 60 min after its first_cloud_run_utc 2026-11-03T03:20:00Z" in e for e in cs["J2"].evidence)
+
+
+def test_the_real_start_files_follow_the_rule(root):
+    """The real v1 START (run 2026-10-17T18:55:29Z, committed in c629430 at 18:55:48) gives 2026-11-02."""
+    import json
+    sj = json.loads((root / "reports/system/START.json").read_text())
+    assert checks.start_problems(sj, 1, None) == [] and sj["start"] == "2026-11-02"
 
 
 def test_j5_mismatch_is_a_warning_and_only_a_system_error_row_makes_a_violation(tmp_path):

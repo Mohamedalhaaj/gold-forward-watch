@@ -102,8 +102,8 @@ class Transport:
                     status, body = resp.status, resp.read()
             except urllib.error.HTTPError as e:
                 status, body = e.code, b""
-            except (urllib.error.URLError, OSError, TimeoutError):
-                status, body = 0, b""
+            except Exception:   # noqa: BLE001  URLError, OSError, timeouts, http.client.HTTPException (IncompleteRead,
+                status, body = 0, b""   # BadStatusLine, ...): a connection error, retried (§3.2 J1: unverified)
             self.sleep(self.pace_s)
             if status == 200:
                 return status, body

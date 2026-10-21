@@ -18,6 +18,7 @@ VENDOR_EXPECTED = {
     "volmap/core.py", "volmap/models.py", "volmap/frozen/discovery_params.json", "hunt/harness.py",
     "hunt/candidates/levels__watched_level_break.py", "hunt/candidates/r3_ctaflow__cta_flip_flow_usmorning.py",
     "hunt/candidates/r2_orb__inplay_comex_orb60.py", "hunt/candidates/r2_exhaustion__databar_stretch_settle.py",
+    "calendars/bls_2026_2027.csv", "calendars/fomc_2026_2027.csv",          # R-V1-15 (lab review MF5)
 }
 
 
@@ -76,6 +77,9 @@ def test_vendored_files_are_exactly_the_allowed_set_and_match_their_sums():
     assert sums["hunt/candidates/r2_orb__inplay_comex_orb60.py"].startswith("99e5426f")
     assert sums["hunt/candidates/r2_exhaustion__databar_stretch_settle.py"].startswith("b0854354")
     assert sums["volmap/frozen/discovery_params.json"].startswith("1182acf5")
+    # the calendars: the register's sha256 values (R-V1-15)
+    assert sums["calendars/bls_2026_2027.csv"] == "7e829d6c5acd861c276552d4086a2c639cbec03fc66242b859cd9d4fabdef45d"
+    assert sums["calendars/fomc_2026_2027.csv"] == "dd709aee9821d0e1b4a1e9e0a8939422e92bb9520961090e31e96f4d30dc10f5"
 
 
 def test_runtime_loads_no_module_from_analysis():

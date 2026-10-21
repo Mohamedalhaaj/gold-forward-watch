@@ -337,3 +337,86 @@ def test_status_parser_on_the_fixture(fixture_world):
 def test_pin_problems_of_the_real_pins_file():
     assert checks.pin_problems() == []
     assert checks.V1_FREEZE == "6cd6d57ef62d8eb8710dd5151c7b5ddc2612d095"
+
+
+class _FakeSeedRun:
+    """Three M5 bars of a model day: one outside the window (00:00), two inside (10:00, 10:05)."""
+
+    def __init__(self, online, full):
+        day = pd.Timestamp("2026-11-10")
+        self.B = pd.DataFrame(index=pd.DatetimeIndex([day, day + pd.Timedelta(hours=10),
+                                                      day + pd.Timedelta(hours=10, minutes=5)]))
+        self.tf = 5
+        self.full = np.array(full)
+        self._online = online
+
+    def day_positions(self, day):
+        return 0, 3
+
+    def online(self, i):
+        return self._online[i]
+
+
+def test_the_causality_audit_fails_on_any_mismatch_window_or_not():
+    """Amendment B2 item 4, R-V2-13: a difference outside the window also fails the audit; first_mismatch is the
+    first differing bar of the day."""
+    a, _ = lab_v2.audit_day(_FakeSeedRun([1, 0, 0], [0, 0, 0]), "2026-11-10", 120)
+    assert (a["n_mismatch_window"], a["n_mismatch_outside"], a["first_mismatch"], a["result"]) == (0, 1, "00:00",
+                                                                                                    "FAIL")
+    a, _ = lab_v2.audit_day(_FakeSeedRun([1, 0, -1], [1, 0, 0]), "2026-11-10", 120)
+    assert (a["n_mismatch_window"], a["n_mismatch_outside"], a["first_mismatch"], a["result"]) == (1, 0, "10:05",
+                                                                                                    "FAIL")
+    a, _ = lab_v2.audit_day(_FakeSeedRun([1, 0, -1], [1, 0, -1]), "2026-11-10", 120)
+    assert (a["n_window"], a["n_signals"], a["first_mismatch"], a["result"]) == (2, 2, "", "ok")
+
+
+def test_start_rule_problems():
+    """v1 §0 / R-V1-38 and v2 §0 / R-V2-26 (review MF5)."""
+    v1 = {"first_cloud_run_utc": "2026-10-17T18:55:29Z", "start": "2026-11-02"}
+    assert checks.start_problems(v1, 1, None) == []
+    assert checks.start_problems(dict(v1, start="2026-11-09"), 1, None)
+    late = {"first_cloud_run_utc": "2026-11-03T03:20:00Z", "start": "2026-11-09", "v1_start": "2026-11-02"}
+    assert checks.start_problems(late, 2, v1) == []
+    assert checks.start_problems(dict(late, start="2026-11-16"), 2, v1)
+    assert checks.start_problems(dict(late, v1_start="2026-11-09"), 2, v1)
+    assert checks.start_problems(dict(late, first_cloud_run_utc="soon"), 2, v1)
+    assert checks.start_problems(late, 2, None)                    # no v1 START to compare with
+    # any first v2 run up to Saturday 2026-10-31 gives the v1 START (R-V2-26)
+    assert checks.start_problems({"first_cloud_run_utc": "2026-10-31T23:00:00Z", "start": "2026-11-02",
+                                  "v1_start": "2026-11-02"}, 2, v1) == []
+
+
+def test_finding_keys_are_stable_and_clean():
+    assert checks.finding_key("J3", "j3_ledger", "reports/system/lab/trades.csv", "937f11a32915") == \
+        "J3|j3_ledger|reports/system/lab/trades.csv|937f11a32915"
+    assert checks.finding_key("J8", "j8_rewritten", "a|b,c", None) == "J8|j8_rewritten|a/b/c|-"
+    c = checks.Check("J3")
+    c.violate("j3_raw", "x", "data/system/raw/2026/11/03/BID.bi5", "abc")
+    c.violate("j3_raw", "x again", "data/system/raw/2026/11/03/BID.bi5", "abc")
+    assert [k for k, _, _ in c.findings] == ["J3|j3_raw|data/system/raw/2026/11/03/BID.bi5|abc"]
+    c.warn("unverified", "y")
+    c.clear({"J3|j3_raw|data/system/raw/2026/11/03/BID.bi5|abc": "2026-12-06T00:00:00Z"})
+    assert c.status == "warning" and c.reasons == ["unverified"]
+
+
+def test_the_page_and_report_do_not_call_an_unverified_check_sound(tmp_path):
+    """Review MF6: an ok check that verified nothing in this run is shown as «لم يُتحقق» (J6 without a complete week:
+    «لا بيانات بعد»), in grey, and the summary counts it apart; VolMapJudge.csv and checks_ok are unchanged."""
+    cs = [checks.Check(i) for i in ("J1", "J2", "J3", "J4", "J5", "J6", "J7", "J8", "J9")]
+    cs[0].idle = "unverified"
+    cs[5].idle = "no_data"
+    cs[8].idle = "unverified"
+    cs[8].unverified.append("J9 2026-11-03: no key")
+    now = pd.Timestamp("2026-11-04T13:10:00Z")
+    publish.write_all(tmp_path, now, "a" * 40, "SOUND", "sound", 9, 9, cs, [], "x" * 64)
+    page = (tmp_path / "reports/forward_site/judge/index.html").read_text()
+    rep = (tmp_path / "reports/judge/REPORT.md").read_text()
+    assert '<tr><td>J1</td><td>تطابق البيانات الخام مع تنزيل مستقل من المصدر</td><td class="s-unverified">لم يُتحقق' \
+        in page
+    assert '<td class="s-unverified">لا بيانات بعد</td></tr>' in page
+    assert page.count('class="s-unverified"') == 3 and page.count('<td class="s-ok">سليم</td>') == 6
+    assert "الفحوص السليمة 6 من 9، ولم يُتحقق من 3" in page and "الفحوص السليمة 6 من 9، ولم يُتحقق من 3" in rep
+    assert "| J9 | مقارنة السعر بمصدر مستقل | لم يُتحقق |" in rep and "| J6 |" in rep and "لا بيانات بعد" in rep
+    assert "checks ok 9 of 9; of these, nothing was verified in this run by: J1, J6, J9" in rep
+    raw = (tmp_path / "reports/forward_site/judge/VolMapJudge.csv").read_text()
+    assert "checks_ok,9\n" in raw and "verdict,SOUND\n" in raw

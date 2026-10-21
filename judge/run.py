@@ -1,4 +1,5 @@
-"""The independent judge, judge v1 (xauusd-quant research/system/SYSTEM_V2_PREREG.md §3 with Amendment B1 item 2).
+"""The independent judge, judge v1 (xauusd-quant research/system/SYSTEM_V2_PREREG.md §3 with Amendments B1 item 2 and
+B2 items 5-7).
 
     uv run --frozen python -I judge/run.py [--now ISO] [--out DIR] [--data-root DIR] [--repo DIR]
                                            [--j1-max-days N] [--j1-sample N] [--j1-max-requests N] [--no-network]
@@ -34,6 +35,28 @@ def _guard(name, fn, *a, **k):
         c = checks.Check(name)
         tb = traceback.format_exception_only(type(e), e)[-1].strip()
         c.warn("unverified", f"the judge could not complete this check: {tb[:300]}")
+        return c
+
+
+def _guard_j9(fn, data_root, out_root, now, **k):
+    """J9 (R-J9-1, R-J9-5): an exception is `unverified`, never a WARNING, and only its type is recorded (its text
+    could hold the key). A cross_source.csv row is still appended when J9 could not write its own."""
+    try:
+        n_before = len(read_dicts(Path(out_root) / checks.CS))
+    except Exception:   # noqa: BLE001
+        n_before = None
+    try:
+        return fn(data_root, out_root, now, **k)
+    except Exception as e:   # noqa: BLE001
+        c = checks.Check("J9")
+        c.idle = "unverified"
+        c.unverified.append(f"J9: the judge could not complete this check ({type(e).__name__}); unverified")
+        try:
+            if n_before is not None and len(read_dicts(Path(out_root) / checks.CS)) == n_before:
+                write_csv_append(Path(out_root) / checks.CS, checks.CS_HEAD,
+                                 [[iso_s(now), "", "unverified", f"judge error {type(e).__name__}", "", "", "", 0]])
+        except Exception:   # noqa: BLE001
+            pass
         return c
 
 
@@ -79,7 +102,8 @@ def main(argv=None):
     ap.add_argument("--j1-sample", type=int, default=20)
     ap.add_argument("--j1-max-requests", type=int, default=150)
     ap.add_argument("--j1-pace-s", type=float, default=1.5)
-    ap.add_argument("--no-network", action="store_true", help="J1 and J9 send no request (unverified)")
+    ap.add_argument("--no-network", action="store_true",
+                    help="J1, J8 (the deployed file) and J9 send no request (unverified)")
     ap.add_argument("--j5-all", action="store_true")
     ap.add_argument("--j5-sample", type=int, default=3)
     ap.add_argument("--write-manifest", action="store_true")
@@ -146,11 +170,11 @@ def main(argv=None):
         c6 = checks.Check("J6")
         c6.warn("unverified", "J6 needs the recomputation inputs, which could not be loaded")
     c7 = _guard("J7", checks.j7, repo, data_root, now)
-    c8 = _guard("J8", checks.j8, repo, out_root, hist_ok)
+    c8 = _guard("J8", checks.j8, repo, out_root, hist_ok, site_url="" if a.no_network else None)
     if a.no_network:
-        c9 = _guard("J9", checks.j9, data_root, out_root, now, env={})
+        c9 = _guard_j9(checks.j9, data_root, out_root, now, env={})
     else:
-        c9 = _guard("J9", checks.j9, data_root, out_root, now)
+        c9 = _guard_j9(checks.j9, data_root, out_root, now)
     allc = [c1, c2, c3, c4, c5, c6, c7, c8, c9]
 
     v, code, ok, since, lines = verdict.decide(allc, out_root, now)

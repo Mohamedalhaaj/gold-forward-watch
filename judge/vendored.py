@@ -1,6 +1,7 @@
 """The judge's vendored research files (SYSTEM_V2_PREREG.md §3.1): the frozen volmap model (research/volmap/core.py,
-models.py, frozen/discovery_params.json), the hunt harness and the four v2 seed files, all byte-identical to
-xauusd-quant and checked against judge/vendor/SHA256SUMS before use. Nothing else is vendored.
+models.py, frozen/discovery_params.json), the hunt harness and the four v2 seed files, and the two official calendar
+data files of research/system/calendars/ (IMPLEMENTATION_REGISTER R-V1-15), all byte-identical to xauusd-quant and
+checked against judge/vendor/SHA256SUMS before use. Nothing else is vendored.
 """
 import importlib.util
 import json

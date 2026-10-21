@@ -1,13 +1,12 @@
 """Recomputation of the forecast store (v1 §1; IMPLEMENTATION_REGISTER R-V1-14 .. R-V1-20).
 
 The grid is the vendored volmap's `models.build` on the model-frame mids of every loaded raw day, then
-`predict(T, "T2")["M4"]` = F_H1 and `predict(T, "T3")["M4"]` = F_S (bp), with the frozen discovery parameters. Events:
-the system's committed calendar data (the official NFP/CPI/FOMC dates, R-V1-15) read with the vendored
-`models.load_events`, plus the extension lines the system accepted (R-V1-17, reports/system/calendar_ext.csv).
-Holidays: R-V1-16.
+`predict(T, "T2")["M4"]` = F_H1 and `predict(T, "T3")["M4"]` = F_S (bp), with the frozen discovery parameters. Events
+(R-V1-15, lab review MF5): the official NFP/CPI/FOMC calendars from the judge's own copies of xauusd-quant
+research/system/calendars/ (judge/vendor/calendars/, pinned by the register's sha256 and SHA256SUMS), read with the
+vendored `models.load_events`, plus the extension lines the system accepted (R-V1-17, reports/system/calendar_ext.csv;
+a run uses the accepted rows with first_seen_utc <= its run time). Holidays: R-V1-16.
 """
-import csv
-import io
 import shutil
 import tempfile
 from pathlib import Path
@@ -16,35 +15,67 @@ import numpy as np
 import pandas as pd
 
 from . import vendored
-from .common import nyse_days, read_dicts
+from .common import VENDOR, nyse_days, parse_utc, read_dicts, sha256_file
 
-CAL_DIR = "analysis/system/vendor/calendars"     # data files only (R-V1-15); nothing under analysis/ is executed
+CAL_DIR = "analysis/system/vendor/calendars"     # the system's copies: hashed only (R-V1-15), never read as input
 CAL_FILES = {"bls_2015_2024.csv": "bls_2026_2027.csv", "fomc_2015_2024.csv": "fomc_2026_2027.csv"}
+CAL_SHA256 = {   # IMPLEMENTATION_REGISTER R-V1-15
+    "bls_2026_2027.csv": "7e829d6c5acd861c276552d4086a2c639cbec03fc66242b859cd9d4fabdef45d",
+    "fomc_2026_2027.csv": "dd709aee9821d0e1b4a1e9e0a8939422e92bb9520961090e31e96f4d30dc10f5",
+}
 
 
 class CalendarMissing(Exception):
     pass
 
 
-def load_events(repo, data_root):
-    """{"NFP", "CPI", "FOMC": model-clock DatetimeIndex} (R-V1-15, R-V1-17)."""
-    core, models, _ = vendored.volmap()
-    src = Path(repo) / CAL_DIR
-    with tempfile.TemporaryDirectory() as td:
-        for dst, name in CAL_FILES.items():
-            if not (src / name).exists():
-                raise CalendarMissing(f"{CAL_DIR}/{name} is missing")
-            shutil.copyfile(src / name, Path(td) / dst)
-        ev = models.load_events(td)
+def ext_lines(data_root, at=None):
+    """R-V1-15/R-V1-17: the accepted extension lines [(first_seen_utc, kind, UTC time)], those with
+    first_seen_utc <= at when `at` is given. A line is split at commas into exactly event,ts_utc,source_url, fields
+    stripped of spaces; ts_utc carries an explicit offset."""
+    out = []
     for row in read_dicts(Path(data_root) / "reports/system/calendar_ext.csv"):
         if row.get("status") != "accepted":
             continue
-        fields = next(csv.reader(io.StringIO(row["line"])))
-        if len(fields) < 2 or fields[0] not in ev:
+        try:
+            seen = parse_utc(row.get("first_seen_utc", ""))
+        except (ValueError, TypeError):
+            seen = None
+        if at is not None and (seen is None or seen > at):
             continue
-        t = core.to_server(pd.DatetimeIndex(pd.to_datetime([fields[1]], utc=True)))
-        ev[fields[0]] = ev[fields[0]].append(t)
+        fields = [f.strip() for f in row.get("line", "").split(",")]
+        if len(fields) != 3 or fields[0] not in ("NFP", "CPI", "FOMC"):
+            continue
+        out.append((seen, fields[0], pd.Timestamp(fields[1]).tz_convert("UTC")))
+    return out
+
+
+def load_events(repo, data_root, at=None):
+    """{"NFP", "CPI", "FOMC": model-clock DatetimeIndex} (R-V1-15, R-V1-17); `at`: the accepted extension lines a run
+    at that time used (None: all of them)."""
+    core, models, _ = vendored.volmap()
+    src = VENDOR / "calendars"
+    with tempfile.TemporaryDirectory() as td:
+        for dst, name in CAL_FILES.items():
+            if not (src / name).exists():
+                raise CalendarMissing(f"judge/vendor/calendars/{name} is missing")
+            if sha256_file(src / name) != CAL_SHA256[name]:
+                raise CalendarMissing(f"judge/vendor/calendars/{name}: sha256 differs from R-V1-15")
+            shutil.copyfile(src / name, Path(td) / dst)
+        ev = models.load_events(td)
+    for _, kind, t in ext_lines(data_root, at):
+        ev[kind] = ev[kind].append(core.to_server(pd.DatetimeIndex([t])))
     return {k: pd.DatetimeIndex(v).unique().sort_values() for k, v in ev.items()}
+
+
+def system_calendar_problems(repo):
+    """The system's own calendar copies (analysis/system/vendor/calendars, R-V1-15) by sha256 only."""
+    probs = []
+    for name, h in CAL_SHA256.items():
+        p = Path(repo) / CAL_DIR / name
+        if p.exists() and sha256_file(p) != h:
+            probs.append(f"{name}: the system's copy differs from the register's sha256 (R-V1-15)")
+    return probs
 
 
 def holidays(years_to):

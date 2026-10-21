@@ -19,7 +19,29 @@ CHECK_AR = {
     "J9": "مقارنة السعر بمصدر مستقل",
 }
 STATUS_AR = {"ok": "سليم", "warning": "تحذير", "violation": "مخالفة"}
+# an ok check that verified nothing in this run (J1 no side compared, J8 no anchor, J9 the latest day not compared:
+# «لم يُتحقق»; J6 no complete forward week: «لا بيانات بعد»). Display only: checks_ok and the verdict are unchanged
+# (R-J9-5).
+IDLE_AR = {"unverified": "لم يُتحقق", "no_data": "لا بيانات بعد"}
 VERDICT_AR = {"SOUND": "سليم", "WARNING": "تحذير", "VIOLATION": "مخالفة"}
+
+
+def shown(c):
+    """(Arabic label, css class) of a check's result on the page and in REPORT.md."""
+    if c.status == "ok" and getattr(c, "idle", ""):
+        return IDLE_AR[c.idle], "s-unverified"
+    return STATUS_AR[c.status], f"s-{c.status}"
+
+
+def counts(checks):
+    """(ok and verified, ok but nothing verified in this run)."""
+    idle = sum(1 for c in checks if c.status == "ok" and getattr(c, "idle", ""))
+    return sum(1 for c in checks if c.status == "ok") - idle, idle
+
+
+def summary_ar(checks, total):
+    x, y = counts(checks)
+    return f"الفحوص السليمة {x} من {total}، ولم يُتحقق من {y}"
 
 
 def judge_csv(asof, head, verdict, code, ok, total):
@@ -35,16 +57,19 @@ def report_md(asof, head, verdict, code, ok, total, checks, extra, judge_sha):
     reason = REPORT_SPELLING.get(code, REASONS[code])
     L = ["<div dir=\"rtl\" lang=\"ar\">", "", "# تقرير الحَكَم المستقل", "",
          f"**الحكم: {VERDICT_AR[verdict]}** · السبب: {reason}", "",
-         f"- وقت الفحص: {iso_s(asof)}", f"- الفحوص السليمة: {ok} من {total}", ""]
+         f"- وقت الفحص: {iso_s(asof)}", f"- {summary_ar(checks, total)}", ""]
     L.append("| الفحص | ما يتحقق منه | النتيجة |")
     L.append("|---|---|---|")
     for c in checks:
-        L.append(f"| {c.id} | {CHECK_AR[c.id]} | {STATUS_AR[c.status]} |")
+        L.append(f"| {c.id} | {CHECK_AR[c.id]} | {shown(c)[0]} |")
     L += ["", "حدود الحَكَم: يكشف الأخطاء والتعديلات اللاحقة، لكنه يعمل على الحساب نفسه ومن صنع الجهة نفسها، "
               "فلا يحمي من تلاعب متعمّد.", "", "</div>", ""]
-    L += ["## Evidence", "", f"- Verdict: **{verdict}** (reason code `{code}`), checks ok {ok} of {total}",
+    idle = [c.id for c in checks if c.status == "ok" and getattr(c, "idle", "")]
+    L += ["## Evidence", "", f"- Verdict: **{verdict}** (reason code `{code}`), checks ok {ok} of {total}"
+          + (f"; of these, nothing was verified in this run by: {', '.join(idle)}" if idle else ""),
           f"- HEAD checked: `{head}`", f"- Judge code sha256 (live manifest): `{judge_sha}`",
-          "- Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendment B1 item 2, "
+          "- Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 "
+          "items 5-7, "
           "SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md", ""]
     for line in extra:
         L.append(f"- {line}")
@@ -66,8 +91,8 @@ def index_html(asof, verdict, code, ok, total, checks):
     reason = REPORT_SPELLING.get(code, REASONS[code])
     color = {"SOUND": "#2e7d4f", "WARNING": "#a8780a", "VIOLATION": "#b3261e"}[verdict]
     rows = "\n".join(
-        f"<tr><td>{c.id}</td><td>{html.escape(CHECK_AR[c.id])}</td><td class=\"s-{c.status}\">"
-        f"{STATUS_AR[c.status]}</td></tr>" for c in checks)
+        f"<tr><td>{c.id}</td><td>{html.escape(CHECK_AR[c.id])}</td><td class=\"{shown(c)[1]}\">"
+        f"{shown(c)[0]}</td></tr>" for c in checks)
     return f"""<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -91,6 +116,7 @@ table {{ width: 100%; border-collapse: collapse; background: var(--card); border
 th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; }}
 td:first-child {{ font-variant-numeric: tabular-nums; direction: ltr; text-align: right; width: 3.5em; }}
 .s-ok {{ color: #2e7d4f; }} .s-warning {{ color: #a8780a; }} .s-violation {{ color: #b3261e; font-weight: 600; }}
+.s-unverified {{ color: var(--muted); }}
 p.note {{ color: var(--muted); font-size: .9rem; }}
 </style>
 </head>
@@ -98,7 +124,7 @@ p.note {{ color: var(--muted); font-size: .9rem; }}
 <main>
 <h1>الحَكَم المستقل</h1>
 <div class="verdict"><b>{VERDICT_AR[verdict]}</b><br>{html.escape(reason)}<br>
-<span class="note">الفحوص السليمة {ok} من {total} · وقت الفحص <span dir="ltr">{iso_s(asof)}</span></span></div>
+<span class="note">{summary_ar(checks, total)} · وقت الفحص <span dir="ltr">{iso_s(asof)}</span></span></div>
 <table>
 <thead><tr><th>الفحص</th><th>ما يتحقق منه</th><th>النتيجة</th></tr></thead>
 <tbody>

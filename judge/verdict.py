@@ -1,13 +1,24 @@
-"""Verdict, adjudications and the latch (SYSTEM_V2_PREREG.md §3.2 "Verdict", "On VIOLATION", J5; §3.3 reason_ar
-with IMPLEMENTATION_REGISTER R-JF-1, R-JF-2).
+"""Verdict, adjudications and the latch (SYSTEM_V2_PREREG.md §3.2 "Verdict", "On VIOLATION", J5, with Amendment B2
+item 6; §3.3 reason_ar with IMPLEMENTATION_REGISTER R-JF-1, R-JF-2; R-JV-1 .. R-JV-4).
+
+VIOLATION findings and their keys (B2 item 6, R-JV-1 .. R-JV-4):
+- every VIOLATION finding has a stable key `<check>|<reason code>|<path>|<commit>` (judge/checks.py finding_key);
+- reports/judge/FINDINGS.csv (append-only; utc,key,check,reason,detail) records each key once, at the first judge
+  run that found it (utc = that run's time = when its latch began);
+- a key stays open, and the verdict stays VIOLATION, until ADJUDICATIONS.csv has a row with ref `latch`, check = the
+  key's check, subject = the key exactly, decision `clear`, and utc at or after the key's FINDINGS.csv utc. A key
+  found in an earlier run and no longer found stays open until then (the latch);
+- a cleared key no longer makes the verdict a VIOLATION, whether or not it is still found (a historical commit is
+  found again by every run). The same kind of finding on a NEW commit has another key and is a new finding;
+- a `clear` row that names no key, or a key not in FINDINGS.csv or this run, clears nothing;
+- REPORT.md lists the keys found by the run, the open keys and every cleared key with the date of its clear row.
 
 ADJUDICATIONS.csv (append-only): utc,ref,check,subject,decision,note
 - the judge appends one `pending` row per new J5 mismatch (ref J5-<run>-<n>, subject = the mismatch key);
 - Claude or the client appends, within 7 days, a row with the same ref and decision system_error, judge_error or
   spec_gap. Only system_error makes the verdict a VIOLATION (a manual, more conservative append); judge_error and
-  spec_gap close the mismatch;
-- a row with decision `clear` and ref `latch` (dated at or after the start of a latched VIOLATION) clears the latch;
-  a `clear` row whose ref is a system_error ref withdraws that system_error.
+  spec_gap close the mismatch; a `clear` row whose ref is a system_error ref withdraws that system_error;
+- `latch` rows clear VIOLATION finding keys as above.
 """
 from pathlib import Path
 
@@ -17,6 +28,8 @@ from .common import iso_s, parse_utc, read_dicts, write_csv_append
 
 ADJ = "reports/judge/ADJUDICATIONS.csv"
 ADJ_HEAD = ["utc", "ref", "check", "subject", "decision", "note"]
+FINDINGS = "reports/judge/FINDINGS.csv"
+FINDINGS_HEAD = ["utc", "key", "check", "reason", "detail"]
 VERDICTS = "reports/judge/VERDICTS.csv"
 CHECK_IDS = ("J1", "J2", "J3", "J4", "J5", "J6", "J7", "J8", "J9")
 V_HEAD = ["utc", "head_sha", "verdict", "reason_code", "checks_ok", "checks_total", "latched_since",
@@ -109,11 +122,38 @@ def active_system_errors(out_root):
     return list(errs.values())
 
 
-def latch_cleared(out_root, since):
+def finding_log(out_root):
+    """{key: first FINDINGS.csv row} (R-JV-1)."""
+    out = {}
+    for r in read_dicts(Path(out_root) / FINDINGS):
+        if r.get("key"):
+            out.setdefault(r["key"], r)
+    return out
+
+
+def cleared_keys(out_root, first_seen):
+    """{key: utc of its first valid clear row} for the keys of first_seen ({key: utc first found}) (R-JV-2)."""
+    def t(s):
+        try:
+            return parse_utc(s)
+        except (ValueError, TypeError, AttributeError):
+            return None
+
+    out = {}
     for r in read_dicts(Path(out_root) / ADJ):
-        if r.get("decision") == "clear" and r.get("ref") == "latch" and r["utc"] >= since:
-            return True
-    return False
+        k = r.get("subject", "")
+        if not (r.get("decision") == "clear" and r.get("ref") == "latch" and k in first_seen
+                and r.get("check") == k.split("|", 1)[0]):
+            continue
+        tr, tf = t(r.get("utc", "")), t(first_seen[k])
+        if tr is not None and tf is not None and tr >= tf:
+            out.setdefault(k, r["utc"])
+    return out
+
+
+def _key_reason(k):
+    parts = k.split("|")
+    return parts[1] if len(parts) > 1 else ""
 
 
 def undecided(out_root):
@@ -131,26 +171,42 @@ def overdue(out_root, now):
             and parse_utc(r["utc"]) + pd.Timedelta(days=7) < now]
 
 
+def _current_findings(checks):
+    cur = {}
+    for c in checks:
+        for k, code, line in getattr(c, "findings", []):
+            cur.setdefault(k, (c.id, code, line))
+    return cur
+
+
 def decide(checks, out_root, now):
-    """(verdict, reason_code, checks_ok, latched_since, detail lines)."""
-    viol = [r for c in checks if c.status == "violation" for r in c.reasons if r in VIOLATION_ORDER]
+    """(verdict, reason_code, checks_ok, latched_since, detail lines). Checks whose every finding of this run is
+    cleared are set back to ok (or warning) here (Check.clear)."""
+    cur = _current_findings(checks)
+    log = finding_log(out_root)
+    first_seen = {k: r["utc"] for k, r in log.items()}
+    for k in cur:
+        first_seen.setdefault(k, iso_s(now))
+    cleared = cleared_keys(out_root, first_seen)
+    for c in checks:
+        if hasattr(c, "clear"):
+            c.clear(cleared)
+    open_keys = [k for k in first_seen if k not in cleared]
+    viol = [_key_reason(k) for k in open_keys]
     warn = [r for c in checks if c.status == "warning" for r in c.reasons]
     syserr = active_system_errors(out_root)
     if syserr:
         viol.append("adj_system_error")
     prev = read_dicts(Path(out_root) / VERDICTS)
     prev = prev[-1] if prev else None
-    latched = bool(prev and prev.get("latched_since") and not latch_cleared(out_root, prev["latched_since"]))
     lines = []
     if viol:
-        code = next(r for r in VIOLATION_ORDER if r in viol)
-        since = prev["latched_since"] if latched else iso_s(now)
+        code = next((r for r in VIOLATION_ORDER if r in viol), viol[0])
+        since = (prev["latched_since"] if prev and prev.get("verdict") == "VIOLATION" and prev.get("latched_since")
+                 else iso_s(now))
         verdict = "VIOLATION"
-    elif latched:
-        code = prev.get("reason_code") or "j3_ledger"
-        since = prev["latched_since"]
-        verdict = "VIOLATION"
-        lines.append(f"VIOLATION latched since {since}: no ADJUDICATIONS.csv row `clear,latch` dated after it")
+        if code not in REASONS:
+            code = "j3_ledger"
     elif warn:
         code = next((r for r in WARNING_ORDER if r in warn), warn[0])
         since = ""
@@ -158,6 +214,17 @@ def decide(checks, out_root, now):
     else:
         code, since, verdict = "sound", "", "SOUND"
     ok = sum(1 for c in checks if c.status == "ok")
+    if cur:
+        lines.append("violation finding keys of this run: " + "; ".join(sorted(cur)))
+    for k in sorted(open_keys):
+        lines.append(f"open finding key {k} (first found {first_seen[k]}"
+                     + ("" if k in cur else "; latched, not found by this run")
+                     + f"): cleared only by an ADJUDICATIONS.csv row "
+                       f"`<utc>,latch,{k.split('|', 1)[0]},{k},clear,<note>` "
+                       f"with utc at or after {first_seen[k]}")
+    for k in sorted(cleared):
+        lines.append(f"cleared finding key {k} (first found {first_seen[k]}; clear row {cleared[k]})"
+                     + ("; still found by this run" if k in cur else ""))
     for e in syserr:
         lines.append(f"system_error adjudication {e['ref']} ({e['subject']}) recorded {e['utc']}")
     return verdict, code, ok, since, lines
@@ -165,6 +232,11 @@ def decide(checks, out_root, now):
 
 def record(out_root, now, head, verdict, code, ok, total, since, code_sha, checks):
     st = {c.id: c.status for c in checks}
+    log = finding_log(out_root)
+    new = [[iso_s(now), k, chk, rc, "".join(ch if 32 <= ord(ch) < 127 else "?" for ch in line)[:300]]
+           for k, (chk, rc, line) in sorted(_current_findings(checks).items()) if k not in log]
+    if new:
+        write_csv_append(Path(out_root) / FINDINGS, FINDINGS_HEAD, new)
     write_csv_append(Path(out_root) / VERDICTS, V_HEAD,
                      [[iso_s(now), head, verdict, code, ok, total, since, code_sha] + [st.get(i, "") for i in
                                                                                        CHECK_IDS]])

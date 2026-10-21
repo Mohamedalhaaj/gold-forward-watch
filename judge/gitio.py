@@ -1,5 +1,6 @@
 """Read-only git helpers for the history checks (J2, J3, J4, J8). Every call is `git -C <repo> ...`; nothing is
 written to the repository."""
+import re
 import subprocess
 from functools import lru_cache
 
@@ -48,10 +49,19 @@ def is_ancestor(repo, a, b):
     return code == 0
 
 
-@lru_cache(maxsize=4096)
-def show_bytes(repo, commit, path):
+def _show(repo, commit, path):
     r = subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{path}"], capture_output=True)
     return r.stdout if r.returncode == 0 else None
+
+
+_show_cached = lru_cache(maxsize=4096)(_show)
+
+
+def show_bytes(repo, commit, path):
+    """The file at a commit (None if absent). Cached only for a commit sha: a ref such as HEAD moves."""
+    if re.fullmatch(r"[0-9a-f]{7,40}", str(commit)):
+        return _show_cached(repo, commit, path)
+    return _show(repo, commit, path)
 
 
 @lru_cache(maxsize=8192)
