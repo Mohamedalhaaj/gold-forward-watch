@@ -1,6 +1,6 @@
 {
  "lab-v1-freeze": "6cd6d57ef62d8eb8710dd5151c7b5ddc2612d095",
- "lab-v2-freeze": null,
- "judge-v1-freeze": null,
+ "lab-v2-freeze": "7a5ce4d22da2c193640d1040e259f0182a10acd9",
+ "judge-v1-freeze": "c2f43d043f8b1bd58db2b7563a4826c65b20d26c",
  "rule": "SYSTEM_V2_PREREG.md §3.1: each freeze by commit sha; lab-v2-freeze and judge-v1-freeze are written by the follow-up commit after their tags are created (§5). A tag that resolves to another commit is a VIOLATION; a shallow checkout or a missing pinned commit is a WARNING."
 }
