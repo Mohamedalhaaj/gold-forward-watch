@@ -1,12 +1,12 @@
 # Gold support system v1: status
 
-Updated 2026-10-21T08:35:32Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
+Updated 2026-10-21T14:30:56Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
 
 ## Data and forecasts
 
 - Raw Dukascopy days stored: 50 (missing sides: 0); complete through 2026-10-21 00:00 UTC (exclusive); lag 0 trading day(s)
 - Revisions logged (never used): 0
-- Forecast store: 830 slots (573 defined); 23 new this run
+- Forecast store: 830 slots (573 defined); 0 new this run
 - START: 2026-11-02
 - Event calendars cover through 2027-12-03 (the earliest of the last NFP, CPI and FOMC dates); extension lines accepted 0, rejected 0
 
