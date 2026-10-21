@@ -422,6 +422,38 @@ def test_the_page_and_report_do_not_call_an_unverified_check_sound(tmp_path):
     assert "checks_ok,9\n" in raw and "verdict,SOUND\n" in raw
 
 
+def test_the_summary_drops_the_unverified_clause_when_nothing_is_unverified(tmp_path):
+    """Amendment B3 item 3, last bullet: the judge page's summary drops «، ولم يُتحقق من 0» when nothing is unverified
+    (y = 0), in the page and in REPORT.md; for y >= 1 the text is unchanged."""
+    cs = [checks.Check(i) for i in ("J1", "J2", "J3", "J4", "J5", "J6", "J7", "J8", "J9")]
+    now = pd.Timestamp("2026-11-04T13:10:00Z")
+    publish.write_all(tmp_path, now, "a" * 40, "SOUND", "sound", 9, 9, cs, [], "x" * 64)
+    page = (tmp_path / "reports/forward_site/judge/index.html").read_text()
+    rep = (tmp_path / "reports/judge/REPORT.md").read_text()
+    assert '<span class="note">الفحوص السليمة 9 من 9 · وقت الفحص <span dir="ltr">' in page
+    assert "\n- الفحوص السليمة 9 من 9\n" in rep
+    for text in (page, rep):
+        assert "ولم يُتحقق من 0" not in text and "، ولم يُتحقق" not in text and "يُتحقق" not in text
+    # the summary itself, for each count of unverified checks y = 0..4 (only J1, J6, J8 and J9 can be idle)
+    assert publish.summary_ar(cs, 9) == "الفحوص السليمة 9 من 9"
+    cs[0].idle = "unverified"
+    assert publish.summary_ar(cs, 9) == "الفحوص السليمة 8 من 9، ولم يُتحقق من 1"
+    cs[5].idle = "no_data"
+    assert publish.summary_ar(cs, 9) == "الفحوص السليمة 7 من 9، ولم يُتحقق من 2"
+    cs[7].idle = "unverified"
+    assert publish.summary_ar(cs, 9) == "الفحوص السليمة 6 من 9، ولم يُتحقق من 3"
+    cs[8].idle = "unverified"
+    assert publish.summary_ar(cs, 9) == "الفحوص السليمة 5 من 9، ولم يُتحقق من 4"
+    # a warning is not counted as unverified: with every remaining check ok and verified, y = 0 again
+    w = [checks.Check(i) for i in ("J1", "J2", "J3", "J4", "J5", "J6", "J7", "J8", "J9")]
+    w[2].warn("unverified", "x")
+    w[6].warn("unverified", "y")
+    assert publish.summary_ar(w, 9) == "الفحوص السليمة 7 من 9"
+    for c in w:
+        c.warn("unverified", "z")
+    assert publish.summary_ar(w, 9) == "الفحوص السليمة 0 من 9"
+
+
 def test_calendar_extension_lines_follow_the_register(tmp_path):
     """R-V1-15/R-V1-17: accepted lines only, split at commas into exactly event,ts_utc,source_url with fields
     stripped, the explicit offset converted to UTC, and only the rows first seen by the given run time."""

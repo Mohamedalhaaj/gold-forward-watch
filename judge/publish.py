@@ -40,8 +40,9 @@ def counts(checks):
 
 
 def summary_ar(checks, total):
+    """Amendment B3 item 3: the «، ولم يُتحقق من y» clause is dropped when nothing is unverified (y = 0)."""
     x, y = counts(checks)
-    return f"الفحوص السليمة {x} من {total}، ولم يُتحقق من {y}"
+    return f"الفحوص السليمة {x} من {total}" + (f"، ولم يُتحقق من {y}" if y else "")
 
 
 def judge_csv(asof, head, verdict, code, ok, total):
