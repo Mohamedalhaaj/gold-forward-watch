@@ -1,11 +1,14 @@
 """Isolation (§2.5, §4): lab v2 writes only its own folders; a forced v2 crash leaves v1's run, publish and commit
 outputs byte-identical; the workflow runs v2 after v1's commit with continue-on-error and its own commit; the v1
 publisher's lab2 keys come from the last summary.json and are left out when it is missing or invalid."""
+import csv
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -14,6 +17,7 @@ import pytest
 import publish
 import run as v1run
 import run_v2
+import v2_page
 
 ROOT = run_v2.ROOT
 V2_DIRS = ("data/system/lab_v2", "reports/system/lab_v2", "reports/forward_site/system/lab_v2")
@@ -111,17 +115,153 @@ def block(text, name):
 def test_the_workflow_runs_v2_after_v1s_commit_with_continue_on_error():
     text = (ROOT / ".github/workflows/system.yml").read_text()
     assert steps(text) == ["System run", "The watch paths are untouched", "Commit the system ledgers", "Lab v2 run",
-                           "Commit the lab v2 ledgers", "Fail the job if the run halted or failed"]
+                           "Lab v2 did not finish", "Commit the lab v2 ledgers",
+                           "Fail the job if the run halted or failed"]
     run2 = block(text, "Lab v2 run")
     assert "continue-on-error: true" in run2 and "timeout-minutes: 10" in run2 and "\n        if:" not in run2
     assert "uv run --frozen python -I analysis/system/lab_v2/run_v2.py" in run2
+    assert 'export LAB2_EXIT_FILE="$RUNNER_TEMP/lab2_exit"' in run2 and 'echo "finished=1"' in run2
+    crash = block(text, "Lab v2 did not finish")
+    assert ("if: ${{ !cancelled() && steps.lab2.outcome != 'skipped' && steps.lab2.outputs.finished != '1' }}"
+            in crash and "continue-on-error: true" in crash)
+    assert "git checkout -q HEAD -- \"$p\"" in crash and "git clean -fdq -- \"$p\"" in crash
+    assert "analysis/system/lab_v2/v2_crash.py --reason" in crash
     com2 = block(text, "Commit the lab v2 ledgers")
-    assert "continue-on-error: true" in com2 and "steps.lab2.outputs.finished == '1'" in com2
+    assert "continue-on-error: true" in com2 and "if: ${{ !cancelled() && steps.lab2.outcome != 'skipped' }}" in com2
     assert "git add -A" not in text and "git add -- \"$p\"" in com2
     for d in V2_DIRS:
-        assert d in com2
+        assert d in com2 and d in crash
     assert block(text, "Fail the job if the run halted or failed").strip().endswith(
         "if: ${{ steps.run.outcome == 'failure' }}\n        run: exit 1".strip())
+
+
+def step_script(name):
+    """The `run: |` body of a step of system.yml, unindented."""
+    b = block((ROOT / ".github/workflows/system.yml").read_text(), name)
+    body = b[b.index("        run: |\n") + len("        run: |\n"):]
+    return "".join(ln[10:] if ln.startswith("          ") else ln.lstrip() for ln in body.splitlines(True))
+
+
+def fake_bin(d, name, script):
+    p = d / name
+    p.write_text("#!/bin/bash\n" + script)
+    p.chmod(0o755)
+
+
+@pytest.mark.parametrize("behaviour,code,finished", [
+    ("ok", 0, True), ("halt", 1, True), ("ops", 2, True),
+    ("killed", 137, False), ("crash_before_main", 1, False), ("uv_failed", 2, False)])
+def test_the_step_is_finished_only_when_run_v2_reports_its_own_end(tmp_path, behaviour, code, finished):
+    """§2.5 item 2 (lab review MF2): the "Lab v2 run" step sets finished=1 only when run_v2.py wrote the step's own
+    exit code to $LAB2_EXIT_FILE; a kill, a crash before main() or a failed `uv run` leave it unset."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    writes = behaviour in ("ok", "halt", "ops")
+    fake_bin(bin_, "uv", (f'echo {code} > "$LAB2_EXIT_FILE"\n' if writes else "") + f"exit {code}\n")
+    out = tmp_path / "out"
+    env = {"PATH": f"{bin_}:/usr/bin:/bin", "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": str(out)}
+    r = subprocess.run(["bash", "-e", "-c", step_script("Lab v2 run")], env=env, capture_output=True, text=True)
+    assert r.returncode == code
+    lines = out.read_text().splitlines()
+    assert f"code={code}" in lines and (("finished=1" in lines) is finished)
+
+
+def test_the_unfinished_step_restores_the_v2_folders_and_records_the_crash(tmp_path):
+    """The "Lab v2 did not finish" step on a git checkout: partial writes in the three v2 folders are discarded, an
+    untracked file there is removed, nothing else is touched, and the crash record is written (summary PAUSED, page
+    re-rendered with the paused banner)."""
+    repo = tmp_path / "repo"
+    (repo / "analysis/system/lab_v2").mkdir(parents=True)
+    for f in ("v2_crash.py", "v2_page.py"):
+        shutil.copyfile(ROOT / "analysis/system/lab_v2" / f, repo / "analysis/system/lab_v2" / f)
+    rep, site = repo / "reports/system/lab_v2", repo / "reports/forward_site/system/lab_v2"
+    rep.mkdir(parents=True)
+    s = dict(GOOD_SUMMARY)
+    (rep / "summary.json").write_text(json.dumps(s, ensure_ascii=False))
+    (rep / "decisions.csv").write_text("id,day\n")
+    (repo / "data/system").mkdir(parents=True)
+    (repo / "data/system/days.csv").write_text("v1\n")
+    git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run(git + ["init", "-q"], check=True)
+    subprocess.run(git + ["add", "-A"], check=True)
+    subprocess.run(git + ["commit", "-q", "-m", "base"], check=True)
+    (rep / "decisions.csv").write_text("id,day\nS2,2026-11-09\n")          # a partial write of the killed run
+    (rep / "lab_days.csv").write_text("day,settled_utc\n")                  # untracked
+    (repo / "data/system/days.csv").write_text("v1 changed\n")              # outside the v2 folders: kept
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    fake_bin(bin_, "uv", "exit 2\n")                                         # uv fails: the python3 fallback runs
+    fake_bin(bin_, "python3", f'exec "{sys.executable}" "$@"\n')
+    script = step_script("Lab v2 did not finish").replace("${{ steps.lab2.outputs.code || 'none' }}", "none")
+    env = {"PATH": f"{bin_}:/usr/bin:/bin", "GITHUB_RUN_ID": "42", "HOME": str(tmp_path)}
+    r = subprocess.run(["bash", "-e", "-c", script], cwd=repo, env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (rep / "decisions.csv").read_text() == "id,day\n" and not (rep / "lab_days.csv").exists()
+    assert (repo / "data/system/days.csv").read_text() == "v1 changed\n"
+    halt = (rep / "HALT.md").read_text()
+    assert "lab v2 step did not finish (timeout or kill; exit code none)" in halt
+    h = list(csv.DictReader(open(rep / "halts.csv")))
+    assert len(h) == 1 and h[0]["run_id"] == "42" and len(h[0]["head_sha"]) == 40
+    new = json.loads((rep / "summary.json").read_text())
+    assert new["state"] == "PAUSED" and new["halted"] and new["asof_utc"] == s["asof_utc"] and new["halt_utc"]
+    page = (site / "index.html").read_text()
+    assert v2_page.PAUSED_AR in page and "المنظومة الأولى" not in page
+    assert json.loads((site / "lab_v2.json").read_text())["state"] == "PAUSED"
+    assert publish.lab2_lines(rep / "summary.json")[0] == "lab2_state,PAUSED"
+
+
+def test_an_import_failure_halts_v2_through_the_crash_record(tmp_path):
+    """§2.5 item 2: run_v2.py imports only the standard library unguarded. A copy of the lab v2 folder without the v1
+    modules it needs (an ImportError, as a broken module would give) still writes HALT.md, halts.csv, the PAUSED
+    summary, the page and its exit code (1) in cloud mode."""
+    lab = tmp_path / "analysis/system/lab_v2"
+    lab.mkdir(parents=True)
+    for f in ("run_v2.py", "v2_crash.py", "v2_page.py", "v2paths.py"):
+        shutil.copyfile(ROOT / "analysis/system/lab_v2" / f, lab / f)
+    rep = tmp_path / "reports/system/lab_v2"
+    rep.mkdir(parents=True)
+    (rep / "summary.json").write_text(json.dumps(GOOD_SUMMARY, ensure_ascii=False))
+    exit_file = tmp_path / "exit"
+    env = dict(os.environ, GITHUB_ACTIONS="true", GITHUB_REF="refs/heads/main", GITHUB_RUN_ID="7",
+               LAB2_EXIT_FILE=str(exit_file))
+    r = subprocess.run([sys.executable, "-I", str(lab / "run_v2.py")], env=env, capture_output=True, text=True,
+                       cwd=tmp_path)
+    assert r.returncode == run_v2.EXIT_HALT, r.stderr
+    assert exit_file.read_text().strip() == "1"
+    assert "lab v2 could not import its modules: ModuleNotFoundError" in (rep / "HALT.md").read_text()
+    assert json.loads((rep / "summary.json").read_text())["state"] == "PAUSED"
+    page = (tmp_path / "reports/forward_site/system/lab_v2/index.html").read_text()
+    assert v2_page.PAUSED_AR in page
+
+
+def test_a_caught_exception_re_renders_the_client_page_paused(worlds, tmp_path):
+    """crash() also rewrites lab_v2.json and index.html from the PAUSED summary (lab review MF2 b)."""
+    PC, _ = worlds["C_v2_crashes_last"]
+    page = (PC.site / "index.html").read_text()
+    assert v2_page.PAUSED_AR in page and "forced crash" in json.loads((PC.site / "lab_v2.json").read_text())[
+        "halt_reasons"][0]
+    PB, _ = worlds["B_v2_always_crashes"]
+    assert not (PB.site / "index.html").exists()             # no summary yet: nothing to show, no lab2 keys
+
+
+def test_the_paused_banner_makes_no_claim_about_v1():
+    """Amendment B2 item 3 (lab review MF4): the banner reads only «المختبر الثاني متوقف مؤقتًا»."""
+    s = dict(GOOD_SUMMARY)
+    running = v2_page.page_html(s)
+    paused = v2_page.page_html(s | {"state": "PAUSED"})
+    assert v2_page.PAUSED_AR == "المختبر الثاني متوقف مؤقتًا"
+    assert v2_page.PAUSED_AR not in running and f'<p class="paused">{v2_page.PAUSED_AR}</p>' in paused
+    assert "المنظومة الأولى" not in paused and "كالمعتاد" not in paused
+    assert 'href="../"' in running                            # back to v1's lab page
+
+
+def test_the_v1_lab_page_links_to_the_v2_section():
+    """Amendment B2 item 2 (lab review MF3): the third v1 OPS edit, a link from reports/forward_site/system/index.html
+    to system/lab_v2/, logged by v1's ops_changes.csv (and lab v2's)."""
+    page = (ROOT / "reports/forward_site/system/index.html").read_text()
+    assert '<a href="lab_v2/">' in page and "المختبر، الإصدار الثاني" in page
+    assert "reports/forward_site/system/index.html" in v1run.OPS_FILES
+    assert "reports/forward_site/system/index.html" in run_v2.OPS_FILES
 
 
 def test_the_v1_part_of_the_workflow_is_unchanged():
@@ -153,6 +293,8 @@ def site(tmp_path, summary):
 
 
 GOOD = {"state": "RUNNING", "days": 5, "n_paper": 4, "best_progress": 0.0014705703464325502}
+GOOD_SUMMARY = json.loads((Path(__file__).resolve().parents[2] / "judge_fixtures/synthetic_world/reports/system/lab_v2/"
+                           "summary.json").read_text())
 
 
 def test_lab2_keys_come_from_summary_json(tmp_path):
@@ -189,9 +331,11 @@ def test_a_write_outside_the_site_path_never_adds_keys(tmp_path):
     assert b"lab2_" not in p.read_bytes()
 
 
-def test_both_ops_edits_are_logged_by_v1():
-    """§2.5 item 5: v1's run logs a row in reports/system/ops_changes.csv for each OPS file whose sha256 changed."""
-    assert ".github/workflows/system.yml" in v1run.OPS_FILES and "analysis/system/publish.py" in v1run.OPS_FILES
+def test_the_three_ops_edits_are_logged_by_v1():
+    """§2.5 item 5 and Amendment B2 item 2: v1's run logs a row in reports/system/ops_changes.csv for each OPS file
+    whose sha256 changed: system.yml, publish.py and the v1 lab page."""
+    for f in (".github/workflows/system.yml", "analysis/system/publish.py", "reports/forward_site/system/index.html"):
+        assert f in v1run.OPS_FILES
 
 
 # ---------------------------------------------------------------- cloud mode guard (as v1)

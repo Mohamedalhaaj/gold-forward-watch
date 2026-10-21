@@ -89,7 +89,8 @@ def test_frozen_v2_manifest_covers_the_frozen_files_and_v1_is_untouched():
     assert listed == v2_frozen.FROZEN_V2_FILES
     for f in ("v2_data.py", "v2_signals.py", "v2_exec.py", "v2_ledger.py", "v2_registry.py", "v2paths.py"):
         assert f"analysis/system/lab_v2/{f}" in listed
-    for f in ("run_v2.py", "v2_publish.py", "v2_lookback.py", "v2_synth.py", "v2_frozen.py"):
+    for f in ("run_v2.py", "v2_publish.py", "v2_page.py", "v2_crash.py", "v2_lookback.py", "v2_synth.py",
+              "v2_frozen.py"):
         assert f"analysis/system/lab_v2/{f}" not in listed           # OPS
     assert frozen_hashes.check() == [] and frozen_hashes.vendor_check() == []
     assert sha(frozen_hashes.MANIFEST) == V1_MANIFEST_SHA              # v1's manifest is never edited (§2.5 item 1)

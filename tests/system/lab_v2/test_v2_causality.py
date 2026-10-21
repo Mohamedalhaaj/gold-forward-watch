@@ -87,6 +87,7 @@ def test_an_audit_failure_halts_v2_and_voids_the_seed(short_world, tmp_path, mon
         return v
     monkeypatch.setattr(v2_signals, "online_value", bad_online)
     t = pd.Timestamp("2026-11-14 03:20", tz="UTC")
+    run_v2.synthetic_runs(P, times=["2026-11-14 03:20"], v2=False, log=lambda *a: None)   # v1 first
     code, info = run_v2.guarded_run(P, t, "synthetic", "dry", "dry-placeholder", fetch_on=False, log=lambda *a: None)
     assert code == run_v2.EXIT_HALT and any("causality audit failed" in h for h in info["halt"])
     ev = pd.read_csv(P.reg / "events.csv")
@@ -106,6 +107,37 @@ def test_an_audit_failure_halts_v2_and_voids_the_seed(short_world, tmp_path, mon
     s = json.loads((P.rep / "summary.json").read_text())
     assert s["state"] == "RUNNING" and {r["id"]: r["state"] for r in s["rules"]}["S5"] == "RETIRED"
     assert len(pd.read_csv(P.rep / "halts.csv")) == 1
+
+
+def test_an_outside_window_mismatch_also_fails_the_audit(short_world, tmp_path, monkeypatch):
+    """Amendment B2 item 4 (lab review MF10): the audit fails on ANY online != full-data difference, outside the
+    eligibility window too, so the tripwire (which re-derives every bar from the full-data values) can never meet a
+    decision written from a differing online value."""
+    P = copy_world(short_world, tmp_path / "w")
+    real = v2_signals.online_value
+    bar = pd.Timestamp("2026-11-10 23:00")                # S5 (hold 210 min): T 23:15, outside the window
+
+    def bad_online(mod, bars, i):
+        v = real(mod, bars, i)
+        if mod.NAME == "databar_stretch_settle" and bars.index[i] == bar:
+            return 1 if v == 0 else 0
+        return v
+    monkeypatch.setattr(v2_signals, "online_value", bad_online)
+    b15 = load_bars(P, pd.Timestamp("2026-11-14 03:20", tz="UTC"))["M15"]
+    full = v2_signals.full_values(v2_signals.load_seed("S5"), b15)
+    sg = v2_signals.day_signals("S5", b15, full, "2026-11-10")
+    k = sg.start.index(23 * 60)
+    assert not sg.window[k]
+    row = v2_ledger.audit_row(sg, "M15", "t")
+    assert row["result"] == "FAIL" and row["n_mismatch_window"] == 0 and row["n_mismatch_outside"] == 1
+    assert row["first_mismatch"] == "23:00"
+    t = pd.Timestamp("2026-11-14 03:20", tz="UTC")
+    run_v2.synthetic_runs(P, times=["2026-11-14 03:20"], v2=False, log=lambda *a: None)   # v1 first
+    code, info = run_v2.guarded_run(P, t, "synthetic", "dry", "dry-placeholder", fetch_on=False, log=lambda *a: None)
+    assert code == run_v2.EXIT_HALT and any("causality audit failed" in h and "1 outside" in h for h in info["halt"])
+    ev = pd.read_csv(P.reg / "events.csv")
+    assert ((ev.id == "S5") & (ev.event == "RETIRED") & (ev.reason == "bug")).sum() == 1
+    assert not (P.rep / "lab_days.csv").exists()
 
 
 def test_settlement_refuses_real_days_before_start(tmp_path):

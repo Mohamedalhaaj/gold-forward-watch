@@ -4,8 +4,8 @@ lab v2 freeze. v1's analysis/system/FROZEN.sha256 is never edited.
 FROZEN (lab v2), by sha256: the v2 bar rules, signal and audit, accounting, ledger and state machine, registry and
 START rule, the vendored hunt harness and seeds with their SHA256SUMS, the four registry files, and the FROZEN v1
 modules lab v2 imports (pinned here too, so a change to any of them halts v2 as well as v1). Everything else in
-analysis/system/lab_v2 (run_v2.py, v2_publish.py, v2_lookback.py, v2_synth.py, this file) is OPS: fixes are allowed
-and logged in reports/system/lab_v2/ops_changes.csv.
+analysis/system/lab_v2 (run_v2.py, v2_publish.py, v2_page.py, v2_crash.py, v2_lookback.py, v2_synth.py, this file) is
+OPS: fixes are allowed and logged in reports/system/lab_v2/ops_changes.csv.
 
 A lab v2 run checks every line of the manifest and the vendored SHA256SUMS; any mismatch halts v2 only
 (reports/system/lab_v2/HALT.md).

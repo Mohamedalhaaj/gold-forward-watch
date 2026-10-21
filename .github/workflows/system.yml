@@ -71,20 +71,45 @@ jobs:
       # It runs only after v1's run, deploy and commit are done (and only if v1's commit step succeeded), with
       # continue-on-error and its own timeout, and commits only its own three folders in a separate commit, so it
       # never changes v1's exit code, publish, deploy or commit. A v2 failure halts v2 only (reports/system/lab_v2/HALT.md).
-      # `finished` is set only when run_v2.py returned (a halt included); a run killed by the timeout commits nothing.
+      # `finished` is set only when run_v2.py reported its own end: it writes its exit code to $LAB2_EXIT_FILE last,
+      # after HALT.md for a halt or a caught crash (an import error included).
       - name: Lab v2 run
         id: lab2
         continue-on-error: true
         timeout-minutes: 10
         run: |
+          export LAB2_EXIT_FILE="$RUNNER_TEMP/lab2_exit"
+          rm -f "$LAB2_EXIT_FILE"
           code=0
           uv run --frozen python -I analysis/system/lab_v2/run_v2.py || code=$?
-          echo "finished=1" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ -f "$LAB2_EXIT_FILE" ] && [ "$(cat "$LAB2_EXIT_FILE")" = "$code" ]; then
+            echo "finished=1" >> "$GITHUB_OUTPUT"
+          fi
           exit $code
+
+      # The lab v2 step ran but did not report its end (the timeout, a killed process such as out of memory, a crash
+      # before run_v2.py could record it, a failed `uv run`): its partial writes are discarded (the three lab v2
+      # folders are restored to HEAD) and the same crash record is written (analysis/system/lab_v2/v2_crash.py:
+      # HALT.md, halts.csv, summary.json marked PAUSED, the client's page re-rendered). The commit step below then
+      # commits it, so v1's next publish shows lab2_state PAUSED. v1's files are never touched.
+      - name: Lab v2 did not finish
+        id: lab2_crash
+        if: ${{ !cancelled() && steps.lab2.outcome != 'skipped' && steps.lab2.outputs.finished != '1' }}
+        continue-on-error: true
+        run: |
+          for p in data/system/lab_v2 reports/system/lab_v2 reports/forward_site/system/lab_v2; do
+            if git ls-files --error-unmatch "$p" >/dev/null 2>&1; then git checkout -q HEAD -- "$p"; fi
+            git clean -fdq -- "$p"
+          done
+          reason="lab v2 step did not finish (timeout or kill; exit code ${{ steps.lab2.outputs.code || 'none' }})"
+          head=$(git rev-parse HEAD)
+          uv run --frozen python -I analysis/system/lab_v2/v2_crash.py --reason "$reason" --head "$head" \
+            || python3 -I analysis/system/lab_v2/v2_crash.py --reason "$reason" --head "$head"
 
       - name: Commit the lab v2 ledgers
         id: lab2_commit
-        if: ${{ !cancelled() && steps.lab2.outputs.finished == '1' }}
+        if: ${{ !cancelled() && steps.lab2.outcome != 'skipped' }}
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
