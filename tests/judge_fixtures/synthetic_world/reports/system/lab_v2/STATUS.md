@@ -15,10 +15,10 @@ Updated 2026-12-05T03:20:00Z. Binding spec: xauusd-quant `research/system/SYSTEM
 
 | id | state | first_day | record | trades | sum net $/oz | mean R | evidence |
 |---|---|---|---|---|---|---|---|
-| S2 | PAPER | 2026-11-09 | since first_day | 1 | -1.43 | -0.127 | E 0.980 of E* 2000/3 |
-| S3 | PAPER | 2026-11-09 | since first_day | 12 | -16.23 | -0.187 | E 0.670 of E* 2000/3 |
-| S4 | PAPER | 2026-11-09 | since first_day | 3 | -46.11 | -0.698 | E 0.732 of E* 1000 |
-| S5 | PAPER | 2026-11-09 | since first_day | 5 | -0.98 | -0.022 | E 0.975 of E* 1000 |
+| S2 | PAPER | 2026-11-09 | since first_day | 5 | -111.06 | -1.279 | E 0.534 of E* 2000/3 |
+| S3 | PAPER | 2026-11-09 | since first_day | 12 | -89.90 | -0.917 | E 0.404 of E* 2000/3 |
+| S4 | PAPER | 2026-11-09 | since first_day | 2 | -36.54 | -0.770 | E 0.786 of E* 1000 |
+| S5 | PAPER | 2026-11-09 | since first_day | 5 | -122.48 | -1.283 | E 0.545 of E* 1000 |
 
-- C1 (v1 coin control) over the same days: 18 trades, sum net 2.65 $/oz, mean R 0.049, E 0.996
-- S3 trend-flip flow values before today: 180 of 250 (warm-up)
+- C1 (v1 coin control) over the same days: 17 trades, sum net -3.59 $/oz, mean R 0.043, E 0.965
+- S3 trend-flip flow values before today: 179 of 250 (warm-up)

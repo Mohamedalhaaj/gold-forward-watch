@@ -7,7 +7,6 @@ import json
 import shutil
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -133,16 +132,39 @@ def test_s3_rows_from_the_first_complete_run_equal_the_complete_world(late_world
         [r for r in rows(P.base, "trades.csv", {"S3"}) if r["status"] == "final"])
 
 
-def test_the_tripwire_passes_when_the_store_completes_between_runs(late_world, tmp_path):
-    """The copy after the 11-14 run, with the late days arriving before a second run at the same time: nothing new
-    to settle, the tripwire re-derives 2026-11-13 for S2, S4, S5 on the now complete store and finds no difference;
-    S3 (not audited that day) is not re-derived."""
-    _, mid, _ = late_world
+@pytest.fixture(scope="module")
+def late_world_11_13(world, tmp_path_factory):
+    """The late-lookback sequence through 2026-11-07, then a job at 2026-11-13 03:20: v2 settles 11-09 .. 11-12 while
+    the store is incomplete (S3 waits). Its last settled day, 11-12, has an S3 signal in the complete world."""
+    base = tmp_path_factory.mktemp("late_11_13")
+    P = run_v2.Paths(base / "w")
+    shutil.copytree(world.base, P.base)
+    make_late(P.lb)
+    codes = run_v2.synthetic_runs(P, times=run_v2.SYNTH_TIMES[:4] + ["2026-11-13 03:20"], log=lambda *a: None)
+    return P, codes
+
+
+def test_the_tripwire_never_re_derives_s3_on_a_day_it_waited(late_world_11_13, world, tmp_path):
+    """Register R-V2-42 (lab review MF7): the copy after the 11-13 run, with the late days arriving before a second
+    run at the same time: nothing new to settle; the tripwire re-derives 2026-11-12 for S2, S4 and S5 on the now
+    complete store and finds no difference. S3 has a non-zero full-data value at 11-12 14:15 on the complete store,
+    so a tripwire that re-derived S3 there would halt ("decision bars differ"): it must not, and S3 keeps no row."""
+    P0, codes = late_world_11_13
+    assert [c for _, c in codes] == [0, 0, 0]
+    assert [r["day"] for r in rows(P0.base, "lab_days.csv")] == [f"2026-11-{d:02d}" for d in range(9, 13)]
+    for name in LEDGERS:
+        assert not rows(P0.base, name, {"S3"}), name
+    now = pd.Timestamp("2026-11-13 03:20", tz="UTC")
+    b15 = bars_at(world.lb, world.v1data, now)["M15"]
+    full = pd.Series(v2_signals.full_values(v2_signals.load_seed("S3"), b15), index=b15.index)
+    assert full[pd.Timestamp("2026-11-12 14:15")] != 0                     # S3 fires there on the complete store
     P = run_v2.Paths(tmp_path / "w")
-    shutil.copytree(mid.base, P.base)
-    make_late(P.lb, when="2026-11-14T03:00:00Z")
-    t = pd.Timestamp("2026-11-14 03:20", tz="UTC")
-    code, info = run_v2.guarded_run(P, t, "synthetic", "dry", "dry-placeholder", fetch_on=False, log=lambda *a: None)
+    shutil.copytree(P0.base, P.base)
+    make_late(P.lb, when="2026-11-13T03:00:00Z")
+    assert v2_data.lookback_complete(P.lb, now)
+    code, info = run_v2.guarded_run(P, now, "synthetic", "dry", "dry-placeholder", fetch_on=False, log=lambda *a: None)
     assert code == 0 and info["halt"] == [] and info["settled_now"] == [] and info["data"]["lookback_complete"]
+    for name in LEDGERS + ("eproc.csv",):
+        assert not [r for r in rows(P.base, name, {"S3"}) if r["day"] == "2026-11-12"], name
     s3 = {r["id"]: r for r in json.loads((P.rep / "summary.json").read_text())["rules"]}["S3"]
-    assert s3["waits_for_lookback"] is False and np.isfinite(s3["E"])
+    assert s3["waits_for_lookback"] is False and s3["n"] == 0

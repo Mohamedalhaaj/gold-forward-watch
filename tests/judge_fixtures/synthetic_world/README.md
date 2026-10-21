@@ -25,12 +25,18 @@ byte-identical, so the fixture must be regenerated whenever v1 or v2 code change
 
 - `data/system/raw/YYYY/MM/DD/{BID,ASK}.bi5`, UTC days 2026-09-01 .. 2026-12-04, from v1's `analysis/system/synth.py`
   (seed 7): a mid random walk from $4,200 with session volatility, flats in the model-clock daily break and on model
-  weekends, a $0.30-0.50 spread.
+  weekends, a $0.30-0.50 spread. Then `analysis/system/lab_v2/v2_synth.py` `apply_edges` makes 11 deterministic edits
+  (`EDGES`, model-clock times, 2026-11-16 .. 2026-12-02) so the runs reach every reachable branch of lab v2's
+  decisions and execution (register R-FX lists them): a gap through a stop at an open, a 21-minute flat stretch inside
+  a trade, wicks through $100 figures and through stops (in an entry minute, at an exit minute), and the ASK of UTC
+  2026-12-01 `missing` (its days.csv row has status `missing` and fetched_utc = the day + 98 h 30 min, and there is no
+  file), which leaves one-sided minutes with a NaN mid and undefined forecasts after it. Every edited file is still
+  a valid body: 1,440 records with increasing seconds; only prices (and, for the flats, volumes) change.
 - `data/system/lab_v2/lookback/raw/YYYY/MM/DD/{BID,ASK}.bi5`, UTC days 2026-01-01 .. 2026-08-31, from
   `analysis/system/lab_v2/v2_synth.py` (seed 11): the same kind of walk in whole cents, shifted to end at $4,200.000.
 - Every file is a real Dukascopy body: LZMA-alone, big-endian `>5if` records (sec, open, close, low, high, volume),
-  1,440 per day, prices × 1000 as int32. `days.csv` rows have `fetched_utc` = the day + 26 h 30 min, so each run sees
-  exactly the days a real run would have fetched by then.
+  1,440 per day, prices × 1000 as int32. `days.csv` rows have `fetched_utc` = the day + 26 h 30 min (the one `missing`
+  row: + 98 h 30 min), so each run sees exactly the days a real run would have fetched by then.
 - No drift: no rule has an edge.
 - The lookback store is complete before the first lab v2 run, so S3 never waits here (register R-V2-42). The waiting
   case (lookback days arriving late) is covered by `tests/system/lab_v2/test_v2_incomplete_lookback.py`, which
@@ -41,7 +47,10 @@ byte-identical, so the fixture must be regenerated whenever v1 or v2 code change
 UTC, all at 03:20: 2026-10-27 (Tue), 10-31, 11-03 (Tue), 11-07, 11-14, 11-21, 11-28, 12-05. v1 runs at every time;
 lab v2 runs from 2026-11-03 (its first run). Results: v1 START 2026-11-02; v2 START 2026-11-09 (the later of v1's
 START and the first Monday at least 2 days after 2026-11-03); v2 settles 2026-11-09 .. 2026-12-04 (20 days, the NYSE
-holidays 2026-11-26 and 11-27 included with abstain_day decisions).
+holidays 2026-11-26 and 11-27 included with abstain_day decisions). Every decision outcome occurs (trade,
+abstain_window, abstain_day, abstain_U, ignored_open), every trade exit reason (time, stop at X, stop at an open, gap)
+and every twin exit reason, a twin that exits at another minute than its trade, and an entry at the earlier-close
+fallback (S2 2026-12-01); `tests/system/lab_v2/test_v2_dry_run.py` checks each of them.
 
 ## The fake `registered_utc` convention (read this before using J2 or J8 on the fixture)
 

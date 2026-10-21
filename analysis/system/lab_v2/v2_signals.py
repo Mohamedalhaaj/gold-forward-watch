@@ -19,10 +19,10 @@ astype(int).
 - T = the signal bar's close = its start + TF minutes (minutes of the bar's model day; 1440 for a bar starting
   at 24:00 − TF).
 - Eligibility window of a bar: T >= 01:30 and T + HOLD·TF <= 23:30 model (22:45 on a Friday).
-- Audit (§2.2): for each newly settled day and every bar of that day inside the eligibility window, online value ==
-  full-data value; any difference halts v2 and voids the seed (L2 §7.3). Online values are computed for every bar of
-  the day (decisions use them, including abstain_window rows); a difference outside the window is counted but does
-  not halt.
+- Audit (§2.2 with Amendment B2 item 4): for each newly settled day and EVERY bar of that day, inside or outside the
+  eligibility window, online value == full-data value; any difference halts v2 and voids the seed (L2 §7.3). Online
+  values are computed for every bar of the day (decisions use them, including abstain_window rows); the audit row
+  counts the differences inside and outside the window separately.
 
 Which seeds read the input-only lookback (UTC 2026-01-01 .. 2026-08-31) on a forward day (on or after the v2 START,
 itself on or after 2026-11-02): LOOKBACK_SEEDS. S3 does: its replica price over the previous 10..60 trading days, a

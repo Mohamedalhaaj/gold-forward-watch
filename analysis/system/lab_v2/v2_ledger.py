@@ -2,9 +2,16 @@
 (SYSTEM_V2_PREREG.md §2.2-§2.4; v1 §3 and L2 §6-§9 where v2 is silent). FROZEN (lab v2).
 
 A lab v2 day d (model weekday on or after the v2 lab's first first_day) is settled once, at the first run where every
-minute through d 23:30 model is final (bars.model_to_utc(d 23:30) <= complete_utc), at most MAX_DAYS_PER_RUN days a
-run, oldest first. All of its rows are written then and never changed (reports/system/lab_v2/):
-- audit.csv      one row per active seed per settled day: the online-vs-full causality audit (§2.2)
+minute through d 23:30 model is final (bars.model_to_utc(d 23:30) <= complete_utc) AND v1's write-once forecast store
+(data/system/forecasts.csv) as read by this run holds all 23 slot rows (d, 0) .. (d, 22) of d (a row whose F_S field
+is empty counts: it is present). Pending days are taken oldest first, at most MAX_DAYS_PER_RUN a run, and the scan
+stops at the first weekday that fails either condition, so a later day is never settled before an earlier one. The
+one exception: a weekday with no store row at all is not waited for when the store holds a row of a later model day
+(v1 has passed it: its grid had no M1 row of that day, so v1 will never write it). So F_S of a settled day is always
+the store row v1 wrote for it; a day that v1 has not covered yet (for example a v1 run that halted after its fetch)
+stays pending and is settled by the first run after v1 writes it. All of a settled day's rows are written then and
+never changed (reports/system/lab_v2/):
+- audit.csv      one row per active seed per settled day: the online-vs-full causality audit (§2.2, Amendment B2 item 4)
 - decisions.csv  one row per bar of the day whose ONLINE value is non-zero, for each active seed with first_day <= d:
                  outcome trade | abstain_window | abstain_day | abstain_U | ignored_open, checked in that order:
                  abstain_window: T < 01:30 or T + HOLD·TF > 23:30 (22:45 on a Friday);
@@ -27,9 +34,12 @@ v2_signals.LOOKBACK_SEEDS (S3) wait: on the days that run settles they get no au
 row, and those days are never settled again (lab_days.csv is shared). The other seeds are settled as usual. From the
 first run that sees the complete store, S3 is audited and settled like the others.
 
-Audit failure: if any active seed's online and full-data values differ on a window bar of a pending day, nothing is
-settled in that run, the failing seed's audit row (result FAIL) is written, the seed is voided (RETIRED, reason
-"bug", L2 §7.3) and v2 halts for the run.
+Audit failure (Amendment B2 item 4): if any active seed's online and full-data values differ on ANY bar of a pending
+day, inside or outside the eligibility window, nothing is settled in that run, the failing seed's audit row (result
+FAIL; first_mismatch = the start of its first differing bar of the day) is written, the seed is voided (RETIRED,
+reason "bug", L2 §7.3) and v2 halts for the run. So on every audited day the online and full-data values are equal on
+every bar, and the tripwire's re-derivation from the full-data values covers every decision row, abstain_window rows
+included.
 
 Tripwire (A1 item 7 as v1): every run re-derives the last settled day's decision and trade rows with the full-data
 signal on the current data and compares them with the ledger (numbers at 1e-12 relative, the rest exactly); a
@@ -176,12 +186,15 @@ def rule_day(rec, di, sigs, now_utc, code_sha8, values="online"):
 
 
 def audit_row(sigs, tf, now_utc):
+    """The causality audit of one seed on one day: FAIL on any bar whose online and full-data values differ, inside
+    or outside the eligibility window (Amendment B2 item 4); first_mismatch = the start of the first such bar."""
     mw, mo = sigs.mismatches(True), sigs.mismatches(False)
-    first = hhmm(sigs.start[mw[0]]) if mw else ""
+    allm = sorted(mw + mo)
+    first = hhmm(sigs.start[allm[0]]) if allm else ""
     return {"day": sigs.day.strftime("%Y-%m-%d"), "id": sigs.sid, "tf": tf, "n_bars": len(sigs.T),
             "n_window": int(sum(sigs.window)), "n_signals": int(sum(1 for v in sigs.online if v)),
             "n_mismatch_window": len(mw), "n_mismatch_outside": len(mo), "first_mismatch": first,
-            "result": "FAIL" if mw else "ok", "recorded_utc": now_utc}
+            "result": "FAIL" if allm else "ok", "recorded_utc": now_utc}
 
 
 # ---------------------------------------------------------------- which days, which seeds
@@ -190,17 +203,32 @@ def lab_first_day(sts):
     return min(fds) if fds else None
 
 
-def pending_days(lab_dir, sts, complete_utc, max_days=MAX_DAYS_PER_RUN):
+def store_covers(slots, day):
+    """True iff v1's forecast store (slots: v2_data.forecast_slots) holds all 23 slot rows of model day `day`."""
+    key = pd.Timestamp(day).strftime("%Y-%m-%d")
+    return all((key, s) in slots for s in range(23))
+
+
+def pending_days(lab_dir, sts, complete_utc, slots, max_days=MAX_DAYS_PER_RUN):
+    """The days this run settles, oldest first (see the module doc): model weekdays from the lab's first first_day,
+    not settled yet, with d 23:30 model final and v1's forecast store covering d; the scan stops at the first weekday
+    that fails either condition (a weekday without any store row is passed over when the store holds a later day)."""
     first = lab_first_day(sts)
     if first is None:
         return []
     done = {r["day"] for r in read(Path(lab_dir) / "lab_days.csv")}
+    store_days = {k[0] for k in slots}
+    last_store_day = max(store_days, default="")
     out, d = [], pd.Timestamp(first)
     while len(out) < max_days:
         if d.dayofweek < 5:
+            key = d.strftime("%Y-%m-%d")
             if v1bars.model_to_utc(d + pd.Timedelta(hours=23, minutes=30)) > complete_utc:
                 break
-            if d.strftime("%Y-%m-%d") not in done:
+            passed_over = key not in store_days and last_store_day > key
+            if not store_covers(slots, d) and not passed_over:
+                break
+            if key not in done:
                 out.append(d)
         d += pd.Timedelta(days=1)
     return out

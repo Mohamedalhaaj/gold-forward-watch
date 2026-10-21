@@ -10,16 +10,18 @@
   - best_progress: max E/E* over PAPER seeds (0 when none), the same linear scale as v1's lab_best_progress;
   plus per-seed rows, START, the C1 comparison and INTERPRETER_NEEDED. UTF-8 JSON, strict (no NaN).
 - reports/system/lab_v2/STATUS.md: a plain summary.
-- reports/forward_site/system/lab_v2/index.html and lab_v2.json: the dashboard section «المختبر، الإصدار الثاني»: the
-  v2 seeds with their record (trades, sum and mean net $/oz, progress E/E*) next to the v1 coin control C1 over the
-  same days (C1's final trades in v1's reports/system/lab/trades.csv from the v2 lab's first first_day, read-only;
-  dollars per ounce are compared, since R units differ between v1 and v2). S3 shows «في مرحلة الإحماء حتى تكتمل
-  بياناتها» while fewer than 250 of its trend-flip flow values precede the day (its 250-day threshold window), and
-  while it waits for an incomplete lookback store (its row's `waits_for_lookback`; v2_ledger.settle). The page is
-  static HTML with the data written in; it is deployed by the next deploy of the site (v1's step or forward-watch).
+- reports/forward_site/system/lab_v2/index.html and lab_v2.json (rendered by v2_page, standard library only): the
+  dashboard section «المختبر، الإصدار الثاني»: the v2 seeds with their record (trades, sum and mean net $/oz, progress
+  E/E*) next to the v1 coin control C1 over the same days (C1's final trades in v1's reports/system/lab/trades.csv
+  from the v2 lab's first first_day, read-only; dollars per ounce are compared, since R units differ between v1 and
+  v2). S3 shows «في مرحلة الإحماء حتى تكتمل بياناتها» while fewer than 250 of its trend-flip flow values precede the
+  day (its 250-day threshold window), and while it waits for an incomplete lookback store (its row's
+  `waits_for_lookback`; v2_ledger.settle). While the state is not RUNNING the page shows only «المختبر الثاني متوقف
+  مؤقتًا» (Amendment B2 item 3). v1's lab page (reports/forward_site/system/index.html) links to it (B2 item 2). The
+  page is static HTML with the data written in; it is deployed by the next deploy of the site (v1's step or
+  forward-watch).
 - A promoted seed (LIVE, SUSPENDED, DEMOTED) shows only its post-promotion record and K (v1 §3 item 11, A1 item 12).
 """
-import html
 import json
 import math
 from pathlib import Path
@@ -28,12 +30,11 @@ import numpy as np
 import pandas as pd
 
 import v2_ledger
+import v2_page
 import v2_signals
 from lab import eproc
+from v2_page import COIN_AR, PAUSED_AR, TITLE_AR, WARMUP_AR, page_html, site_json  # noqa: F401 (re-exported)
 
-TITLE_AR = "المختبر، الإصدار الثاني"
-WARMUP_AR = "في مرحلة الإحماء حتى تكتمل بياناتها"
-COIN_AR = "عملة عشوائية: لتعرف شكل الحظ"
 STATE_AR = {"PAPER": "قيد الاختبار", "LIVE": "مثبتة", "SUSPENDED": "معلّقة", "DEMOTED": "سُحبت",
             "RETIRED": "متوقفة", "PENDING": "لم تُسجَّل بعد"}
 S3_QWIN = 250
@@ -138,15 +139,6 @@ def summary(lab_dir, recs, sts, events, state, asof, start, v1_lab_dir, bars_m15
             "c1": c1_record(v1_lab_dir, first)}
 
 
-def paused(old, asof, reason):
-    """The summary after a crashed run: the last good summary with state PAUSED (None if there is none)."""
-    if not isinstance(old, dict):
-        return None
-    out = dict(old)
-    out.update({"state": "PAUSED", "halted": True, "halt_reasons": [reason], "halt_utc": asof})
-    return out
-
-
 # ---------------------------------------------------------------- STATUS.md
 def _f(x, fmt):
     return "-" if x is None or (isinstance(x, float) and not math.isfinite(x)) else format(x, fmt)
@@ -191,95 +183,7 @@ def status_md(info, s):
     return "\n".join(L) + "\n"
 
 
-# ---------------------------------------------------------------- dashboard section
-CSS = """:root{color-scheme:dark;--page:#0f0f0e;--panel:#151514;--line:#2a2a27;--ink:#efece4;--ink-2:#b9b5a8;
---ink-3:#8f8b80;--gold:#d9a43b;--warn:#f0c846;--bad:#f05f55}
-@media (prefers-color-scheme:light){:root{color-scheme:light;--page:#f3f1eb;--panel:#fbfaf7;--line:#e3e0d6;
---ink:#141412;--ink-2:#4f4c45;--ink-3:#6c685f;--gold:#9a6b12;--warn:#8a6a00;--bad:#c0392b}}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--page);color:var(--ink);font-family:"Plex Arabic",system-ui,-apple-system,"Segoe UI",
-sans-serif;font-size:15px;line-height:1.7}
-main{max-width:860px;margin:0 auto;padding:28px 16px 48px}
-h1{font-size:1.45rem;margin:0 0 4px;font-weight:700}.sub{color:var(--ink-2);margin:0 0 20px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
-.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.92rem}
-th,td{text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--ink-3);font-weight:500;white-space:nowrap}td.title{min-width:11em}
-td.num{font-variant-numeric:tabular-nums;direction:ltr;text-align:right;white-space:nowrap}
-.note{color:var(--ink-2);font-size:.9rem}.warm{color:var(--warn)}.paused{color:var(--bad);font-weight:600}
-tr.coin td{color:var(--ink-2)}"""
-
-
-def _n(x, fmt):
-    return "–" if x is None or (isinstance(x, float) and not math.isfinite(x)) else format(x, fmt)
-
-
-def page_html(s):
-    e = html.escape
-    rows = []
-    for r in s["rules"]:
-        name = e(r["title_ar"])
-        if r.get("warmup"):
-            name += f'<div class="warm">{e(WARMUP_AR)}</div>'
-        prog = "–" if r.get("progress") is None else f"{100 * r['progress']:.1f}%"
-        rows.append(f'<tr><td class="title">{name}</td><td>{e(r["state_ar"])}</td><td class="num">{r["n"]}</td>'
-                    f'<td class="num">{_n(r["net_sum"], "+.2f")}</td><td class="num">{_n(r["net_avg"], "+.2f")}</td>'
-                    f'<td class="num">{prog}</td></tr>')
-    c = s["c1"]
-    c_avg = c["net_sum"] / c["n"] if c["n"] else None
-    rows.append(f'<tr class="coin"><td class="title">{e(COIN_AR)}</td><td>مرجع للمقارنة</td><td class="num">{c["n"]}</td>'
-                f'<td class="num">{_n(c["net_sum"], "+.2f")}</td><td class="num">{_n(c_avg, "+.2f")}</td>'
-                f'<td class="num">–</td></tr>')
-    state = ('<p class="paused">المختبر الثاني متوقف مؤقتًا، والمنظومة الأولى تعمل كالمعتاد</p>'
-             if s["state"] != "RUNNING" else "")
-    start = e(s["start"] or "لم يُحدَّد بعد")
-    return f"""<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow, noarchive">
-<meta name="color-scheme" content="dark light">
-<title>{e(TITLE_AR)}</title>
-<link rel="stylesheet" href="../../fonts/fonts.css">
-<style>
-{CSS}
-</style>
-</head>
-<body>
-<main>
-<h1>{e(TITLE_AR)}</h1>
-<p class="sub">أربع أفكار من بحثنا السابق تُختبر على بيانات جديدة فقط، مقارنةً بالعملة العشوائية في الأيام نفسها.</p>
-{state}
-<section class="card">
-<div class="table-wrap">
-<table>
-<thead><tr><th>الفكرة</th><th>الحالة</th><th>الصفقات</th><th>صافي $ للأونصة</th><th>متوسط الصفقة</th><th>التقدم نحو الاعتماد</th></tr></thead>
-<tbody>
-{chr(10).join(rows)}
-</tbody>
-</table>
-</div>
-</section>
-<section class="card note">
-<p>بداية المختبر الثاني: <bdi dir="ltr">{start}</bdi> · أيام التداول المحسوبة: <bdi>{s["days"]}</bdi></p>
-<p>الاعتماد يحتاج دليلًا قويًا جدًا، فهذه الأفكار لن تُعتمد عمليًا إلا إذا ظهرت لها ميزة أكبر بكثير مما رأيناه في البحث.</p>
-<p class="note">آخر تحديث <bdi dir="ltr">{e(s["asof_utc"])}</bdi></p>
-</section>
-</main>
-</body>
-</html>
-"""
-
-
-def site_json(s):
-    return {k: v for k, v in s.items() if k != "halt_reasons"} | {"halt_reasons": s.get("halt_reasons", [])}
-
-
 def write_all(rep_dir, site_dir, info, s):
     write_json(Path(rep_dir) / "summary.json", s)
     (Path(rep_dir) / "STATUS.md").write_text(status_md(info, s), encoding="utf-8")
-    site = Path(site_dir)
-    site.mkdir(parents=True, exist_ok=True)
-    write_json(site / "lab_v2.json", site_json(s))
-    (site / "index.html").write_text(page_html(s), encoding="utf-8")
+    v2_page.write_site(site_dir, _clean(s))

@@ -1,8 +1,11 @@
 utc,file,sha256,head_sha
-2026-11-03T03:20:00Z,analysis/system/lab_v2/run_v2.py,e61d68390840a842a5da586ea81ce43aa164de4dd00bcc8cb10cecc7b8a1621d,dry-placeholder
-2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_publish.py,b7a1327296e7b0d23655ba82ff7c1a3fb19bd4a122dc253e061e2b2692c0e032,dry-placeholder
+2026-11-03T03:20:00Z,analysis/system/lab_v2/run_v2.py,a0338c3d086454a11d921bb8e30f071bc8543e8389dcff336e2a1f69642491c5,dry-placeholder
+2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_publish.py,3e5b5fd77c52467723cb47a44e642addcab371e418ef3e0bc66630e3bf43deb8,dry-placeholder
+2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_page.py,ed51494141c6f77b08d6aaadd2576a3949c373b9ebb9c01b8c75a8f60e519838,dry-placeholder
+2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_crash.py,343cf9c9cbdafa619bca811fc3460c562517eebce3ccee56ef8ec3d1e1fe4214,dry-placeholder
 2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_lookback.py,d6c58ea6ac9ea68eb2101bb0f0bedcda8d0c4bedb994fadb297d3d3b00b0022a,dry-placeholder
-2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_synth.py,915d1a5f21873a597bcf3c7ed4eb573fef1cbb0df82a0c0909c94c660f71e4be,dry-placeholder
-2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_frozen.py,27c42c6931f4faa53b03f931f1ee395b8f20dc14133fababd673fed257f6914b,dry-placeholder
-2026-11-03T03:20:00Z,.github/workflows/system.yml,02957f2a2aab80b71ef034de63fd5135cd547e445c41f2addf67c03bf0ddd206,dry-placeholder
+2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_synth.py,cbfc947f7df79efdb1087d6d989382d8ac9e4a00306e50abd7433ba827cf2862,dry-placeholder
+2026-11-03T03:20:00Z,analysis/system/lab_v2/v2_frozen.py,1ee51db62bf62a8cced86216c6b6b5ebf28d94e20d1c58a22e34064480efe320,dry-placeholder
+2026-11-03T03:20:00Z,.github/workflows/system.yml,a5daf6606b1ebcb4b5b4fcc2d5fe4dda251ad80b90543bded883eba2045b4e9f,dry-placeholder
 2026-11-03T03:20:00Z,analysis/system/publish.py,7d8e047d12f12d09c966bffbb0dafccffcc251b05dffd8af4ca5932675041f32,dry-placeholder
+2026-11-03T03:20:00Z,reports/forward_site/system/index.html,51d5a12517efb15f19d529ad3e5972fa42d03f84911681fcc35685c7d392be0d,dry-placeholder
