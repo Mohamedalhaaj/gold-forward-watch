@@ -420,3 +420,22 @@ def test_the_page_and_report_do_not_call_an_unverified_check_sound(tmp_path):
     assert "checks ok 9 of 9; of these, nothing was verified in this run by: J1, J6, J9" in rep
     raw = (tmp_path / "reports/forward_site/judge/VolMapJudge.csv").read_text()
     assert "checks_ok,9\n" in raw and "verdict,SOUND\n" in raw
+
+
+def test_calendar_extension_lines_follow_the_register(tmp_path):
+    """R-V1-15/R-V1-17: accepted lines only, split at commas into exactly event,ts_utc,source_url with fields
+    stripped, the explicit offset converted to UTC, and only the rows first seen by the given run time."""
+    from judge import forecasts
+    p = tmp_path / "reports/system/calendar_ext.csv"
+    p.parent.mkdir(parents=True)
+    p.write_text("line,first_seen_utc,status,reason,run_id,head_sha\n"
+                 '" CPI , 2027-01-13T08:30:00-05:00 , https://x",2026-12-01T03:20:00Z,accepted,,1,a\n'
+                 '"NFP,2027-01-08T13:30:00+00:00,https://y",2026-12-08T03:20:00Z,accepted,,2,b\n'
+                 '"FOMC,2027-01-27T19:00:00+00:00,https://z,extra",2026-12-01T03:20:00Z,accepted,,3,c\n'
+                 '"NFP,2027-02-05T13:30:00+00:00,https://w",2026-12-01T03:20:00Z,rejected,bad,4,d\n')
+    allx = forecasts.ext_lines(tmp_path)
+    assert [(k, t.isoformat()) for _, k, t in allx] == [("CPI", "2027-01-13T13:30:00+00:00"),
+                                                         ("NFP", "2027-01-08T13:30:00+00:00")]
+    early = forecasts.ext_lines(tmp_path, at=pd.Timestamp("2026-12-05T03:20:00Z"))
+    assert [k for _, k, _ in early] == ["CPI"]
+    assert forecasts.system_calendar_problems(tmp_path) == []          # no system copy there: nothing to compare
