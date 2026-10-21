@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>الحَكَم المستقل</title>
+<style>
+:root { --bg: #f7f6f2; --fg: #1d1d1b; --muted: #5f5e58; --line: #dedbd2; --card: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151513; --fg: #ecebe6; --muted: #a8a69e; --line: #34332f; --card: #1e1e1b; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, "Segoe UI", Tahoma, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.5rem; margin: 0 0 12px; }
+.verdict { background: var(--card); border: 1px solid var(--line); border-inline-start: 6px solid #2e7d4f;
+  border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+.verdict b { color: #2e7d4f; font-size: 1.25rem; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; }
+td:first-child { font-variant-numeric: tabular-nums; direction: ltr; text-align: right; width: 3.5em; }
+.s-ok { color: #2e7d4f; } .s-warning { color: #a8780a; } .s-violation { color: #b3261e; font-weight: 600; }
+.s-unverified { color: var(--muted); }
+p.note { color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>الحَكَم المستقل</h1>
+<div class="verdict"><b>سليم</b><br>كل الفحوص سليمة<br>
+<span class="note">الفحوص السليمة 7 من 9، ولم يُتحقق من 2 · وقت الفحص <span dir="ltr">2026-10-21T14:34:13Z</span></span></div>
+<table>
+<thead><tr><th>الفحص</th><th>ما يتحقق منه</th><th>النتيجة</th></tr></thead>
+<tbody>
+<tr><td>J1</td><td>تطابق البيانات الخام مع تنزيل مستقل من المصدر</td><td class="s-ok">سليم</td></tr>
+<tr><td>J2</td><td>تسجيل كل قاعدة قبل نتائجها وثبات ملفاتها</td><td class="s-ok">سليم</td></tr>
+<tr><td>J3</td><td>عدم تعديل السجلات والبيانات الخام بعد كتابتها</td><td class="s-ok">سليم</td></tr>
+<tr><td>J4</td><td>ثبات الملفات المجمدة وكود الحكم</td><td class="s-ok">سليم</td></tr>
+<tr><td>J5</td><td>إعادة حساب التوقعات والإشارة والمعايرة والصفقات وملف الحالة</td><td class="s-ok">سليم</td></tr>
+<tr><td>J6</td><td>أداء التوقع ونسبة لمس الوقف على البيانات الجديدة</td><td class="s-unverified">لا بيانات بعد</td></tr>
+<tr><td>J7</td><td>حداثة ملف الحالة وخلو آخر تشغيل من الأعطال</td><td class="s-ok">سليم</td></tr>
+<tr><td>J8</td><td>عدم إعادة كتابة تاريخ المستودع</td><td class="s-unverified">لم يُتحقق</td></tr>
+<tr><td>J9</td><td>مقارنة السعر بمصدر مستقل</td><td class="s-ok">سليم</td></tr>
+</tbody>
+</table>
+<p class="note">برنامج منفصل كُتب من القواعد المكتوبة وحدها ويعمل بعد كل تشغيل للمنظومة. يكشف الأخطاء والتعديلات
+اللاحقة، لكنه يعمل على الحساب نفسه ومن صنع الجهة نفسها، فلا يحمي من تلاعب متعمّد.</p>
+</main>
+</body>
+</html>

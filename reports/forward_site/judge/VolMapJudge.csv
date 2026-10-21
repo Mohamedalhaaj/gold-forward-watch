@@ -1,0 +1,9 @@
+key,value
+version,1
+asof_utc,2026-10-21T14:34:13Z
+head_sha,9a18fc9c10aff1f64226f8f6cd7ea2a1ebcf9f93
+verdict,SOUND
+reason_ar,كل الفحوص سليمة
+checks_ok,9
+checks_total,9
+end,8
