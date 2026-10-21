@@ -23,6 +23,15 @@ astype(int).
   full-data value; any difference halts v2 and voids the seed (L2 §7.3). Online values are computed for every bar of
   the day (decisions use them, including abstain_window rows); a difference outside the window is counted but does
   not halt.
+
+Which seeds read the input-only lookback (UTC 2026-01-01 .. 2026-08-31) on a forward day (on or after the v2 START,
+itself on or after 2026-11-02): LOOKBACK_SEEDS. S3 does: its replica price over the previous 10..60 trading days, a
+20-day realised vol and up to 250 previous flow values, all counted in rows of the days present. S2 (the 40 completed
+days before the bar's day and the last 48 M5 bars), S4 (the opening ranges of the 14 days before) and S5 (the last 80
+M15 bars) reach at most 40 trading days back, which from 2026-11-02 starts on or after 2026-09-07, inside v1's raw
+store. While the lookback store is incomplete the LOOKBACK_SEEDS wait (v2_ledger.settle): with a gap their traded
+values would be computed on an input that is not the M1 from 2026-01-02, and could change when the missing day
+arrives.
 """
 from dataclasses import dataclass, field
 
@@ -35,6 +44,7 @@ SEEDS = (("S2", "levels__watched_level_break.py", "M5", 24),
          ("S3", "r3_ctaflow__cta_flip_flow_usmorning.py", "M15", 8),
          ("S4", "r2_orb__inplay_comex_orb60.py", "M5", 48),
          ("S5", "r2_exhaustion__databar_stretch_settle.py", "M15", 14))
+LOOKBACK_SEEDS = ("S3",)   # seeds whose values on forward days read the input-only lookback (see the module doc)
 TF_MIN = {"M5": 5, "M15": 15}
 WIN_FIRST_T = 90           # 01:30
 WIN_EXIT_MAX = 1410        # 23:30

@@ -22,6 +22,11 @@ run, oldest first. All of its rows are written then and never changed (reports/s
 Then promotions (registry order), demotions, retirements and suspensions, each a row of registry/events.csv, exactly
 as v1 (P1-P3, P4 of §2.2, P5, P7; D1-D3; n150/age retirement; S-a suspensions), with P1 against the exact E*.
 
+An incomplete lookback store: while v2_data.lookback_complete is false at the run time, the seeds in
+v2_signals.LOOKBACK_SEEDS (S3) wait: on the days that run settles they get no audit, decision, trade, twin or eproc
+row, and those days are never settled again (lab_days.csv is shared). The other seeds are settled as usual. From the
+first run that sees the complete store, S3 is audited and settled like the others.
+
 Audit failure: if any active seed's online and full-data values differ on a window bar of a pending day, nothing is
 settled in that run, the failing seed's audit row (result FAIL) is written, the seed is voided (RETIRED, reason
 "bug", L2 §7.3) and v2 halts for the run.
@@ -206,11 +211,18 @@ def active(rec, st, day):
             and pd.Timestamp(day) >= pd.Timestamp(st["first_day"]))
 
 
+def waits(rec, lookback_complete):
+    """True for a seed that reads the input-only lookback on forward days while the lookback store is incomplete."""
+    return not lookback_complete and rec["id"] in v2_signals.LOOKBACK_SEEDS
+
+
 # ---------------------------------------------------------------- settlement
-def settle(lab_dir, recs, sts, days, signals_fn, inputs_fn, now_utc, code_sha8, start, synthetic=False):
+def settle(lab_dir, recs, sts, days, signals_fn, inputs_fn, now_utc, code_sha8, start, synthetic=False,
+           lookback_complete=True):
     """Audit, then settle the given pending days (in order).
 
-    signals_fn(sid, day) -> DaySignals (online values); inputs_fn(day) -> DayInputs.
+    signals_fn(sid, day) -> DaySignals (online values); inputs_fn(day) -> DayInputs; lookback_complete: the lookback
+    store is complete at this run's time (v2_data.lookback_complete), else the LOOKBACK_SEEDS wait.
     Returns (n_trades_written, failures) with failures = [(sid, audit row)] (then nothing was settled)."""
     lab_dir = Path(lab_dir)
     plan, failures = [], []
@@ -220,7 +232,7 @@ def settle(lab_dir, recs, sts, days, signals_fn, inputs_fn, now_utc, code_sha8, 
         per = []
         for rec in recs:
             st = sts[rec["id"]]
-            if not active(rec, st, d):
+            if not active(rec, st, d) or waits(rec, lookback_complete):
                 continue
             sg = signals_fn(rec["id"], d)
             arow = audit_row(sg, rec["tf"], now_utc)

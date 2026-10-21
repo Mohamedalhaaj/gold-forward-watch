@@ -56,7 +56,8 @@
    "mean_R": -0.18719361936899756,
    "mu_bar": 0.11452472688286253,
    "flow_values_before_today": 180,
-   "warmup": true
+   "warmup": true,
+   "waits_for_lookback": false
   },
   {
    "id": "S4",

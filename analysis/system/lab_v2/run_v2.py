@@ -12,10 +12,11 @@ are never touched. HALT.md is a snapshot of the latest run: a later run that doe
 is also appended to reports/system/lab_v2/halts.csv.
 
 One run, in order: FROZEN_V2 and vendor check, registry check, OPS change log, lookback fetch (budget, cloud only),
-raw-store checks, registration (cloud: the registry files tracked at HEAD), the ledger consistency check, data and
-bars, settlement with the causality audit (at most 10 days a run), the tripwire on the last settled day, states,
-START.json (the first run that does not halt, cloud or synthetic), then publish (summary.json, STATUS.md, dashboard
-section) and HALT.md.
+raw-store checks, whether the lookback store is complete at the run time (v2_data.lookback_complete; while it is not,
+S3 waits), registration (cloud: the registry files tracked at HEAD), the ledger consistency check, data and bars,
+settlement with the causality audit (at most 10 days a run), the tripwire on the last settled day, states, START.json
+(the first run that does not halt, cloud or synthetic), then publish (summary.json, STATUS.md, dashboard section) and
+HALT.md.
 
 Modes:
 - cloud (default): only inside GitHub Actions, only on main and only when HEAD = origin/main (as v1).
@@ -145,6 +146,7 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
     bad_store = store_checks(P, now, complete)
     if bad_store:
         halt.append(f"raw store differs from its days file: {', '.join(bad_store[:5])}")
+    lb_done = v2_data.lookback_complete(P.lb, now)
     v1_start = (read_json(P.v1rep / "START.json") or {}).get("start")
     start = (read_json(P.rep / "START.json") or {}).get("start")
     recs = v2_registry.load(P.reg)
@@ -181,7 +183,7 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
 
             pend = v2_ledger.pending_days(P.rep, sts, complete)
             n_trades, failures = v2_ledger.settle(P.rep, recs, sts, pend, sig, inputs, asof, code8, start,
-                                                  synthetic=(mode == "synthetic"))
+                                                  synthetic=(mode == "synthetic"), lookback_complete=lb_done)
             if failures:
                 v1reg.append_events(ev_path, v2_ledger.void_events(failures, events, asof, run_id, head))
                 events = v1reg.read_events(ev_path)
@@ -211,13 +213,13 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
         v2_publish.write_json(P.rep / "START.json", v2_registry.start_record(now, run_id, head, v1_start))
         start = read_json(P.rep / "START.json")["start"]
     s = v2_publish.summary(P.rep, recs, sts, events, state, asof, start, P.v1lab, bars_m15=b15, halt=halt,
-                           today=today)
+                           today=today, lookback_complete=lb_done)
     lbs = v2_data.final_status(v2_data.read_days(P.lb / "days.csv"))
     info = {"asof_utc": asof, "halt": halt, "ops": ops, "start": start, "v1_start": v1_start,
             "settled_now": settled_now, "trades_now": n_trades,
             "data": {"lookback_ok": sum(1 for v in lbs.values() if v[0] == "ok"),
                      "lookback_missing": sum(1 for v in lbs.values() if v[0] == "missing"),
-                     "lookback_complete": v2_lookback.complete(P.lb),
+                     "lookback_complete": lb_done,
                      "complete_utc": complete.strftime("%Y-%m-%d %H:%M")}}
     v2_publish.write_all(P.rep, P.site, info, s)
     if halt:

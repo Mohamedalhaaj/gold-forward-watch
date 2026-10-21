@@ -32,6 +32,9 @@ byte-identical, so the fixture must be regenerated whenever v1 or v2 code change
   1,440 per day, prices × 1000 as int32. `days.csv` rows have `fetched_utc` = the day + 26 h 30 min, so each run sees
   exactly the days a real run would have fetched by then.
 - No drift: no rule has an edge.
+- The lookback store is complete before the first lab v2 run, so S3 never waits here (register R-V2-42). The waiting
+  case (lookback days arriving late) is covered by `tests/system/lab_v2/test_v2_incomplete_lookback.py`, which
+  compares its ledgers with this fixture's.
 
 ## The runs
 

@@ -11,7 +11,6 @@ import pytest
 import run_v2
 import v2_data
 import v2_ledger
-import v2_lookback
 import v2_signals
 
 ROOT = run_v2.ROOT
@@ -118,17 +117,34 @@ def test_settlement_refuses_real_days_before_start(tmp_path):
 
 REAL_DAYS = ["2026-01-14", "2026-02-11", "2026-03-11", "2026-04-15", "2026-05-13", "2026-06-17", "2026-07-15",
              "2026-08-12", "2026-09-16", "2026-10-14"]
+V1_REAL_DAYS = ["2026-09-16", "2026-10-14"]          # in v1's committed raw store, always present
 
 
-@pytest.mark.skipif(not v2_lookback.complete(ROOT / "data/system/lab_v2/lookback"),
-                    reason="the real lookback store is not complete")
-def test_real_input_only_days_signals_are_causal():
+def real_lookback_view(tmp_path):
+    """A read-only view of the real lookback store, whatever its state: a copy of its days rows (complete lines only,
+    so a row being appended by a fetch in progress is ignored) and a link to its raw folder. Nothing is written in the
+    real store."""
+    src = ROOT / "data/system/lab_v2/lookback"
+    dst = tmp_path / "lookback"
+    dst.mkdir()
+    text = (src / "days.csv").read_text() if (src / "days.csv").exists() else ""
+    lines = [ln for ln in text.splitlines(keepends=True) if ln.endswith("\n") and ln.count(",") == 7]
+    header = ",".join(v2_data.DAYS_COLS) + "\n"
+    (dst / "days.csv").write_text(header + "".join(ln for ln in lines if ln != header))
+    (dst / "raw").symlink_to(src / "raw", target_is_directory=True)
+    return dst
+
+
+def test_real_input_only_days_signals_are_causal(tmp_path):
     """Signals only, on input-only days (2026-01 .. 2026-10, all before START): online == full on every bar.
-    No trade, no exit, no outcome is computed."""
-    P = run_v2.Paths(ROOT)
+    No trade, no exit, no outcome is computed. It does not need a complete lookback store: it audits the days of
+    REAL_DAYS that the store (or v1's store) holds when the test runs, at least the two v1 days."""
+    P = types.SimpleNamespace(lb=real_lookback_view(tmp_path), v1data=ROOT / "data/system")
     now = pd.Timestamp.now(tz="UTC").floor("s")
     bars_tf = load_bars(P, now)
-    days = [pd.Timestamp(d) for d in REAL_DAYS]
+    have = set(bars_tf["M5"].day) & set(bars_tf["M15"].day)
+    days = [pd.Timestamp(d) for d in REAL_DAYS if pd.Timestamp(d) in have]
+    assert {pd.Timestamp(d) for d in V1_REAL_DAYS} <= set(days)
     assert max(days) < pd.Timestamp("2026-11-02")                      # input-only (before the earliest START)
     res = audit_days(bars_tf, days)
     for sid, rows in res.items():

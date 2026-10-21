@@ -14,8 +14,9 @@
   v2 seeds with their record (trades, sum and mean net $/oz, progress E/E*) next to the v1 coin control C1 over the
   same days (C1's final trades in v1's reports/system/lab/trades.csv from the v2 lab's first first_day, read-only;
   dollars per ounce are compared, since R units differ between v1 and v2). S3 shows «في مرحلة الإحماء حتى تكتمل
-  بياناتها» while fewer than 250 of its trend-flip flow values precede the day (its 250-day threshold window). The page
-  is static HTML with the data written in; it is deployed by the next deploy of the site (v1's step or forward-watch).
+  بياناتها» while fewer than 250 of its trend-flip flow values precede the day (its 250-day threshold window), and
+  while it waits for an incomplete lookback store (its row's `waits_for_lookback`; v2_ledger.settle). The page is
+  static HTML with the data written in; it is deployed by the next deploy of the site (v1's step or forward-watch).
 - A promoted seed (LIVE, SUSPENDED, DEMOTED) shows only its post-promotion record and K (v1 §3 item 11, A1 item 12).
 """
 import html
@@ -88,7 +89,8 @@ def c1_record(v1_lab_dir, first_day):
             "mean_R": float(np.mean(R)) if R else None, "E": eproc.e_value([float(t["y"]) for t in tr])}
 
 
-def summary(lab_dir, recs, sts, events, state, asof, start, v1_lab_dir, bars_m15=None, halt=None, today=None):
+def summary(lab_dir, recs, sts, events, state, asof, start, v1_lab_dir, bars_m15=None, halt=None, today=None,
+            lookback_complete=True):
     lab_dir = Path(lab_dir)
     trades_all, twins_all = v2_ledger.read(lab_dir / "trades.csv"), v2_ledger.read(lab_dir / "twins.csv")
     days = v2_ledger.read(lab_dir / "lab_days.csv")
@@ -121,8 +123,11 @@ def summary(lab_dir, recs, sts, events, state, asof, start, v1_lab_dir, bars_m15
             row |= {"record": "since first_day", "E": stt["E"], "progress": prog, "K": None}
         row |= {"n": n_shown, "net_sum": net_shown, "net_avg": net_shown / n_shown if n_shown else None,
                 "mean_R": float(np.mean(R_shown)) if R_shown else None, "mu_bar": stt["mu_bar"]}
+        waits = r["id"] in v2_signals.LOOKBACK_SEEDS and not lookback_complete
         if r["id"] == "S3" and flow_n is not None:
-            row |= {"flow_values_before_today": flow_n, "warmup": flow_n < S3_QWIN}
+            row |= {"flow_values_before_today": flow_n, "warmup": flow_n < S3_QWIN or waits}
+        if r["id"] in v2_signals.LOOKBACK_SEEDS:
+            row["waits_for_lookback"] = waits
         rules.append(row)
     return {"version": 2, "asof_utc": asof, "state": state, "halted": bool(halt), "halt_reasons": list(halt or []),
             "start": start, "first_day": first,
@@ -179,6 +184,10 @@ def status_md(info, s):
         if "warmup" in r:
             L.append(f"- S3 trend-flip flow values before today: {r['flow_values_before_today']} of {S3_QWIN} "
                      f"({'warm-up' if r['warmup'] else 'window full'})")
+    for r in s["rules"]:
+        if r.get("waits_for_lookback"):
+            L.append(f"- {r['id']} waits for the lookback store: it is not audited, settled or traded until the store "
+                     "is complete (R-V2-42).")
     return "\n".join(L) + "\n"
 
 

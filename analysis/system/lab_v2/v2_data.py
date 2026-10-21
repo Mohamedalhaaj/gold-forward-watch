@@ -15,6 +15,11 @@ is read only if it is before complete_utc: v1's rule, the end (exclusive, UTC) o
 2026-09-01 whose two sides are both final (ok or missing) as of the run time, so v2 sees exactly the M1 that v1's
 forecasts see.
 
+The lookback store is complete at time t iff each of its 486 (UTC day, side) pairs has a row with status ok or missing
+and fetched_utc <= t (lookback_complete). A lookback pair without such a row is simply not read. While the store is
+not complete the seeds that read the lookback on forward days (v2_signals.LOOKBACK_SEEDS, S3) wait
+(v2_ledger.settle); the others are unaffected.
+
 Arithmetic (§2.2, shared exactly by system and judge):
 - decode: v1 bi5.decode, each price int32 / 1000.0 in IEEE double, timestamp = UTC day + sec;
 - mid M1: pipeline/build_parquet.py line for line: per side concat, ts from ms (UTC), sort by ts, drop duplicate ts
@@ -90,6 +95,15 @@ def final_status(days_df, now=None):
             continue
         out[(r.day, r.side)] = (r.status, r.sha256)
     return out
+
+
+def lookback_complete(lookback_dir, now):
+    """True iff every (UTC day, side) of 2026-01-01 .. 2026-08-31 has a final row (status ok or missing) with
+    fetched_utc <= now in the lookback days file. Rows are append-only and `missing` is final, so once complete the
+    store stays complete. A lab v2 run evaluates this once, at its run time, after its own lookback fetch."""
+    st = final_status(read_days(Path(lookback_dir) / "days.csv"), now)
+    return all(st.get((d.strftime("%Y-%m-%d"), s), ("", ""))[0] in ("ok", "missing")
+               for d in pd.date_range(LOOKBACK_FIRST, LOOKBACK_LAST, freq="D") for s in SIDES)
 
 
 def v1_complete_utc(v1_data, now):
