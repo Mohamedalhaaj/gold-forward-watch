@@ -1,6 +1,6 @@
 # Gold support system v2: lab v2 status
 
-Updated 2026-10-22T08:42:33Z. Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` with SYSTEM_V1_PREREG.md and Amendment A1.
+Updated 2026-10-22T14:34:15Z. Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` with SYSTEM_V1_PREREG.md and Amendment A1.
 
 ## Data
 
@@ -15,10 +15,10 @@ Updated 2026-10-22T08:42:33Z. Binding spec: xauusd-quant `research/system/SYSTEM
 
 | id | state | first_day | record | trades | sum net $/oz | mean R | evidence |
 |---|---|---|---|---|---|---|---|
-| S2 | PAPER | - | since first_day | 0 | 0.00 | - | E 1.000 of E* 2000/3 |
-| S3 | PAPER | - | since first_day | 0 | 0.00 | - | E 1.000 of E* 2000/3 |
-| S4 | PAPER | - | since first_day | 0 | 0.00 | - | E 1.000 of E* 1000 |
-| S5 | PAPER | - | since first_day | 0 | 0.00 | - | E 1.000 of E* 1000 |
+| S2 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | - | E 1.000 of E* 2000/3 |
+| S3 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | - | E 1.000 of E* 2000/3 |
+| S4 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | - | E 1.000 of E* 1000 |
+| S5 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | - | E 1.000 of E* 1000 |
 
 - C1 (v1 coin control) over the same days: 0 trades, sum net 0.00 $/oz, mean R -, E 1.000
 - S3 trend-flip flow values before today: 148 of 250 (warm-up)
