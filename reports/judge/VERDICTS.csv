@@ -1,3 +1,4 @@
 utc,head_sha,verdict,reason_code,checks_ok,checks_total,latched_since,judge_code_sha,J1,J2,J3,J4,J5,J6,J7,J8,J9
 2026-10-21T14:34:13Z,9a18fc9c10aff1f64226f8f6cd7ea2a1ebcf9f93,SOUND,sound,9,9,,7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72,ok,ok,ok,ok,ok,ok,ok,ok,ok
 2026-10-22T08:42:57Z,78c13fa583e791db4c85fb885867abde94fa6337,WARNING,j5_mismatch,8,9,,7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72,ok,ok,ok,ok,warning,ok,ok,ok,ok
+2026-10-22T14:41:34Z,3558adaeaab043a38340ab207105905e5eed706c,WARNING,j5_mismatch,8,9,,7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72,ok,ok,ok,ok,warning,ok,ok,ok,ok
