@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-10-22T08:37:44Z",
+ "generated_utc": "2026-10-22T14:32:36Z",
  "lab_state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
@@ -116,6 +116,6 @@
   "revisions": 0,
   "store_rows": 853,
   "store_defined": 596,
-  "store_new": 23
+  "store_new": 0
  }
 }
