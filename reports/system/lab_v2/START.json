@@ -1,0 +1,8 @@
+{
+ "first_cloud_run_utc": "2026-10-22T08:42:33Z",
+ "run_id": "39749123612",
+ "head_sha": "e06be950b30666abcf7df5a0d2d58b257ec19dc3",
+ "v1_start": "2026-11-02",
+ "start": "2026-11-02",
+ "rule": "later of the v1 START and the first Monday >= 2 days after the first successful lab v2 cloud run (SYSTEM_V2_PREREG.md §0)"
+}
