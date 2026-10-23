@@ -1,6 +1,6 @@
 # Gold support system v1: status
 
-Updated 2026-10-23T08:33:52Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
+Updated 2026-10-23T14:15:58Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
 
 ## Data and forecasts
 
