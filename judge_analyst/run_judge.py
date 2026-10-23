@@ -1,7 +1,7 @@
-"""Analyst judge entry point (prereg §8, IMPLEMENTATION_REGISTER R-AN-1, R-AN-66..R-AN-70).
+"""Analyst judge entry point (prereg §8, IMPLEMENTATION_REGISTER R-AN-1, R-AN-66..R-AN-70, amendment §16.18 A6).
 
 The judge lives in gold-forward-watch (R-AN-1). Usage, from the gold-forward-watch root:
-    python -I judge_analyst/run_judge.py --repo <FULL clone of gold-analyst main>
+    python -I judge_analyst/run_judge.py --repo <FULL clone of gold-analyst main> [--inbox <clone of the inbox>]
         [--now YYYY-MM-DDTHH:MM:SSZ] [--out reports/judge_analyst] [--site reports/forward_site/judge_analyst|none]
         [--api github|none|fake:<file.json>] [--hours dukascopy|none|fake:<dir>] [--store .|<path>|none]
         [--fetch-pushes]
@@ -10,8 +10,12 @@ The judge lives in gold-forward-watch (R-AN-1). Usage, from the gold-forward-wat
 never from its working tree, never imported or executed. Relative --out, --site and --store paths are taken from
 the gold-forward-watch root; --store defaults to this checkout (the system store at HEAD) and --site to the folder
 the gold-watch site serves at <PINS.judge_site_url>/judge_analyst/ (R-AN-70).
+--fetch-pushes (A6, R-AN-70): pushed agent commits are fetched by sha (else by their ref) from the inbox,
+PINS.inbox_repo, into the gold-analyst clone, without credentials: from --inbox (a local clone of the public inbox,
+data only) when given, else from https://github.com/<PINS.inbox_repo>.git. It also allows the one fresh fetch of
+gold-analyst main that A4 repo_head_foreign and A12 inbox_main_foreign retest against.
 The GitHub token is read from the GITHUB_TOKEN environment variable and only placed in request headers. Nothing from
-an agent-pushed commit is executed: pushed commits are fetched as data only (--fetch-pushes) and read with git.
+an agent-pushed commit is executed: pushed commits are fetched as data only and read with git.
 Only enums, counts and hashes are printed; model text never reaches stdout.
 """
 from __future__ import annotations
@@ -35,6 +39,53 @@ from jlib.judge import EVIDENCE_HEADER, Judge  # noqa: E402
 from jlib.sources import FakeGitHub, FakeHourFetcher, GitHubAPI, HourSource, HttpHourFetcher  # noqa: E402
 
 MANIFEST = "FROZEN_JUDGE_ANALYST.sha256"
+NO_CREDENTIALS = ["-c", "credential.helper=", "-c", "core.askPass=", "-c", "http.https://github.com/.extraheader="]
+
+
+def _git(root, *args, timeout=180):
+    """A git command on the gold-analyst clone that never sends a credential (no helper, no prompt, and the
+    extraheader actions/checkout may persist reset to empty)."""
+    return subprocess.run(["git", *NO_CREDENTIALS, "-C", root, *args], capture_output=True, timeout=timeout,
+                          env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
+
+
+def make_fetch(root, source, timeout=180, max_failures=3):
+    """fetch(sha, ref) for --fetch-pushes (R-AN-70, A6): bring a pushed commit from the inbox (`source`: a local clone
+    or https://github.com/<inbox>.git) into the gold-analyst clone as data: `git fetch` by sha, else by the push's
+    ref (objects and FETCH_HEAD only; no ref, no checkout, nothing run). Each fetch is bounded by `timeout`; after
+    `max_failures` failed pushes the judge stops fetching (their diffs are then unverified: WARNING)."""
+    failures = [0]
+
+    def fetch(sha, ref=None):
+        if failures[0] >= max_failures:
+            return False
+        for spec in (sha, ref):
+            if not spec:
+                continue
+            try:
+                p = _git(root, "fetch", "--no-tags", "-q", source, spec, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                break
+            if p.returncode == 0:
+                return True
+        failures[0] += 1
+        return False
+    return fetch
+
+
+def make_fresh_main(root, source, timeout=180):
+    """fresh_main() (A6): fetch gold-analyst main once more (into FETCH_HEAD only) and return its sha, or None."""
+    def fresh_main():
+        try:
+            p = _git(root, "fetch", "--no-tags", "-q", source, "refs/heads/main", timeout=timeout)
+            if p.returncode != 0:
+                return None
+            q = _git(root, "rev-parse", "--verify", "-q", "FETCH_HEAD^{commit}", timeout=60)
+        except subprocess.TimeoutExpired:
+            return None
+        sha = q.stdout.decode("ascii", "replace").strip()
+        return sha if q.returncode == 0 and len(sha) == 40 else None
+    return fresh_main
 
 
 def manifest_status(root: str = JUDGE_ROOT):
@@ -95,6 +146,7 @@ def write_manifest(root: str = JUDGE_ROOT):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=None, help="a FULL clone of gold-analyst main (data only)")
+    ap.add_argument("--inbox", default=None, help="a clone of the public inbox, the source of pushed commits (data)")
     ap.add_argument("--out", default="reports/judge_analyst")
     ap.add_argument("--site", default="reports/forward_site/judge_analyst", help="verdict feed folder, or none")
     ap.add_argument("--now", default=None)
@@ -113,8 +165,10 @@ def _at_root(p):
 
 
 def resolve(a):
-    """Absolute paths: --repo from the working directory; --out, --site and --store from the judge root."""
+    """Absolute paths: --repo and --inbox from the working directory; --out, --site and --store from the judge
+    root."""
     a.repo = os.path.abspath(a.repo) if a.repo else None
+    a.inbox = os.path.abspath(a.inbox) if a.inbox else None
     a.out = _at_root(a.out)
     a.site = _at_root(a.site)
     a.store = _at_root(a.store)
@@ -144,7 +198,7 @@ def main(argv=None):
         api = GitHubAPI(pins.get("repo") or "Mohamedalhaaj/gold-analyst", os.environ.get("GITHUB_TOKEN"))
     elif a.api.startswith("fake:"):
         with open(a.api[5:], encoding="utf-8") as f:
-            api = FakeGitHub(json.load(f))
+            api = FakeGitHub(json.load(f), repo=pins.get("repo") or "Mohamedalhaaj/gold-analyst")
     else:
         api = None
     if a.hours == "dukascopy":
@@ -165,15 +219,18 @@ def main(argv=None):
     os.makedirs(out, exist_ok=True)
     hours = HourSource(fetcher, os.path.join(out, "hours.csv"), now)
     store_git = GitRepo(a.store) if a.store else None
-    fetch = None
+    fetch = fresh = None
     if a.fetch_pushes:
-        def fetch(sha):
-            p = subprocess.run(["git", "-C", root, "fetch", "--no-tags", "-q", "origin", sha], capture_output=True)
-            return p.returncode == 0
+        ga_repo = pins.get("repo") or "Mohamedalhaaj/gold-analyst"
+        inbox = pins.get("inbox_repo")
+        source = a.inbox or f"https://github.com/{inbox or ga_repo}.git"     # before A6: gold-analyst itself
+        fetch = make_fetch(root, source)
+        fresh = make_fresh_main(root, f"https://github.com/{ga_repo}.git")
     ok, code_sha8 = manifest_status(JUDGE_ROOT)
     evidence = report.read_csv(os.path.join(out, "evidence.csv"), EVIDENCE_HEADER)
     judge = Judge(git, now, api=api, hours=hours, store_git=store_git, fetch_commit=fetch, evidence_rows=evidence,
-                  prev_anchor=report.last_anchor(out), judge_manifest_ok=ok)
+                  prev_anchor=report.last_anchor(out), judge_manifest_ok=ok, fresh_main=fresh,
+                  prev_judge_utc=report.last_judge_utc(out))
     res = judge.run()
     v = report.write_outputs(res, out, now, code_sha8, hours)
     if a.site:                               # R-AN-70: the feed analyst-settle reads, byte-identical to the record

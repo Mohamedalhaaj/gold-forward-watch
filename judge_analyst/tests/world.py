@@ -2,6 +2,13 @@
 workflows would write (attempts, calls, witnesses, terminals, START, settled, twins, state, ledger, runs exports), a
 source store repository (gold-forward-watch stand-in), a GitHub API double and a Dukascopy hour-file double.
 
+Since register §16.18 A6 (the agent inbox) the world is the inbox design: PINS names the inbox (`inbox_repo`,
+`inbox_repo_id`, `inbox_from_utc`); session pushes are entries of the inbox's activity log (actor: the owner, as the
+proxy attributes them); inbox main follows gold-analyst main; witnesses come from scheduled analyst-merge runs and
+from analyst-settle runs, all on main; canary calls carry a passing `canary_probe`; the owner's runs exports carry
+`inbox_checks`. The API double also answers the public reads of R-AN-66 (the inbox's repository, activity, runs and
+rules, gold-analyst's runs by day and rules, and `git ls-remote` of both).
+
 It is built from the register's schemas (§16) by the judge's author, not from the analyst code, and it uses the
 judge's own functions to fill derived fields, so a clean world must judge SOUND and every tamper must be found.
 """
@@ -33,6 +40,31 @@ OWNER = "Mohamedalhaaj"
 BOT = "github-actions[bot]"
 AGENT = "claude[bot]"
 ISSUE = 7
+GA = f"{OWNER}/gold-analyst"
+INBOX = f"{OWNER}/gold-analyst-inbox"
+INBOX_ID = 424242
+ZERO40 = "0" * 40
+
+
+def rules(repo, *types):
+    """GET /repos/{repo}/rules/branches/{branch} as GitHub answers it (checked 2026-10-23)."""
+    return [{"type": t, "ruleset_source_type": "Repository", "ruleset_source": repo, "ruleset_id": 25713120 + i}
+            for i, t in enumerate(types)]
+
+
+def probe_record(tag, kind, head, when):
+    """A passing `analyst-probe/1` record (R-AN-84): every probe at an outcome its "Pass iff" column passes."""
+    outcomes = {"net.dukascopy": 200, "net.google": 0, "net.raw_public": 0, "net.api_root": 200,
+                "rest.inbox": "ok", "rest.ga": "scope", "rest.gfw": "scope", "rest.hooks": 0,
+                "git.ls_remote_inbox": "accepted", "git.ls_remote_gfw": "refused", "git.ls_remote_gfw_proxy": "refused",
+                "git.ls_remote_public": "refused", "git.ls_remote_public_proxy": "refused",
+                "push_main": "refused_rule", "force_main": "refused_rule", "rest.force_main": "denied",
+                "tag_push": "refused", "rest.tag_create": "denied", "other_branch_push": "refused_rule",
+                "branch_delete": "refused", "activity_seen_s": 7, "rest.delete_branch": "denied",
+                "ga_push": "refused", "ga_push_proxy": "refused", "workflow_push": "accepted", "admin_probe": "denied"}
+    passes = {k: (None if k in ("net.api_root", "activity_seen_s", "workflow_push") else True) for k in outcomes}
+    return {"schema": "analyst-probe/1", "tag": tag, "kind": kind, "repo_head_sha": head, "probe_utc": fmt_utc(when),
+            "outcomes": outcomes, "pass": passes, "verdict": "pass"}
 FORECAST_HEADER = "day,slot,origin_model,origin_utc,F_H1,F_S,price,y_bp,nfp,cpi,fomc,hol,computed_utc"
 _REC24 = struct.Struct(">iiiiif")
 _TICK = struct.Struct(">IIIff")
@@ -103,13 +135,23 @@ class World:
         self.hooks = hooks or {}
         self.rng = random.Random(seed)
         self.plans = plans if plans is not None else self.default_plans()
-        self.api = {"activity": [], "comments": {str(ISSUE): []}, "runs": {}}
+        self.api = {"activity": [], "comments": {str(ISSUE): []}, "runs": {},
+                    "repos": {INBOX: {"id": INBOX_ID, "private": False, "full_name": INBOX}},
+                    "repo_activity": {INBOX: []}, "runs_total": {INBOX: 0},
+                    "rules": {INBOX: {"main": rules(INBOX, "update", "deletion", "non_fast_forward"),
+                                      "claude/x": rules(INBOX, "deletion", "non_fast_forward"),
+                                      "x": rules(INBOX, "creation", "update", "deletion", "non_fast_forward")},
+                              GA: {"claude/x": rules(GA, "creation")}},
+                    "ls_remote": {GA: [], INBOX: []}}
+        self.ls_main = {}           # a sha `git ls-remote` lists as main, per repository (default: gold-analyst HEAD)
         self.hour_files = {}
         self.seq = 0
         self.run_id = 1000
         self.act_id = 50000
+        self.inbox_act_id = 70000
         self.comment_id = 90000
         self.prev_chain = {"live": ZERO64, "canary": ZERO64}
+        self.raced = {}
         self.terminals = {}
         self.attempts = {}
         self.settled_done = set()
@@ -148,6 +190,7 @@ class World:
         self.gv = GitRepo(self.repo.path)
         self.make_source_store()
         self.make_build_commit(first)
+        self.make_probe_session(first)
         self.mirrored_until = None
         day = first - dt.timedelta(days=1)
         last = self.live_to + dt.timedelta(days=3)
@@ -252,14 +295,18 @@ class World:
         w.writerow(["date", "exchange", "kind", "close_utc"])
         for row in register_holiday_rows():
             w.writerow(row)
+        build_time = T(f"{(first - dt.timedelta(days=3)).isoformat()}T09:00:00Z")
+        self.inbox_from = fmt_utc(build_time + dt.timedelta(hours=1))      # R-AN-7: after the A6 build commit
         files = {
             "analyst/PARAMS.json": record_form({"T_run_min": 0, "L_min": 50, "T_setup_min": 0, "concurrency_min": 20,
                                                 "provisional": True, "canary_report_sha256": None}),
-            "analyst/PINS.json": record_form({"repo": f"{OWNER}/gold-analyst", "witness_issue": ISSUE,
+            "analyst/PINS.json": record_form({"repo": GA, "witness_issue": ISSUE,
                                               "model": "claude-opus-5-5", "effort": "high",
                                               "freeze_tag": "analyst-v1-freeze",
                                               "judge_site_url": "https://example.invalid/judge",
-                                              "page_url": "https://example.invalid/analyst/"}),
+                                              "page_url": "https://example.invalid/analyst/",
+                                              "inbox_repo": INBOX, "inbox_repo_id": INBOX_ID,
+                                              "inbox_from_utc": self.inbox_from}),
             "analyst/MODE.json": record_form({"mode": "live", "canary_from": min(self.canary_days).isoformat()
                                               if self.canary_days else None,
                                               "canary_to": max(self.canary_days).isoformat()
@@ -286,7 +333,26 @@ class World:
         self.prompt_sha = sha256_bytes(files["analyst/ROUTINE_PROMPT.md"])
         if "build" in self.hooks:
             self.hooks["build"](self)
-        r.commit("analyst build", T(f"{(first - dt.timedelta(days=3)).isoformat()}T09:00:00Z"))
+        sha = r.commit("analyst build", build_time)
+        # analyst-inbox-mirror creates inbox main (before PINS.inbox_from_utc, so the judge ignores the entry)
+        self.inbox_activity("refs/heads/main", sha, build_time + dt.timedelta(minutes=5), OWNER, "branch_creation")
+
+    def make_probe_session(self, first):
+        """The one-off probe session (R-AN-84 `run_window.py probe`) after PINS.inbox_from_utc: its probe pushes in the
+        inbox (claude/probe-*, never read by analyst-merge) and the owner's byte copy of its record in
+        analyst/canary/checks/ (create-only)."""
+        when = T(f"{(first - dt.timedelta(days=2)).isoformat()}T10:15:00Z")
+        tag = "p" + when.strftime("%Y%m%dT%H%M%SZ")
+        for i, b in enumerate(("c3", "del", "wf", "result")):
+            sha = sha256_bytes(f"{tag}-{b}".encode())[:40]
+            ref = f"refs/heads/claude/probe-{b}-{tag}"
+            self.inbox_activity(ref, sha, when + dt.timedelta(seconds=10 * i), OWNER, "branch_creation")
+            self.api["ls_remote"][INBOX].append([sha, ref])
+        rec = probe_record(tag, "probe", self.repo.head(), when)
+        if "probe_check" in self.hooks:
+            self.hooks["probe_check"](self, rec)
+        self.repo.write(f"analyst/canary/checks/PROBE_{tag}.json", record_form(rec))
+        self.repo.commit(f"owner: probe record {tag}", when + dt.timedelta(hours=1))
 
     # ------------------------------------------------------------------ mirror and settle runs
     def mirror_through(self, day, when):
@@ -319,6 +385,8 @@ class World:
         r.append("mirror/exports.csv", exp_line.encode())
         sha = r.commit(f"analyst mirror {fmt_utc(when)}", when)
         self.activity("refs/heads/main", sha, when, OWNER, "push")
+        # analyst-inbox-mirror fast-forwards inbox main to it (R-AN-83; deploy-key pushes show as the owner)
+        self.inbox_activity("refs/heads/main", sha, when + dt.timedelta(minutes=1), OWNER, "push")
         self.mirrored_until = day
 
     def next_run(self):
@@ -326,22 +394,33 @@ class World:
         return self.run_id
 
     def activity(self, ref, after, when, actor, typ):
+        """An entry of gold-analyst's own activity log (its main pushes)."""
         self.act_id += 1
-        self.api["activity"].append({"id": self.act_id, "before": "0" * 40, "after": after, "ref": ref,
+        self.api["activity"].append({"id": self.act_id, "before": ZERO40, "after": after, "ref": ref,
                                      "timestamp": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "activity_type": typ,
                                      "actor": {"login": actor}})
         return self.act_id
+
+    def inbox_activity(self, ref, after, when, actor, typ, before=ZERO40):
+        """An entry of the inbox's activity log (R-AN-32): session pushes, probe pushes and inbox main."""
+        self.inbox_act_id += 1
+        self.api["repo_activity"][INBOX].append({"id": self.inbox_act_id, "before": before, "after": after, "ref": ref,
+                                                 "timestamp": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                 "activity_type": typ, "actor": {"login": actor}})
+        return self.inbox_act_id
 
     def new_run(self, workflow, created, event="push"):
         rid = self.next_run()
         self.api["runs"][str(rid)] = {"id": rid, "run_attempt": 1, "event": event,
                                       "created_at": created.strftime("%Y-%m-%dT%H:%M:%SZ"), "name": workflow,
-                                      "path": f".github/workflows/{workflow}.yml"}
+                                      "path": f".github/workflows/{workflow}.yml", "head_branch": "main",
+                                      "head_sha": self.repo.head()}
         return {"workflow": workflow, "id": rid, "attempt": 1, "event": event, "created_utc": fmt_utc(created)}
 
     # ------------------------------------------------------------------ agent pushes and merge
     def agent_push(self, mode, branch, path, data: bytes, when):
-        """A session push: one new commit on a new claude/ branch based on main."""
+        """A session push to the inbox: one new commit on a new claude/ branch based on main (R-AN-30). The commit is
+        made in the world's repository (so the judge finds it without a fetch) and listed in the inbox only."""
         r = self.repo
         base = r.head()
         r("switch", "-q", "-c", branch, base)
@@ -351,7 +430,8 @@ class World:
             r.write(extra[0], extra[1])
         sha = r.commit(f"session push {path}", when)
         r("switch", "-q", "main")
-        aid = self.activity(f"refs/heads/{branch}", sha, when, AGENT, "branch_creation")
+        aid = self.inbox_activity(f"refs/heads/{branch}", sha, when, OWNER, "branch_creation")
+        self.api["ls_remote"][INBOX].append([sha, f"refs/heads/{branch}"])
         return sha, aid
 
     def witness(self, mode, kind, wid, status, reason, path, file_sha, push, run, window, terminal, when):
@@ -366,6 +446,7 @@ class World:
         created = when + dt.timedelta(seconds=5)
         self.api["comments"][str(ISSUE)].append({"id": self.comment_id, "body": body,
                                                  "created_at": created.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                 "updated_at": created.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                                  "user": {"login": BOT}})
         w["comment"] = {"issue": ISSUE, "id": self.comment_id, "created_utc": fmt_utc(created),
                         "body_sha256": sha256_bytes(body.encode())}
@@ -374,9 +455,9 @@ class World:
         return w
 
     def merge_push(self, mode, kind, wid, path, data, sha, aid, push_time, win, branch):
-        run = self.new_run("analyst-merge", push_time + dt.timedelta(seconds=20))
-        push = {"ref": f"refs/heads/{branch}", "before": "0" * 40, "after": sha, "activity_id": aid,
-                "activity_type": "branch_creation", "activity_utc": fmt_utc(push_time), "actor": AGENT}
+        run = self.new_run("analyst-merge", push_time + dt.timedelta(seconds=20), event="schedule")
+        push = {"repo": INBOX, "ref": f"refs/heads/{branch}", "before": ZERO40, "after": sha, "activity_id": aid,
+                "activity_type": "branch_creation", "activity_utc": fmt_utc(push_time), "actor": OWNER}
         window = None
         if win is not None:
             void = push_time < win.span_lo or push_time > win.deadline
@@ -464,6 +545,9 @@ class World:
         if kind == "run_died":
             self.close(mode, win, "no_call:run", attempts)
             return
+        if kind in ("raced_call", "invalid_call", "closed_then_call"):
+            self.call_closed_over(mode, win, kind, attempts, fire + dt.timedelta(minutes=4))
+            return
         n = len(times)
         asof = times[-1] + dt.timedelta(seconds=30)
         R = self.repo.head()
@@ -500,6 +584,34 @@ class World:
         when = lock_time + dt.timedelta(seconds=45)
         self.write_terminal(mode, win, tstatus, tdetail, "merge", call_block, attempts, when, run)
         self.repo.commit(f"analyst-merge call {win.call_id} seq {w['seq']}", when + dt.timedelta(seconds=5))
+
+    def call_closed_over(self, mode, win, kind, attempts, lock_time):
+        """A call pushed to the inbox in time (lock_time <= deadline) whose window the closer closed (writer closer):
+        - raced_call: the push is never witnessed (the closer raced it; A8 closer_raced);
+        - invalid_call: the merge witnessed it rejected (invalid_content) BEFORE the closer ran (no race);
+        - closed_then_call: the closer ran first and the push was witnessed afterwards as window_closed (a race)."""
+        pre = "analyst/" if mode == "live" else "analyst/canary/"
+        path = f"{pre}calls/{win.call_id}.json"
+        data = record_form({"schema": "analyst-call/1", "call_id": win.call_id, "mode": mode, "status": "called"})
+        branch = f"claude/analyst-{mode}-call-{win.call_id}"
+        sha, aid = self.agent_push(mode, branch, path, data, lock_time)
+        self.raced[win.call_id] = sha
+
+        def rejected(reason, when):
+            run = self.new_run("analyst-merge", when - dt.timedelta(seconds=20), event="schedule")
+            push = {"repo": INBOX, "ref": f"refs/heads/{branch}", "before": ZERO40, "after": sha, "activity_id": aid,
+                    "activity_type": "branch_creation", "activity_utc": fmt_utc(lock_time), "actor": OWNER}
+            window = {"entry_utc": fmt_utc(win.entry), "deadline_utc": fmt_utc(win.deadline),
+                      "time_utc": fmt_utc(lock_time), "time_source": "activity", "void": False}
+            w = self.witness(mode, "call", win.call_id, "rejected", reason, path, sha256_bytes(data), push, run, window,
+                             None, when)
+            self.repo.commit(f"analyst-merge call {win.call_id} seq {w['seq']}", when + dt.timedelta(seconds=5))
+
+        if kind == "invalid_call":
+            rejected("invalid_content", lock_time + dt.timedelta(minutes=2))
+        self.close(mode, win, "no_call:run", attempts)
+        if kind == "closed_then_call":
+            rejected("window_closed", win.deadline + dt.timedelta(minutes=40))
 
     def close(self, mode, win, status, attempts):
         when = win.deadline + dt.timedelta(minutes=25)
@@ -570,6 +682,15 @@ class World:
             side = 0
         if status not in ("called", "stay_out"):
             side = None
+        call = self._call(mode, win, ctx, plan, status, n, session, asof, dref, side, sm, tm, S, Tt, sd, td)
+        if mode == "canary":                           # R-AN-71, R-AN-84: canary calls carry the probe record
+            call["canary_probe"] = probe_record(win.call_id, "canary", ctx["repo_head_sha"],
+                                                asof + dt.timedelta(seconds=5))
+            if "probe" in self.hooks:
+                self.hooks["probe"](self, win, call["canary_probe"])
+        return call
+
+    def _call(self, mode, win, ctx, plan, status, n, session, asof, dref, side, sm, tm, S, Tt, sd, td):
         return {"schema": "analyst-call/1", "call_id": win.call_id, "mode": mode, "window": win.w,
                 "model_day": win.day.isoformat(), "entry_utc": fmt_utc(win.entry), "exit_utc": fmt_utc(win.exit),
                 "deadline_utc": fmt_utc(win.deadline), "status": status,
@@ -757,19 +878,37 @@ class World:
                                  "effort": "high", "crons": ["20 6,7 * * 1-5"], "enabled": True},
                                 {"name": "analyst-w2", "trigger_id": "t2", "model": "claude-opus-5-5",
                                  "effort": "high", "crons": ["50 12,13 * * 1-5"], "enabled": True}],
-                   "runs": rows}
+                   "runs": rows,
+                   # R-AN-60 (A6, blocker B3): the owner's weekly read of the inbox's hooks, keys and Actions switch
+                   "inbox_checks": {"checked_utc": "2026-12-07T08:55:00Z", "hooks": 0, "deploy_keys": 1,
+                                    "actions_enabled": False, "security_log_hook_events": 0}}
+            if "runs_record" in self.hooks:
+                self.hooks["runs_record"](self, wk, rec)
             self.repo.write(f"analyst/runs/{wk}.json", record_form(rec))
         self.repo.commit("owner runs export", T("2026-12-07T09:00:00Z"))
 
     # ------------------------------------------------------------------ judging
-    def judge(self, out_dir=None, api=None, hours=None, store=True, now=None, prev_anchor=None, evidence=None):
+    def api_data(self):
+        """The API double's data at judging time: `git ls-remote` lists main (and HEAD) at gold-analyst's current
+        head, in both repositories, unless a test set `ls_main`."""
+        data = copy.deepcopy(self.api)
+        head = self.repo.head()
+        for repo in (GA, INBOX):
+            sha = self.ls_main.get(repo, head)
+            data["ls_remote"][repo] = [[sha, "HEAD"], [sha, "refs/heads/main"]] + data["ls_remote"].get(repo, [])
+        return data
+
+    def judge(self, out_dir=None, api=None, hours=None, store=True, now=None, prev_anchor=None, evidence=None,
+              fetch=None, fresh_main=None, prev_judge_utc=None):
         from jlib.gitrepo import GitRepo
         git = GitRepo(self.repo.path)
         hs = hours or HourSource(FakeHourFetcher(self.hour_files), os.path.join(out_dir, "hours.csv")
                                  if out_dir else None, now or self.now)
         sg = GitRepo(self.src.path) if store else None
-        j = Judge(git, now or self.now, api=api if api is not None else FakeGitHub(copy.deepcopy(self.api)),
-                  hours=hs, store_git=sg, evidence_rows=evidence or [], prev_anchor=prev_anchor)
+        extra = {k: v for k, v in (("fresh_main", fresh_main), ("prev_judge_utc", prev_judge_utc)) if v is not None}
+        j = Judge(git, now or self.now, api=api if api is not None else FakeGitHub(self.api_data(), repo=GA),
+                  hours=hs, store_git=sg, evidence_rows=evidence or [], prev_anchor=prev_anchor, fetch_commit=fetch,
+                  **extra)
         try:
             return j.run()
         finally:
@@ -785,6 +924,7 @@ class World:
         w.repo = _Rebind(os.path.join(dest, "gold-analyst"))
         w.src = _Rebind(os.path.join(dest, "gold-forward-watch"))
         w.api = copy.deepcopy(self.api)
+        w.ls_main = dict(self.ls_main)
         w.hour_files = dict(self.hour_files)
         return w
 

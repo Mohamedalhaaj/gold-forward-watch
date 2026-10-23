@@ -121,6 +121,16 @@ class GitRepo:
         commits.reverse()
         return commits
 
+    def oldest_missing(self, a: str, b: str):
+        """(sha, committer unix time) of the oldest commit of b's first-parent history that a lacks, or None (the
+        mirror's lag, A12 inbox_stale)."""
+        out = self.run("log", "--first-parent", "--reverse", "--format=%H %ct", f"{a}..{b}", check=False)
+        for line in out.split("\n"):
+            parts = line.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                return parts[0], int(parts[1])
+        return None
+
     def diff_name_status(self, base: str, after: str):
         out = self.run("diff", "--no-renames", "--name-status", base, after)
         res = []

@@ -1,5 +1,5 @@
 """.github/workflows/analyst-judge.yml in gold-forward-watch (prereg §8, §9; register R-AN-1, R-AN-66, R-AN-69,
-R-AN-70, R-AN-75 items 4-5; review blockers B1 and B3).
+R-AN-70, R-AN-75 items 4-5; review blockers B1 and B3; §16.18 A6: the inbox is a third checkout, read as data).
 
 The rules the analyst's own workflows follow in gold-analyst (script only, permissions declared, no pull_request
 trigger, no model key) hold here too, plus the judge's own: the gold-analyst clone is data (full history, no stored
@@ -88,18 +88,24 @@ def test_concurrency_own_group_and_the_shared_group_only_on_publish():
     assert re.search(r"\n    concurrency:\n      group: forward-watch\n      cancel-in-progress: false\n", job("publish"))
 
 
-def test_the_two_checkouts():
+def test_the_three_checkouts():
     """R-AN-66: a full clone of gold-analyst (read as data, no credentials kept) and gold-forward-watch at HEAD with
-    its history (the mirror is checked against the source at each source_sha)."""
+    its history (the mirror is checked against the source at each source_sha). A6 (R-AN-70): the public inbox, full
+    with every branch, also as data: pushed agent commits are fetched from it by sha into the gold-analyst clone."""
     judge = job("judge")
-    gfw = judge[judge.index("- uses: actions/checkout@v4"):judge.index("repository: Mohamedalhaaj/gold-analyst")]
+    gfw = judge[judge.index("- uses: actions/checkout@v4"):judge.index("repository: Mohamedalhaaj/gold-analyst\n")]
     assert "path: gfw" in gfw and "fetch-depth: 0" in gfw and "persist-credentials: false" in gfw
-    ga = judge[judge.index("repository: Mohamedalhaaj/gold-analyst"):judge.index("astral-sh/setup-uv")]
+    ga = judge[judge.index("repository: Mohamedalhaaj/gold-analyst\n"):
+               judge.index("repository: Mohamedalhaaj/gold-analyst-inbox\n")]
     assert "path: ga" in ga and "ref: main" in ga and "fetch-depth: 0" in ga and "fetch-tags: true" in ga
     assert "persist-credentials: false" in ga
+    inbox = judge[judge.index("repository: Mohamedalhaaj/gold-analyst-inbox\n"):judge.index("astral-sh/setup-uv")]
+    assert "path: inbox" in inbox and "ref: main" in inbox and "fetch-depth: 0" in inbox
+    assert "persist-credentials: false" in inbox and "fetch-tags" not in inbox
     run = step("Judge run")
     assert "working-directory: gfw" in run
-    assert "uv run --frozen --no-dev python -I judge_analyst/run_judge.py --repo ../ga --fetch-pushes" in run
+    assert ("uv run --frozen --no-dev python -I judge_analyst/run_judge.py --repo ../ga --inbox ../inbox "
+            "--fetch-pushes") in run
     assert "--store" not in run and "--out" not in run                  # the defaults: this checkout, its folders
 
 
@@ -109,6 +115,8 @@ def test_the_judge_writes_only_its_folders_and_never_the_analyst_clone():
         assert f"':(exclude){p}'" in chk
     clean = step("Check that the judge left the gold-analyst clone untouched")
     assert "working-directory: ga" in clean and "git status --porcelain" in clean
+    clean = step("Check that the judge left the inbox clone untouched")
+    assert "working-directory: inbox" in clean and "git status --porcelain" in clean
     up = step("Upload the judge records")
     assert re.search(r"path: \|\n\s+gfw/reports/judge_analyst\n\s+gfw/reports/forward_site/judge_analyst\n", up)
     assert "if-no-files-found: error" in up and "name: judge-analyst-records" in up

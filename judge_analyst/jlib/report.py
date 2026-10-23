@@ -61,6 +61,14 @@ def last_anchor(out_dir):
     return rows[-1]["head_sha"] if rows else None
 
 
+def last_judge_utc(out_dir):
+    """The newest judge_utc in VERDICTS.csv, or None on a first run (R-AN-66, A6: the runs day range starts two days
+    before it)."""
+    rows = read_csv(os.path.join(out_dir, "VERDICTS.csv"), VERDICTS_HEADER)
+    times = [r["judge_utc"] for r in rows if r.get("judge_utc")]
+    return max(times) if times else None
+
+
 def decide(findings, out_dir, now_utc):
     """Apply latching and adjudications. Returns (verdict, violation_keys, cleared_keys, warning_keys,
     adjudicated_warnings, new_finding_rows)."""
@@ -136,10 +144,11 @@ def render_report(result, verdict, vkeys, ckeys, wkeys, wdone, first_seen, adj, 
     L.append(f"- judge code_sha8: {code_sha8}")
     L.append(f"- **analyst_verdict: {verdict}**")
     L.append("")
-    L.append("Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.5) and IMPLEMENTATION_REGISTER section 16. "
-             "Model text is "
+    L.append("Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 "
+             "(with amendment 16.18 A6, the agent inbox). Model text is "
              "never printed here: findings carry enums, field names, hashes and numbers only. Findings marked "
-             "(owner-attested) rest on the owner's weekly runs export (R-AN-60).")
+             "(owner-attested) rest on the owner's weekly runs export (R-AN-60). Session probe outcomes (A12 "
+             "probe_failed, probe_incomplete) are self-reported by the session (R-AN-84).")
     L.append("")
     L.append(f"## VIOLATION keys in force ({len(vkeys)})")
     L.append("")

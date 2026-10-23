@@ -4,32 +4,19 @@ A clean synthetic world must judge SOUND with no finding. Every tamper must be f
 assigns (R-AN-67), at its severity. Post-hoc tampers act on a copy of the built world (git commits, API double edits,
 hour-file double edits); construction tampers rebuild a small world with a hook.
 """
-import copy
 import datetime as dt
 import json
 import os
 import subprocess
 
-import pytest
-
 from jlib import report
 from jlib.common import VIOLATION, WARNING, fmt_utc, record_form, sha256_bytes
 from jlib.judge import EVIDENCE_HEADER, Judge
 from jlib.sources import FakeGitHub, FakeHourFetcher, HourSource
-from world import BOT, ISSUE, T, World
+from world import BOT, INBOX, ISSUE, OWNER, T, World
 
 
-# ---------------------------------------------------------------- fixtures and helpers
-@pytest.fixture(scope="session")
-def base(tmp_path_factory):
-    return World(str(tmp_path_factory.mktemp("world") / "w")).build()
-
-
-@pytest.fixture
-def w(base, tmp_path):
-    return base.clone(str(tmp_path / "copy"))
-
-
+# ---------------------------------------------------------------- fixtures (conftest: base, w) and helpers
 def keys(res, check=None, severity=None, code=None):
     out = []
     for f in res.findings.items:
@@ -73,7 +60,8 @@ def attempt_witnesses(world, call_id, mode="live"):
 
 
 def set_activity_time(world, after, when):
-    for a in world.api["activity"]:
+    """Move a push's activity entry (agent pushes are in the inbox's log since A6; main pushes in gold-analyst's)."""
+    for a in world.api["activity"] + world.api["repo_activity"][INBOX]:
         if a["after"] == after:
             a["timestamp"] = when
 
@@ -106,7 +94,7 @@ def test_clean_world_is_sound(base, tmp_path):
                  "ADJUDICATIONS.csv"):
         assert os.path.exists(tmp_path / name)
     ev = report.read_csv(str(tmp_path / "evidence.csv"), EVIDENCE_HEADER)
-    assert {r["source"] for r in ev} == {"activity", "comment", "run"}
+    assert {r["source"] for r in ev} == {"activity", "comment", "run", "inbox_activity", "ga_ref"}
     # a second run with the evidence and the anchor: still SOUND, no evidence row repeated
     res2 = base.judge(out_dir=str(tmp_path), evidence=ev, prev_anchor=report.last_anchor(str(tmp_path)))
     assert res2.findings.items == [] and res2.evidence_new == []
@@ -120,7 +108,8 @@ def test_evidence_replaces_an_unreachable_api(base, tmp_path):
     report.write_outputs(res, str(tmp_path), base.now, "x")
     ev = report.read_csv(str(tmp_path / "evidence.csv"), EVIDENCE_HEADER)
     res2 = base.judge(api=FakeGitHub(unreachable=True), evidence=ev)
-    assert keys(res2) == ["A0|api_unreachable|api|-"]          # lock times recomputed from the evidence file
+    # lock times recomputed from the evidence file (inbox_activity rows); the boundary reads give A0 only
+    assert sorted(keys(res2)) == ["A0|api_unreachable|api|-", "A0|inbox_api_unreachable|api|-"]
     v, *_ = report.decide(res2.findings, str(tmp_path), base.now)
     assert v == "WARNING"                                    # never SOUND
 
@@ -180,7 +169,8 @@ def _unwitnessed_push(world, files, branch):
         r.write(p, data)
     sha = r.commit("session push", T("2026-12-05T07:00:00Z"))
     r("switch", "-q", "main")
-    world.activity(f"refs/heads/{branch}", sha, T("2026-12-05T07:00:00Z"), "claude[bot]", "branch_creation")
+    world.inbox_activity(f"refs/heads/{branch}", sha, T("2026-12-05T07:00:00Z"), OWNER, "branch_creation")
+    world.api["ls_remote"][INBOX].append([sha, f"refs/heads/{branch}"])
     return sha
 
 
@@ -500,7 +490,7 @@ def test_A0_shallow_clone(base, tmp_path):
     subprocess.run(["git", "clone", "-q", "--depth", "3", f"file://{base.repo.path}", dest], check=True)
     from jlib.gitrepo import GitRepo
     git = GitRepo(dest)
-    j = Judge(git, base.now, api=FakeGitHub(copy.deepcopy(base.api)),
+    j = Judge(git, base.now, api=FakeGitHub(base.api_data(), repo="Mohamedalhaaj/gold-analyst"),
               hours=HourSource(FakeHourFetcher(base.hour_files), None, base.now))
     res = j.run()
     git.close()
