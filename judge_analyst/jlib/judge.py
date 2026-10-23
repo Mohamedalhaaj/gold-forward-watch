@@ -1,5 +1,5 @@
-"""The analyst judge's checks A0-A12 (prereg §8 as amended by v0.5 M7 and v0.6; IMPLEMENTATION_REGISTER R-AN-66..R-AN-70
-with amendment §16.18 A6, the agent inbox).
+"""The analyst judge's checks A0-A13 (prereg §8 as amended by v0.5 M7 and v0.6; IMPLEMENTATION_REGISTER R-AN-66..R-AN-70
+with amendments §16.18 A6, the agent inbox, and A7, the session guard).
 
 A0 is the judge's own input check (a shallow clone, an unreachable API, an unreadable source store or hour file, a
 PINS.json without the inbox pins): WARNING, never SOUND, never latched. The one A0 VIOLATION, `inbox_blind` (second
@@ -11,6 +11,12 @@ the mirror's lag; after the second review the App's repository list, the routine
 branches; after the fourth review the inbox's deploy keys and Actions switch, `inbox_config`). Since the fourth review
 every VIOLATION key names its incident, and A11 checks the analyst's pause, lift and retirement events against the
 pause rule of R-AN-55.
+
+A13 (§16.18 A7, R-AN-85, R-AN-86) is the session guard: each run's tool calls in the owner's run-log export, classified
+by the guard's string rules as `jlib/sessionguard.py` re-implements them from the register (the analyst's `guard.py`
+is never read, parsed or run; A11 hashes it against FROZEN_ANALYST.sha256), and the guard's files at gold-analyst
+main's head (`guard_config`). Since A7, A11 also holds that a verdict older than one the analyst already used is not
+fresh (decision 15), and A12 reads the owner's security-log events (`inbox_hook`, detection 2).
 
 Since A6 the agent's pushes are entries of the inbox's activity log (PINS.inbox_repo), counted only at or after
 PINS.inbox_from_utc. Without the inbox pins (a gold-analyst main from before A6) the judge reads pushes from
@@ -25,7 +31,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from . import derive, settle, stats
+from . import derive, sessionguard, settle, stats
 from .clock import Events, Holidays, Window, add_months_12, iso_week, parse_call_id, windows_between
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
@@ -100,6 +106,11 @@ BLIND_RUNS = 2                                 # A0 inbox_blind (fourth review, 
 # codes. With every A0 key and every `system_error:` entry they pause the analyst while the verdict carries them and
 # never retire it; every other VIOLATION key is an integrity key.
 OPERATIONAL_A12 = {"probe_failed", "app_scope", "routine_connectors", "inbox_identity", "inbox_config"}
+# §16.18 A7 (R-AN-55, R-AN-67, R-AN-86): the guard not acting, or its files wrong, is the system's fault.
+OPERATIONAL_A13 = {"guard_not_enforced", "guard_config"}
+OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13}
+C20_PATH = "analyst/canary/checks/C20.json"     # R-AN-74 C20: the probe session's root, when a run log has none
+SECURITY_LOG_FILTER = "repo:{} action:hook"     # R-AN-60 (A7, detection 2), with PINS.inbox_repo
 
 
 def _int(x) -> bool:
@@ -120,11 +131,11 @@ FIRST_SEEN_SLACK = dt.timedelta(minutes=10)   # R-AN-70: a verdict dated up to 1
 def operational(key: str) -> bool:
     """R-AN-55, R-AN-67 (fourth review of A6, J-4): a `violation_keys` entry that starts with `A0|` or
     `system_error:`, or whose check and code are A12 `probe_failed`, `app_scope`, `routine_connectors`,
-    `inbox_identity` or `inbox_config`."""
+    `inbox_identity` or `inbox_config`; (§16.18 A7) or A13 `guard_not_enforced` or `guard_config`."""
     if key.startswith(("A0|", "system_error:")):
         return True
     parts = key.split("|")
-    return len(parts) >= 2 and parts[0] == "A12" and parts[1] in OPERATIONAL_A12
+    return len(parts) >= 2 and parts[1] in OPERATIONAL.get(parts[0], ())
 
 
 def resumed_subject(reason):
@@ -235,6 +246,7 @@ class Judge:
         self.judge_adjudications = judge_adjudications or []
         self.judge_findings = judge_findings or []
         self._mode_at = {}
+        self._floor = None
         self._fresh = False
         self._diffs = {}
         self.F = Findings()
@@ -313,6 +325,7 @@ class Judge:
         self.safe("settlement_state", self.check_settlement_and_state)
         self.safe("mirror_source", self.check_mirror_source)
         self.safe("frozen", self.check_frozen)
+        self.safe("guard_config", self.check_guard_config)
         self.safe("history", self.check_history)
         self.summary["head"] = self.head
         return Result(self.F, self.head, self.evidence_new, self.summary)
@@ -1303,6 +1316,7 @@ class Judge:
                 if isinstance(x, dict):
                     runs.append((r, x))
         self.check_inbox_checks(exports)
+        self.safe("run_logs", self.check_run_logs, exports)
         model = self.pins.get("model")
         t_run = int(self.params.get("T_run_min") or 0)
         t_setup = int(self.params.get("T_setup_min") or 0)
@@ -1423,10 +1437,82 @@ class Judge:
                 config.append("deploy_keys")
             if ic.get("actions_enabled") is True:
                 config.append("actions_enabled")
+            # §16.18 A7, detection 2 (R-AN-60): the security log's webhook events on the inbox, event by event
+            events = ic.get("security_log_events")
+            if isinstance(events, list) and events:
+                hook.append(safe_detail("security_log_events", len(events)))
+            if ic.get("security_log_hook_events") is not None:
+                bad = self.security_log_gaps(ic)
+                if bad:
+                    self.F.w("A12", "inbox_checks_missing", r.path, r.commit, safe_detail(*bad), owner_attested=True)
             if hook:
                 self.F.v("A12", "inbox_hook", r.path, r.commit, safe_detail(*hook), owner_attested=True)
             if config:
                 self.F.v("A12", "inbox_config", r.path, r.commit, safe_detail(*config), owner_attested=True)
+
+    def security_log_gaps(self, ic):
+        """What keeps `inbox_checks`' security-log fields (R-AN-60, §16.18 A7 detection 2) from being consistent, while
+        `security_log_hook_events` is not null (C7 found that the log records the inbox's webhook events):
+        `security_log_events` missing, not a list, or of another length than the count (the register's rule); and
+        (judge decision J-D38) an entry that is not `{action, created_utc, actor}` with an R-C4 `created_utc`, or a
+        `security_log_filter` other than `repo:<PINS.inbox_repo> action:hook`, the filter the owner must apply."""
+        bad = []
+        events, n = ic.get("security_log_events"), ic.get("security_log_hook_events")
+        if not isinstance(events, list):
+            bad.append("security_log_events missing or not a list")
+        else:
+            if not (_int(n) and len(events) == n):
+                bad.append(safe_detail("security_log_events length", len(events), "count", n if _int(n) else "?"))
+            if not all(isinstance(e, dict) and isinstance(e.get("action"), str) and is_utc(e.get("created_utc"))
+                       and isinstance(e.get("actor"), str) for e in events):
+                bad.append("a security_log_events entry is not {action, created_utc, actor}")
+        want = SECURITY_LOG_FILTER.format(self.inbox or "Mohamedalhaaj/gold-analyst-inbox")
+        if ic.get("security_log_filter") != want:
+            bad.append("security_log_filter is not the register's")
+        return bad
+
+    # ================================================================ the session guard's run logs (A13, R-AN-86)
+    def check_run_logs(self, exports):
+        """A13 (§16.18 A7; R-AN-67, R-AN-86), owner-attested: each runs export, file by file by its path (J-D33), each
+        run with `created_utc` at or after PINS.inbox_from_utc (none without it, J-D20): its `tool_log`, missing or
+        `absent` (`tool_log_missing`), and each logged call classified by the guard's string rules (R-AN-85, as
+        `jlib/sessionguard.py` re-implements them) and R-AN-86's classes, with the session root P from the log, else
+        from `analyst/canary/checks/C20.json` at HEAD. A run of `analyst-probe` follows the probe routine's rules; any
+        other routine the four session routines' (judge decision J-D36)."""
+        if self.inbox_from is None:
+            return
+        since = parse_utc(self.inbox_from)
+        c20 = self.json_at_head(C20_PATH)
+        c20_root = sessionguard.norm_root(c20.get("project_dir")) if isinstance(c20, dict) else None
+        n_runs = n_calls = 0
+        for _path, r in sorted(exports.items()):
+            for x in r.rec.get("runs") or []:
+                if not isinstance(x, dict):
+                    continue
+                ct = _utc_or_none(x.get("created_utc"))
+                if ct is not None and ct < since:
+                    continue
+                run_id = safe_detail(x.get("run_id")) or "-"
+                tl = x.get("tool_log")
+                if not isinstance(tl, dict) or tl.get("form") not in ("full", "condensed", "absent") or \
+                        not isinstance(tl.get("calls"), list) or tl.get("form") == "absent":
+                    why = "no tool_log" if tl is None else ("form absent" if isinstance(tl, dict) and
+                                                             tl.get("form") == "absent" else "tool_log unreadable")
+                    self.F.w("A13", "tool_log_missing", r.path, run_id, why, owner_attested=True)
+                    continue
+                n_runs += 1
+                pd = tl.get("project_dir")
+                root = c20_root if pd is None else sessionguard.norm_root(pd)
+                probe = x.get("routine") == "analyst-probe"
+                for i, call in enumerate(tl["calls"], start=1):
+                    n_calls += 1
+                    seq = call.get("seq") if isinstance(call, dict) else None
+                    label = f"{run_id}#{seq if _int(seq) else f'i{i}'}"
+                    for code, detail in sessionguard.call_findings(call, root, probe):
+                        add = self.F.v if code in sessionguard.VIOLATIONS else self.F.w
+                        add("A13", code, r.path, label, safe_detail(detail), owner_attested=True)
+        self.summary["run_logs_scanned"] = n_runs
+        self.summary["run_log_calls_scanned"] = n_calls
 
     # ================================================================ the routines' connectors (A12, R-AN-61)
     def check_routine_config(self):
@@ -2085,17 +2171,62 @@ class Judge:
             cache[c] = (min(starts) if starts else None, day0("live_from"))
         return cache[c]
 
-    def fresh_at(self, commit) -> bool:
-        """analyst/STATE.json in `commit` shows `judge_verdict.fresh` true (R-AN-56, fourth review of A6, N2)."""
+    def verdict_at(self, commit):
+        """`judge_verdict` of analyst/STATE.json in `commit` (an object), or None."""
         if not commit or commit == "-":
-            return False
+            return None
         b = self.git.show(commit, "analyst/STATE.json")
         try:
             S = load_json_bytes(b) if b is not None else None
         except Exception:  # noqa: BLE001
-            return False
+            return None
         jv = S.get("judge_verdict") if isinstance(S, dict) else None
-        return isinstance(jv, dict) and jv.get("fresh") is True
+        return jv if isinstance(jv, dict) else None
+
+    def fresh_at(self, commit) -> bool:
+        """analyst/STATE.json in `commit` shows `judge_verdict.fresh` true (R-AN-56, fourth review of A6, N2)."""
+        jv = self.verdict_at(commit)
+        return jv is not None and jv.get("fresh") is True
+
+    def verdict_floor(self, commit):
+        """L_prev of `commit` (§16.18 A7 decision 15; R-AN-56, R-AN-67 A11, R-AN-70): the largest
+        `judge_verdict.last_fresh_asof_utc` among the versions of analyst/STATE.json in main's first-parent history
+        before that commit (the commit's own version not included); None when there is none."""
+        if self._floor is None:
+            self._floor, m = {}, None
+            for sha, _parent, changes in self.log:
+                self._floor[sha] = m
+                if any(p == "analyst/STATE.json" and st[:1] in ("A", "M", "T") for st, p in changes):
+                    jv = self.verdict_at(sha)
+                    t = _utc_or_none(jv.get("last_fresh_asof_utc")) if jv is not None else None
+                    if t is not None and (m is None or t > m):
+                        m = t
+        return self._floor.get(commit)
+
+    def older_verdict(self, commit) -> bool:
+        """Decision 15: the commit's analyst/STATE.json shows a `judge_verdict.asof_utc` earlier than L_prev, so the
+        analyst acted on a verdict older than one it had already used, which is not fresh. No condition while L_prev
+        is none; an `asof_utc` that is not an R-C4 time cannot be shown not to be earlier (judge decision J-D37)."""
+        floor = self.verdict_floor(commit)
+        if floor is None:
+            return False
+        jv = self.verdict_at(commit)
+        asof = _utc_or_none(jv.get("asof_utc")) if jv is not None else None
+        return asof is None or asof < floor
+
+    def p7_gaps(self, commit):
+        """The judge's recompute of P7 (R-AN-53) for a PROMOTED event, from analyst/STATE.json in the commit that added
+        it (judge decision J-D37): a fresh verdict (`judge_verdict.fresh` true) that is not VIOLATION and, since A7
+        (decision 15), not older than one the analyst had already used."""
+        jv = self.verdict_at(commit)
+        bad = []
+        if jv is None or jv.get("fresh") is not True:
+            bad.append("no fresh verdict")
+        elif jv.get("value") == "VIOLATION":
+            bad.append("verdict VIOLATION")
+        if self.older_verdict(commit):
+            bad.append("a verdict older than one already used")
+        return bad
 
     @staticmethod
     def mirrored(subject, paused, LS) -> bool:
@@ -2124,7 +2255,12 @@ class Judge:
           judge's ADJUDICATIONS.csv dated at or before the RETIRED event. A is the earliest clear time of the live
           integrity pauses that earlier RESUMED `clear:` events closed: the utc of the pause's earliest
           analyst/ADJUDICATIONS.csv clear row dated at or after its PAUSED event, else the RESUMED event's utc;
-        - `pause_early`: a PAUSED `judge_violation:<K>` or `judge_silent` dated before P0, or with no P0."""
+        - `pause_early`: a PAUSED `judge_violation:<K>` or `judge_silent` dated before P0, or with no P0.
+        - *(§16.18 A7, decision 15)* `resume_unsupported` for a `lifted:` resume, and `retire_unsupported` for a
+          RETIRED `violation`, whose commit's STATE.json shows a `judge_verdict.asof_utc` earlier than the largest
+          `last_fresh_asof_utc` of the versions before it (an older verdict is not fresh, R-AN-70); and
+          `promote_unsupported` for a PROMOTED event whose commit's STATE.json fails the judge's recompute of P7
+          (judge decision J-D37: a fresh verdict, not VIOLATION, not older)."""
         pause_rows = {}
         adj = self.bytes_at_head("analyst/ADJUDICATIONS.csv") or b""
         try:
@@ -2185,6 +2321,8 @@ class Judge:
                             why = "a lift of a pause only a clear ends"
                         elif not self.fresh_at(r.commit):
                             why = "its commit's STATE.json shows no fresh verdict"
+                        elif self.older_verdict(r.commit):
+                            why = "its commit's STATE.json shows a verdict older than one already used"
                         elif K is not None and not K.startswith(("A0|", "system_error:")) and \
                                 not any(c <= t for c in judge_rows.get(K, [])):
                             why = "a latched key without the judge's clear row"
@@ -2196,9 +2334,16 @@ class Judge:
                     arm_times.append(min(rows) if rows else t)
                 if subj is not None and subj in open_:
                     open_.pop(subj)
+            elif ev == "PROMOTED":
+                bad = self.p7_gaps(r.commit)
+                if bad:
+                    self.F.w("A11", "promote_unsupported", r.path, r.commit, safe_detail("P7 false", *bad))
             elif ev == "RETIRED" and reason == "violation":
                 if t is None or LS is None or t < LS:
                     self.F.w("A11", "retire_unsupported", r.path, r.commit, "a retirement before live_from")
+                elif self.older_verdict(r.commit):
+                    self.F.w("A11", "retire_unsupported", r.path, r.commit,
+                             "its commit's STATE.json shows a verdict older than one already used")
                 elif not arm_times:
                     self.F.w("A11", "retire_unsupported", r.path, r.commit,
                              "no earlier clear of a live integrity pause")
@@ -2273,19 +2418,55 @@ class Judge:
                          safe_detail(f"{len(miss)} register rows missing", f"{len(extra)} rows not in the register"))
         man = self.bytes_at_head("analyst/FROZEN_ANALYST.sha256")
         if man is not None:
+            listed = set()
             for line in man.decode("utf-8", "replace").split("\n"):
                 if not line.strip():
                     continue
                 sha, _, path = line.partition("  ")
+                listed.add(path)
                 x = self.bytes_at_head(path)
                 if x is None or sha256_bytes(x) != sha:
                     self.F.w("A11", "frozen_drift", path, "-", "file differs from FROZEN_ANALYST.sha256 at HEAD")
+            # §16.18 A7 (R-AN-7): the manifest lists the guard's files and the probe session's prompt, so that a
+            # change of the guard is frozen drift; unlisted, `guard.py` could not be checked at all (judge decision
+            # J-D39), since the judge never reads it otherwise (R-AN-66)
+            for path in sessionguard.FROZEN_A7:
+                if path not in listed:
+                    self.F.w("A11", "frozen_unlisted", path, "-", "not listed in FROZEN_ANALYST.sha256 (R-AN-7)")
         else:
             self.F.w("A11", "frozen_drift", "analyst/FROZEN_ANALYST.sha256", "-", "manifest missing")
-        for p in self.git.ls_tree(self.head):
-            base = p.rsplit("/", 1)[-1]
-            if base in ("CLAUDE.md", "AGENTS.md") or "/.claude/" in "/" + p:
-                self.F.v("A3", "forbidden_file", p, self.commit_of(p), "R1(a): no CLAUDE.md, AGENTS.md or .claude/")
+
+    # ================================================================ the guard's files (A13 guard_config)
+    def check_guard_config(self):
+        """A13 `guard_config` (§16.18 A7; R-AN-2 as replaced, R-AN-67, R-AN-85; prereg R1 Isolation (a), (f)),
+        VIOLATION, operational, at gold-analyst main's head: `.claude/settings.json` missing, not JSON, or parsed to
+        an object other than R-AN-85's; `.claude/hooks/guard.py` missing (never read here: A11 hashes it against
+        the manifest, R-AN-66); any other path under a `.claude/` folder (judge decision J-D40: at any depth); a file
+        named `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md` anywhere. Key `<path>|<blob sha>`, or
+        `absent`, so the same content keeps its key. (Before A7 a `CLAUDE.md`, `AGENTS.md` or `.claude/` was A3
+        `forbidden_file`; R-AN-2 as replaced makes it this operational code.)"""
+        tree = set(self.git.ls_tree(self.head))
+        for path in sessionguard.GUARD_FILES:
+            if path not in tree:
+                self.F.v("A13", "guard_config", path, "absent", "missing at main's head")
+        if sessionguard.SETTINGS_PATH in tree:
+            b = self.bytes_at_head(sessionguard.SETTINGS_PATH)
+            try:
+                obj = load_json_bytes(b) if b is not None else None
+                same = b is not None and compact_form(obj) == compact_form(sessionguard.GUARD_SETTINGS)
+            except Exception:  # noqa: BLE001
+                same = False
+            if not same:
+                self.F.v("A13", "guard_config", sessionguard.SETTINGS_PATH,
+                         self.git.object_id(self.head, sessionguard.SETTINGS_PATH) or "-",
+                         "not the object of R-AN-85")
+        for p in sorted(tree):
+            parts = p.split("/")
+            if p in sessionguard.GUARD_FILES:
+                continue
+            if ".claude" in parts[:-1] or parts[-1] in sessionguard.FORBIDDEN_NAMES:
+                self.F.v("A13", "guard_config", p, self.git.object_id(self.head, p) or "-",
+                         "a file a one-repository session would load (R-AN-2)")
 
     # ================================================================ history (A7)
     def check_history(self):

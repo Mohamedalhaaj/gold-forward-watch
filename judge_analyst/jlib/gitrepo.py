@@ -90,6 +90,14 @@ class GitRepo:
         self._cache[key] = data
         return data
 
+    def object_id(self, commit: str, path: str):
+        """The object id (blob sha) of path at commit, or None (A13 guard_config keys name a file's content)."""
+        if "\n" in path or "\0" in path:
+            return None
+        p = subprocess.run(["git", "-C", self.path, "rev-parse", "--verify", "-q", f"{commit}:{path}"],
+                           capture_output=True, text=True)
+        return p.stdout.strip() if p.returncode == 0 else None
+
     def ls_tree(self, commit: str, prefix: str = ""):
         """Paths of the tree of `commit` under `prefix` (one git call per commit, cached: commits are immutable)."""
         sha = self.rev(commit) if len(commit) != 40 else commit

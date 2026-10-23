@@ -156,9 +156,10 @@ def render_report(result, verdict, vkeys, ckeys, wkeys, wdone, first_seen, adj, 
     L.append(f"- **analyst_verdict: {verdict}**")
     L.append("")
     L.append("Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 "
-             "(with amendment 16.18 A6, the agent inbox). Model text is "
+             "(with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is "
              "never printed here: findings carry enums, field names, hashes and numbers only. Findings marked "
-             "(owner-attested) rest on the owner's weekly runs export (R-AN-60) or routine config export (R-AN-61). "
+             "(owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs "
+             "(A13, R-AN-86) and of the security log, or routine config export (R-AN-61). "
              "Session probe outcomes (A12 "
              "probe_failed, probe_incomplete) are self-reported by the session (R-AN-84).")
     L.append("")

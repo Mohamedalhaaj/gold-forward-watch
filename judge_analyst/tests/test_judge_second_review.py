@@ -89,7 +89,9 @@ def add_export(world, week, app="omit", when="2026-12-02T20:00:00Z"):
     rec = {"schema": "analyst-runs/1", "iso_week": week, "exported_utc": when, "attested_by": "owner",
            "routines": [], "runs": [],
            "inbox_checks": {"checked_utc": when, "hooks": 0, "deploy_keys": 1, "actions_enabled": False,
-                            "security_log_hook_events": 0}}
+                            "security_log_hook_events": 0,
+                            # §16.18 A7 (detection 2): the security log's filter and events, consistent
+                            "security_log_filter": f"repo:{INBOX} action:hook", "security_log_events": []}}
     if app != "omit":
         rec["inbox_checks"]["app_repositories"] = app
     path = f"analyst/runs/{week}.json"

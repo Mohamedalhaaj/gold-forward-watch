@@ -196,12 +196,15 @@ def test_A3_accepted_push_whose_diff_broke_scope(tmp_path):
 
 
 def test_A3_record_on_main_without_witness_and_forbidden_files(w):
+    """A CLAUDE.md anywhere was A3 `forbidden_file`; since §16.18 A7 (R-AN-2 as replaced) it is A13 `guard_config`,
+    an operational VIOLATION (tests/test_judge_session_guard.py has every case)."""
     w.repo.write("analyst/calls/2026-12-07_W2.json", b"{}\n")
     w.repo.write("docs/CLAUDE.md", b"x\n")
     owner_commit(w)
     res = w.judge()
     assert has(res, "A3", "unwitnessed_record", VIOLATION)
-    assert has(res, "A3", "forbidden_file", VIOLATION)
+    assert has(res, "A13", "guard_config", VIOLATION)
+    assert not has(res, "A3", "forbidden_file", VIOLATION)
 
 
 def test_A3_push_to_main_by_another_actor(w):
@@ -413,7 +416,8 @@ def test_A9_wrong_start(tmp_path):
 # ---------------------------------------------------------------- A10 owner-attested runs
 def test_A10_in_span_run_without_attempt_and_other_model(tmp_path):
     def runs(world, weeks):
-        wk = sorted(weeks)[0]
+        # the week of the 2026-11-30 runs (since §16.18 A7 the first export is the probe run's week)
+        wk = next(k for k, rows in sorted(weeks.items()) if any(x["run_id"] == "r-2026-11-30_W2-1" for x in rows))
         weeks[wk].append({"routine": "analyst-w2", "run_id": "r-extra", "session_id": "s-extra",
                           "created_utc": "2026-12-01T13:50:00Z", "status": "success", "model": "claude-opus-5-5",
                           "model_source": "get_run_log"})
@@ -609,7 +613,9 @@ def test_the_judge_reads_no_analyst_code(w, monkeypatch):
         r"|^analyst/(MODE|PARAMS|PINS|START|STATE|ROUTINE_CONFIG)\.json$"
         r"|^analyst/(ledger|ADJUDICATIONS|ops_changes)\.csv$"
         r"|^analyst/(tables|calendars)/"
-        r"|^analyst/FROZEN_ANALYST\.sha256$")
+        r"|^analyst/FROZEN_ANALYST\.sha256$"
+        r"|^\.claude/settings\.json$")            # §16.18 A7: parsed as JSON (R-AN-66, A13 guard_config)
     hashed_only = sorted({p for p in reads if not data.match(p)})
     assert set(hashed_only) <= listed, hashed_only
     assert not {"analyst/ga/merge.py", "analyst/run_window.py", "analyst/jobs/merge_job.py"} & set(reads)
+    assert ".claude/hooks/guard.py" in listed                  # the guard's code: only ever hashed (R-AN-66)

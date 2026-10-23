@@ -69,7 +69,12 @@ def test_a_run_writes_its_folders_and_leaves_the_analyst_clone_untouched(tmp_pat
                                           '"mode": "off", "note": "t", "set_utc": "2026-10-23T00:00:00Z"}\n')
     (ga / "analyst/ga").mkdir()
     (ga / "analyst/ga/__init__.py").write_text("raise SystemExit('the judge imported analyst code')\n")
-    _git(ga, "add", ".")
+    # §16.18 A7 (R-AN-85): the session guard's two files, else A13 guard_config; guard.py is never read or run
+    from world import GUARD_SETTINGS_BYTES
+    (ga / ".claude/hooks").mkdir(parents=True)
+    (ga / ".claude/settings.json").write_bytes(GUARD_SETTINGS_BYTES)
+    (ga / ".claude/hooks/guard.py").write_text("raise SystemExit('the judge ran the guard')\n")
+    _git(ga, "add", "-f", ".")
     _git(ga, "commit", "-q", "-m", "seed")
     head = _git(ga, "rev-parse", "HEAD").strip()
     out, site = tmp_path / "gfw/reports/judge_analyst", tmp_path / "gfw/reports/forward_site/judge_analyst"
@@ -106,6 +111,13 @@ def test_blind_the_judge_imports_only_the_standard_library_and_jlib():
         for mod, level in _imports(p):
             assert level > 0 or mod == "jlib" or mod in sys.stdlib_module_names or mod == "__future__", (p, mod)
         text = open(p, encoding="utf-8").read()
+        if p.endswith("sessionguard.py"):
+            # §16.18 A7: R-AN-85's allow-list is register text, the command lines the guard admits and R-AN-86's
+            # pattern for them, which the judge compares logged commands with; it never opens the script they name
+            from jlib import sessionguard
+            for line in sessionguard.NINE:
+                text = text.replace(f'"{line}"', "")
+            text = text.replace(sessionguard._RUN_WINDOW.pattern, "")
         assert "analyst/ga" not in text and "run_window" not in text, p
         assert "sys.path" not in text or p.endswith("run_judge.py"), p
     rj = open(os.path.join(JUDGE, "run_judge.py"), encoding="utf-8").read()

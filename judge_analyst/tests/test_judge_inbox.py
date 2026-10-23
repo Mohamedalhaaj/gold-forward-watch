@@ -580,7 +580,11 @@ def test_A12_inbox_hook_and_checks_missing(tmp_path):
         if wk == "2026-W48":
             del rec["inbox_checks"]
         else:
-            rec["inbox_checks"].update(hooks=1, deploy_keys=2, actions_enabled=True, security_log_hook_events=3)
+            rec["inbox_checks"].update(hooks=1, deploy_keys=2, actions_enabled=True, security_log_hook_events=3,
+                                       # §16.18 A7 (R-AN-60): the three events, event by event
+                                       security_log_events=[{"action": "hook.create", "actor": OWNER,
+                                                             "created_utc": f"2026-12-0{d}T10:00:00Z"}
+                                                            for d in (1, 2, 3)])
     world = World(str(tmp_path / "s"), hooks={"runs_record": rec_hook}, canary_days=("2026-11-27",),
                   live_from="2026-11-30", live_to="2026-12-01", now="2026-12-02T23:00:00Z").build()
     res = world.judge()

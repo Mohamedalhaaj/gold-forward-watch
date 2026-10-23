@@ -255,6 +255,7 @@ def test_A12_probe_flood_day_count_key_carries_its_day(m):
 def add_export(world, path, week, checks=None, app="inbox", when="2026-12-02T20:00:00Z"):
     """An owner runs export at `path` claiming `week` (create-only: a new file)."""
     ic = {"checked_utc": when, "hooks": 0, "deploy_keys": 1, "actions_enabled": False, "security_log_hook_events": 0,
+          "security_log_filter": f"repo:{INBOX} action:hook", "security_log_events": [],     # §16.18 A7
           "app_repositories": {"repository_selection": "selected", "full_names": [INBOX]}}
     if app != "inbox":
         ic["app_repositories"] = app
@@ -273,7 +274,9 @@ def add_export(world, path, week, checks=None, app="inbox", when="2026-12-02T20:
     ({"deploy_keys": 0}, ["inbox_config"]),
     ({"actions_enabled": True}, ["inbox_config"]),
     ({"hooks": 1}, ["inbox_hook"]),
-    ({"security_log_hook_events": 2}, ["inbox_hook"]),
+    ({"security_log_hook_events": 2,                    # §16.18 A7: the count with its events, event by event
+      "security_log_events": [{"action": a, "created_utc": "2026-12-02T10:00:00Z", "actor": OWNER}
+                              for a in ("hook.create", "hook.destroy")]}, ["inbox_hook"]),
     ({"hooks": 1, "actions_enabled": True}, ["inbox_config", "inbox_hook"]),
 ])
 def test_A12_inbox_config_is_its_own_code(m, checks, codes):
@@ -293,8 +296,9 @@ def test_A12_inbox_config_is_its_own_code(m, checks, codes):
 
 # ---------------------------------------------------------------- each runs export by its path (N3)
 def test_each_runs_export_is_judged_by_its_path(m):
-    """Two export files claiming the same iso_week are both judged (before, the second hid the first)."""
-    bad = "analyst/runs/2026-W48.json"
+    """Two export files claiming the same iso_week are both judged (before, the second hid the first). (Since
+    §16.18 A7 the small world exports its probe run in 2026-W48, so the planted file is a week without an export.)"""
+    bad = "analyst/runs/2026-W46.json"
     sha = add_export(m, bad, "2026-W49", {"hooks": 1},
                      app={"repository_selection": "selected", "full_names": [GA]})
     assert sorted(keys(m.judge())) == sorted([f"A12|inbox_hook|{bad}|{sha}", f"A12|app_scope|{bad}|{sha}"])
