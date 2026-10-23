@@ -1,0 +1,8 @@
+{
+ "analyst_verdict": "WARNING",
+ "asof_utc": "2026-10-23T08:38:40Z",
+ "cleared_keys": [],
+ "head_sha": "0e0df8369f999957cd05f26e8ae7704a6b483db0",
+ "schema": "analyst-verdict/1",
+ "violation_keys": []
+}

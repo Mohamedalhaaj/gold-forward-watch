@@ -1,0 +1,2 @@
+first_seen_utc,severity,check,key
+2026-10-23T08:38:40Z,WARNING,A11,A11|state_snapshot|analyst/STATE.json|-
