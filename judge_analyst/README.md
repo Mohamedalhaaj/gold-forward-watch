@@ -37,6 +37,8 @@ episode; every VIOLATION key names its incident (`inbox_identity` what was seen,
 `routine_connectors` also judges the version in force at PINS.inbox_from_utc; each runs export is judged by its own
 path; A11 checks the analyst's pause, lift and retirement events against R-AN-55's pause rule (`resume_unsupported`,
 `retire_unsupported`, `pause_early`); a Sunday backstop run. Tests: `tests/test_judge_fourth_review.py`.
+After J-5 (fifth review): A10's pause interval ends when inbox main first carries the RESUMED event, not at the
+event's `utc` (J-D34). Tests: `tests/test_judge_fifth_review.py`.
 
 Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
 token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
@@ -114,7 +116,7 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 | A7 | a create-only/write-once file modified or deleted in main's history; an append-only file changed other than by whole-line appends; a force push or deletion of main; main not descending from the judge's previous anchor | VIOLATION |
 | A8 | an expected window (MODE.json periods) with zero or two terminal witnesses / no terminal record; a terminal outside the mode's period. A6 `closer_raced`: a closer terminal for window w while a counting inbox entry on a `claude/analyst-*` ref, timed at or before w's deadline, pushed a commit whose diff adds exactly w's call path (key `A8|closer_raced|<terminal path>|<after>`) | VIOLATION |
 | A9 | START.json differs from R-AN-38 (first live called/stay_out, first_day rule, same commit as that terminal) | VIOLATION |
-| A10 | owner-attested (`analyst/runs/*.json`): an in-span run without an attempt (R-AN-60), a run on another model. Calls are disabled from a PAUSED event to its RESUMED (`clear:` or, since the fourth review, `lifted:`) and after RETIRED, in canary and live windows alike (J-D14, J-D31) | VIOLATION (owner-attested) |
+| A10 | owner-attested (`analyst/runs/*.json`): an in-span run without an attempt (R-AN-60), a run on another model. Calls are disabled from a PAUSED event to its RESUMED (`clear:` or, since the fourth review, `lifted:`) and after RETIRED, in canary and live windows alike (J-D14, J-D31); the RESUMED counts from the first inbox main push that carries it (J-D34) | VIOLATION (owner-attested) |
 | A11 | a re-downloaded hour file whose sha256 differs (its hour is left out of A4); settlement, opposite side, path summary, twin, ledger, E_n, state events or STATE.json recompute mismatch; mirror vs source; unmatched session id (`unverified_model`); vendored eproc/calendar/holiday table/frozen-manifest drift; record bytes not in the R-AN-3 form. Fourth review (J-4; R-AN-55, R-AN-56, R-AN-67): the analyst's state events replayed by seq against the pause rule, with P0 and LS from MODE.json in each event's commit: `resume_unsupported` (a `clear:` without an owner `pause` clear row dated from its PAUSED event to the RESUMED one, or of a mirrored pause or `judge_silent`; a `lifted:` whose commit's STATE.json shows no fresh verdict, of a live integrity pause or a `model:` pause, or of a latched key without the judge's clear row dated at or before it; a resume with no open pause), `retire_unsupported` (a RETIRED `violation` before LS, or with no earlier clear of a live integrity pause), `pause_early` (a PAUSED `judge_violation:` or `judge_silent` before P0, or with no P0) | WARNING + ADJUDICATIONS row |
 | A12 | A6, the repository boundary. gold-analyst: `ga_branch` (a branch other than main; pull refs ignored), `ga_tag` (a tag that is no `freeze_tag` of PINS.json in main's first-parent history, or whose peeled commit is not on main), `ga_tag_moved` (an allowed tag away from its first `ga_ref` row), `ga_run_branch` (a run of the day range off main), `ga_run_trigger` (a run from PINS.inbox_from_utc on outside R-AN-75's trigger table), `ga_dynamic_run` (WARNING: a `dynamic/` run). The inbox: `inbox_identity` (404, another id than PINS.inbox_repo_id, or private; fourth review: key `inbox\|<seen>`, `404`, `id-<id read>` or `private`), `inbox_main_foreign` (a counting main entry, or the listed main, not on gold-analyst main after one fresh fetch), `inbox_rewrite` (a counting `force_push` or `branch_deletion`; sha `after`, or `before` for a deletion), `inbox_ref` (a branch other than main and `claude/**`, or any tag; pull refs ignored), `inbox_runs` (`total_count` > 0; fourth review: the count is the key's sha slot), `inbox_rules` (WARNING: rule types missing for `inbox/rules/{main,claude/x,x}`, or `rules/claude/x` of gold-analyst lacking creation), `inbox_stale` (WARNING: inbox main a strict ancestor of gold-analyst main whose oldest missing commit is more than 30 min old). Probes (R-AN-84, self-reported): `probe_failed` (a canary call's `canary_probe` or a `checks/PROBE_<tag>.json` with a pass false, verdict `fail`, or an outcome its probe fails), `probe_incomplete` (WARNING: a canary call whose verdict is not `pass`). Owner-attested (R-AN-60): `inbox_hook` (`inbox_checks` with hooks > 0 or security-log hook events > 0), `inbox_config` (fourth review, J-4: deploy_keys ≠ 1 or Actions on; operational, R-AN-55), `inbox_checks_missing` (WARNING: no complete `inbox_checks` for a week with expected windows; second review: also an `inbox_checks` without a readable `app_repositories`). Second review: `app_scope` (owner-attested, SEC-1: `app_repositories` with a `repository_selection` other than `selected`, or naming gold-analyst, gold-forward-watch or xauusd-quant), `routine_connectors` (owner-attested, SEC-2: a version of `analyst/ROUTINE_CONFIG.json` committed to main at or after PINS.inbox_from_utc, or (fourth review, N3) the version in force at PINS.inbox_from_utc, in which a routine's `raw` lacks `mcp_connections` or `enabled_plugins` or holds a non-empty one; key: that version's commit), `probe_flood` (SEC-3: a listed `claude/probe-*` ref first seen at or after PINS.inbox_from_utc whose name is not `claude/probe-<c3\|del\|wf\|result>-<call_id\|pYYYYMMDDTHHMMSSZ>`, or more than 40 `branch_creation` entries on probe refs in one UTC day, key `inbox/refs/heads/claude/probe-*\|<YYYY-MM-DD>` since the fourth review). Each runs export file is judged on its own, by its path (fourth review, N3) | VIOLATION (the codes marked WARNING: WARNING) |
 
@@ -174,7 +176,8 @@ aged out); a cleared key never clears another (R-JV-4).
 - J-D13 `analyst/canary/hours/<day>.csv` is a snapshot (R-AN-72 fills the re-check the next day), not create-only.
 - J-D14 A10 uses PARAMS.json at HEAD for T_run and T_setup; calls count as disabled between PAUSED and its RESUMED and
   after RETIRED; MODE `off` periods are not reconstructed from history. (Fourth review, R-AN-67: a RESUMED's subject is
-  its reason after its first `clear:` or `lifted:`, so a lift ends an interval too; J-D31.)
+  its reason after its first `clear:` or `lifted:`, so a lift ends an interval too; J-D31. J-5: the interval ends when
+  the sessions could first read the RESUMED event, not at its `utc`; J-D34.)
 - J-D15 Only `analyst/START.json` is checked; a re-freeze's `START_<tag>.json` is not handled yet.
 - J-D16 (A6) The runs day range starts at today's date when there is neither a `VERDICTS.csv` row nor a
   PINS.inbox_from_utc. The anonymous fallback of the public reads restarts the whole read once, as R-AN-32's merge.
@@ -242,6 +245,21 @@ aged out); a cleared key never clears another (R-JV-4).
 - J-D33 (fourth review, N3) Runs exports are judged file by file, by path. For `inbox_checks_missing` a file stands
   for the week of its name (`analyst/runs/<iso_week>.json`) and for the `iso_week` it claims; `unverified_model` counts
   a week as exported the same way.
+- J-D34 (fifth review, blocker J-5; not yet in the register) A RESUMED event's `utc` is its settle run's t0, but the
+  sessions read STATE.json at inbox main (R-AN-24), which analyst-inbox-mirror moves only after the settle commit
+  reached gold-analyst main (R-AN-83), minutes or, when GitHub starts the mirror late, hours later. A fire in that gap
+  is refused `calls_disabled`, so A10's pause interval (J-D14) ends at:
+  1. the timestamp of the first counting inbox activity entry on `refs/heads/main` (live list or `inbox_activity`
+     evidence rows, in (timestamp, id) order; `branch_deletion` and a zero `after` left out) whose `after` has the
+     commit that added the RESUMED event as an ancestor (main's first-parent order, else git after the one fresh
+     fetch; an `after` the clone cannot find never matches);
+  2. else, when `git ls-remote` lists inbox main at a commit that lacks the event's commit: not yet, the interval
+     stays open. Inbox main only fast-forwards (R-AN-83), so no session has read the lift; a later judge run, after
+     the mirror push, judges those fires again. This keeps a judge run during a mirror lag from latching a VIOLATION;
+  3. else (no inbox pinned, no such entry known, inbox main unread or not in the clone): 30 minutes after the event's
+     `utc`, the mirror lag `inbox_stale` treats as normal (`LIFT_GRACE`).
+  Never before the event's own `utc`. Only the end moves: an interval still starts at the PAUSED (or RETIRED) event's
+  `utc`, which is earlier than the sessions see it and so only excuses more. The same holds for `clear:` resumes.
 
 ## Open points
 
@@ -277,4 +295,9 @@ aged out); a cleared key never clears another (R-JV-4).
    code. To log in the register before the freeze: J-D29..J-D33. Not covered: a lift or clear lands in an
    analyst-settle commit, but sessions read STATE.json from inbox main, which the mirror updates afterwards; a fire in
    that gap is still refused, and A10 can then report it as an in-span run without an attempt (pre-existing, and
-   longer when GitHub starts the mirror late).
+   longer when GitHub starts the mirror late). *(Resolved by J-D34, below.)*
+10. **J-5 (2026-10-23), branch `analyst-judge-inbox`, not merged or pushed.** Built test-first
+    (`tests/test_judge_fifth_review.py`) without reading the analyst code. A10's pause interval now ends when inbox
+    main first carries the RESUMED event's commit (J-D34). To log in the register before the freeze: J-D34, in
+    particular its fallback grace (30 minutes, the `inbox_stale` lag; the register has no fallback grace for this
+    yet) and the open interval while `git ls-remote` shows inbox main without the lift.

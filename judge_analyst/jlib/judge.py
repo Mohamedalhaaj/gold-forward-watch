@@ -84,6 +84,10 @@ INBOX_RULES = {"main": {"update", "deletion", "non_fast_forward"}, "claude/x": {
                "x": {"creation"}}
 GA_RULES = {"claude/x": {"creation"}}
 STALE = dt.timedelta(minutes=30)               # A12 inbox_stale (R-AN-83)
+# J-5 (judge decision J-D34): a lift with no known inbox main push that carried it reaches the sessions this long after
+# its event, the mirror lag the judge treats as normal (A12 inbox_stale); A10's pause intervals.
+LIFT_GRACE = STALE
+NEVER = dt.datetime.max.replace(tzinfo=UTC)
 INBOX_CHECK_TYPES = {"checked_utc": (str,), "hooks": (int,), "deploy_keys": (int,), "actions_enabled": (bool,),
                      "security_log_hook_events": (int, type(None))}
 # The second review of A6 (2026-10-23, register §16.18 A6 decisions 20-23; R-AN-60, R-AN-61, R-AN-66, R-AN-67).
@@ -1329,7 +1333,7 @@ class Judge:
                 hi = w.deadline - dt.timedelta(minutes=t_run + t_setup)
                 if not (w.span_lo <= cu <= hi) or self.holidays.window_holiday(w):
                     continue
-                if any(a <= cu < b for a, b in pauses):          # J-D31: canary windows too (R-AN-55)
+                if any(a <= cu < b for a, b in pauses):          # J-D31: canary windows too (R-AN-55); J-D34
                     continue
                 if cid not in acc_by_mode[mode]:
                     self.F.v("A10", "in_span_without_attempt", r.path, r.commit, safe_detail("run", x.get("run_id"),
@@ -1680,15 +1684,16 @@ class Judge:
     def pause_intervals(self):
         """[(start, end)] UTC datetimes when calls were disabled (PAUSED..RESUMED, RETIRED..; judge decision J-D14).
         A RESUMED event closes the subject after its first `clear:` or `lifted:` (fourth review of A6, R-AN-67), and
-        the intervals cover canary and live windows alike (J-D31)."""
+        the intervals cover canary and live windows alike (J-D31). Since J-5 (judge decision J-D34) an interval ends
+        when the sessions could first read the RESUMED event (`lift_seen`), not at the event's `utc`."""
         out = []
         evs = []
         for p, r in sorted(self.records("analyst/state/").items()):
             if isinstance(r.rec, dict) and r.rec.get("schema") == "analyst-state-event/1":
-                evs.append(r.rec)
-        evs.sort(key=lambda e: e.get("seq") or 0)
+                evs.append((r.rec, r.commit))
+        evs.sort(key=lambda x: x[0].get("seq") or 0)
         open_ = {}
-        for e in evs:
+        for e, commit in evs:
             try:
                 t = parse_utc(e.get("utc"))
             except (ValueError, TypeError):
@@ -1698,12 +1703,55 @@ class Judge:
             elif e.get("event") == "RESUMED":
                 _kind, subj = resumed_subject(e.get("reason"))
                 if subj is not None and subj in open_:
-                    out.append((open_.pop(subj), t))
+                    out.append((open_.pop(subj), self.lift_seen(t, commit)))
             elif e.get("event") == "RETIRED":
-                out.append((t, dt.datetime.max.replace(tzinfo=UTC)))
+                out.append((t, NEVER))
         for t in open_.values():
-            out.append((t, dt.datetime.max.replace(tzinfo=UTC)))
+            out.append((t, NEVER))
         return out
+
+    def lift_seen(self, t, commit):
+        """When the sessions could first read a RESUMED event dated `t` and added in `commit` (J-5, judge decision
+        J-D34). `t` is the settle run's t0; its commit reaches gold-analyst main later, and analyst-inbox-mirror
+        carries it to inbox main later still (R-AN-83), where `start` reads STATE.json (R-AN-24). So:
+        1. the timestamp of the first counting inbox activity entry on `refs/heads/main` (live list or `inbox_activity`
+           evidence rows, in (timestamp, id) order) whose `after` has `commit` as an ancestor;
+        2. else, when `git ls-remote` lists inbox main at a commit that lacks `commit`: not yet (NEVER). Inbox main
+           only fast-forwards, so no session has read the event;
+        3. else (no inbox pinned, no such entry known, inbox main unread or unknown): `t` + LIFT_GRACE.
+        Never before `t` itself."""
+        for e in getattr(self, "inbox_entries", None) or []:
+            if self.counts(e) and e["ref"] == "refs/heads/main" and not _zero(e["after"]) and \
+                    e["type"] != "branch_deletion" and self.holds(e["after"], commit):
+                try:
+                    return max(t, parse_utc(e["ts"]))
+                except ValueError:
+                    continue
+        main = next((sha for sha, ref in getattr(self, "inbox_ls", None) or [] if ref == "refs/heads/main"), None)
+        if main is not None and self.holds(main, commit) is False:
+            return NEVER
+        return t + LIFT_GRACE
+
+    def holds(self, sha, commit):
+        """True when gold-analyst commit `sha` has `commit` as an ancestor (or is it), False when not, None when either
+        is unknown to the clone (after the one fresh fetch of gold-analyst main). Main's first-parent history answers
+        without git; any other commit is asked of git."""
+        if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha) or \
+                not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+            return None
+        if sha == commit:
+            return True
+        if getattr(self, "_fp_pos", None) is None:
+            self._fp_pos = {c: i for i, (c, _parent, _changes) in enumerate(self.log)}
+        if sha in self._fp_pos and commit in self._fp_pos:
+            return self._fp_pos[sha] >= self._fp_pos[commit]
+        if not self.git.commit_exists(sha):
+            self.fresh_head()
+            if not self.git.commit_exists(sha):
+                return None
+        if not self.git.commit_exists(commit):
+            return None
+        return self.git.is_ancestor(commit, sha)
 
     # ================================================================ settlement, twins, E, K, states, ledger (A11)
     def check_settlement_and_state(self):
