@@ -1,0 +1,63 @@
+# analyst-export (xauusd-quant IMPLEMENTATION_REGISTER.md R-AN-12): mirrors the analyst's allowed inputs into the
+# public repository Mohamedalhaaj/gold-analyst (mirror/** only). Script only. It needs, as repository secrets of
+# gold-forward-watch, ANALYST_MIRROR_DEPLOY_KEY: the private half of a deploy key with write access on gold-analyst
+# (that key can reach no other repository). Its push to gold-analyst main starts analyst-settle there.
+# `workflow_run` needs this file on the default branch, so the export runs only after this branch is merged.
+name: analyst-export
+
+on:
+  workflow_run:
+    workflows: [system]
+    types: [completed]
+  schedule:
+    - cron: "10 5,11,17 * * 1-6"
+  workflow_dispatch:
+
+concurrency:
+  group: analyst-export
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: gfw
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Mohamedalhaaj/gold-analyst
+          ref: main
+          path: ga
+          fetch-depth: 0
+          ssh-key: ${{ secrets.ANALYST_MIRROR_DEPLOY_KEY }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Export
+        run: python -I gfw/analysis/analyst_export/export.py --source gfw --dest ga --run-id "$GITHUB_RUN_ID"
+
+      - name: Commit and push the mirror
+        working-directory: ga
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mirror
+          outside=$(git diff --cached --name-only | grep -v '^mirror/' || true)
+          if [ -n "$outside" ]; then echo "staged outside mirror/"; exit 1; fi
+          changed=$(git diff --cached --name-only | grep -v '^mirror/exports.csv$' || true)
+          if [ -z "$changed" ]; then echo "no new input"; exit 0; fi
+          git commit -q -m "analyst mirror $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3 4 5; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            echo "push attempt $i failed"; sleep 20
+          done
+          exit 1
