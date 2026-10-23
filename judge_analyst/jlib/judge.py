@@ -27,8 +27,9 @@ from dataclasses import dataclass, field
 
 from . import derive, settle, stats
 from .clock import Events, Holidays, Window, add_months_12, iso_week, parse_call_id, windows_between
-from .common import (UTC, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes, norm_api_time,
-                     num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes, sha256_compact)
+from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
+                     norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
+                     sha256_compact)
 from .context import compare_context, rebuild_context
 from .m1 import DaysTable, Store
 
@@ -111,6 +112,9 @@ def _zero(sha) -> bool:
 
 def _id_key(aid: str):
     return (0, int(aid), "") if aid.isdigit() else (1, 0, aid)
+
+
+FIRST_SEEN_SLACK = dt.timedelta(minutes=10)   # R-AN-70: a verdict dated up to 10 min after a settle run counts
 
 
 def operational(key: str) -> bool:
@@ -208,11 +212,13 @@ class Result:
 class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
-                 prev_judge_utc=None, judge_adjudications=None):
+                 prev_judge_utc=None, judge_adjudications=None, judge_findings=None):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
         judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
-        ADJUDICATIONS.csv (R-AN-70; the A11 check of a `lifted:` resume of a latched key, fourth review of A6)."""
+        ADJUDICATIONS.csv (R-AN-70; the A11 check of a `lifted:` resume of a latched key, fourth review of A6);
+        judge_findings are the rows of its FINDINGS.csv before this run (the A11 check of a retirement by time,
+        sixth review of A6, R6-2)."""
         self.git = git
         self.now_s = now_utc
         self.now = parse_utc(now_utc)
@@ -227,6 +233,7 @@ class Judge:
         self.fresh_main = fresh_main
         self.prev_judge_utc = prev_judge_utc
         self.judge_adjudications = judge_adjudications or []
+        self.judge_findings = judge_findings or []
         self._mode_at = {}
         self._fresh = False
         self._diffs = {}
@@ -2110,7 +2117,13 @@ class Judge:
           for K in the judge's ADJUDICATIONS.csv dated at or before the RESUMED event; and (judge decision J-D30) a
           RESUMED whose reason is neither, or whose subject has no open pause;
         - `retire_unsupported`: a RETIRED `violation` dated before LS, or with no earlier RESUMED
-          `clear:judge_violation:K'` event for a live integrity pause (the analyst was not armed);
+          `clear:judge_violation:K'` event for a live integrity pause (the analyst was not armed); *(sixth review,
+          R6-2)* or that no integrity key supports by time: a VIOLATION key of the judge's FINDINGS.csv, not
+          operational, first seen strictly after the arming time A and no later than 10 min after the RETIRED
+          event (R-AN-70's tolerance), with no earlier PAUSED event for its subject and no clear row for it in the
+          judge's ADJUDICATIONS.csv dated at or before the RETIRED event. A is the earliest clear time of the live
+          integrity pauses that earlier RESUMED `clear:` events closed: the utc of the pause's earliest
+          analyst/ADJUDICATIONS.csv clear row dated at or after its PAUSED event, else the RESUMED event's utc;
         - `pause_early`: a PAUSED `judge_violation:<K>` or `judge_silent` dated before P0, or with no P0."""
         pause_rows = {}
         adj = self.bytes_at_head("analyst/ADJUDICATIONS.csv") or b""
@@ -2126,8 +2139,14 @@ class Judge:
             t = _utc_or_none(a.get("utc"))
             if a.get("ref") == "latch" and a.get("decision") == "clear" and t is not None:
                 judge_rows.setdefault(a.get("subject"), []).append(t)
+        first_seen = {}                       # the judge's FINDINGS.csv: VIOLATION key -> first_seen_utc
+        for row in self.judge_findings:
+            ft = _utc_or_none(row.get("first_seen_utc"))
+            if ft is not None and row.get("severity") == VIOLATION and row.get("key"):
+                first_seen[row["key"]] = ft
         open_ = {}
-        armed = False
+        ever_paused = set()
+        arm_times = []                        # the clear times of the live integrity pauses cleared so far
         for r in evs:
             e = r.rec
             ev, reason = e.get("event"), str(e.get("reason") or "")
@@ -2138,6 +2157,7 @@ class Judge:
                         (P0 is None or t < P0):
                     self.F.w("A11", "pause_early", r.path, r.commit,
                              safe_detail("paused before P0", fmt_utc(P0) if P0 else "no period set"))
+                ever_paused.add(reason)
                 if t is not None:
                     open_.setdefault(reason, t)
             elif ev == "RESUMED":
@@ -2171,15 +2191,25 @@ class Judge:
                 if why:
                     self.F.w("A11", "resume_unsupported", r.path, r.commit, why)
                 if kind == "clear" and live_int:
-                    armed = True                      # a live integrity pause the owner cleared (R-AN-55 step 2)
+                    # a live integrity pause the owner cleared (R-AN-55 step 2): its clear time is its row's utc
+                    rows = [c for c in pause_rows.get(subj, []) if c >= paused]
+                    arm_times.append(min(rows) if rows else t)
                 if subj is not None and subj in open_:
                     open_.pop(subj)
             elif ev == "RETIRED" and reason == "violation":
                 if t is None or LS is None or t < LS:
                     self.F.w("A11", "retire_unsupported", r.path, r.commit, "a retirement before live_from")
-                elif not armed:
+                elif not arm_times:
                     self.F.w("A11", "retire_unsupported", r.path, r.commit,
                              "no earlier clear of a live integrity pause")
+                else:
+                    A = min(arm_times)
+                    if not any(A < ft <= t + FIRST_SEEN_SLACK and not operational(K)
+                               and f"judge_violation:{K}" not in ever_paused
+                               and not any(c <= t for c in judge_rows.get(K, []))
+                               for K, ft in first_seen.items()):
+                        self.F.w("A11", "retire_unsupported", r.path, r.commit,
+                                 safe_detail("no integrity key first seen after the live clear", fmt_utc(A)))
 
     # ================================================================ mirror vs source (A11)
     def check_mirror_source(self):

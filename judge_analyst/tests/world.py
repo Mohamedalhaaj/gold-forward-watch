@@ -946,18 +946,22 @@ class World:
         return data
 
     def judge(self, out_dir=None, api=None, hours=None, store=True, now=None, prev_anchor=None, evidence=None,
-              fetch=None, fresh_main=None, prev_judge_utc=None, adjudications=None):
-        """adjudications: the judge's own ADJUDICATIONS.csv rows (R-AN-70); default: that file in out_dir, if any."""
+              fetch=None, fresh_main=None, prev_judge_utc=None, adjudications=None, findings=None):
+        """adjudications: the judge's own ADJUDICATIONS.csv rows (R-AN-70); default: that file in out_dir, if any.
+        findings: its FINDINGS.csv rows before the run (sixth review of A6, R6-2); default: that file in out_dir."""
         from jlib import report
         from jlib.gitrepo import GitRepo
         if adjudications is None and out_dir:
             adjudications = report.read_csv(os.path.join(out_dir, "ADJUDICATIONS.csv"), report.ADJ_HEADER)
+        if findings is None and out_dir:
+            findings = report.read_csv(os.path.join(out_dir, "FINDINGS.csv"), report.FINDINGS_HEADER)
         git = GitRepo(self.repo.path)
         hs = hours or HourSource(FakeHourFetcher(self.hour_files), os.path.join(out_dir, "hours.csv")
                                  if out_dir else None, now or self.now)
         sg = GitRepo(self.src.path) if store else None
         extra = {k: v for k, v in (("fresh_main", fresh_main), ("prev_judge_utc", prev_judge_utc),
-                                   ("judge_adjudications", adjudications or None)) if v is not None}
+                                   ("judge_adjudications", adjudications or None),
+                                   ("judge_findings", findings or None)) if v is not None}
         j = Judge(git, now or self.now, api=api if api is not None else FakeGitHub(self.api_data(), repo=GA),
                   hours=hs, store_git=sg, evidence_rows=evidence or [], prev_anchor=prev_anchor, fetch_commit=fetch,
                   **extra)

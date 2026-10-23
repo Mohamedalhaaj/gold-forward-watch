@@ -11,7 +11,10 @@ Files (all written by the judge workflow only, except ADJUDICATIONS.csv, which i
                    head_sha is the anchor of the next run's A7 check.
 - evidence.csv     append-only, R-AN-69's columns, one row per item first seen.
 - hours.csv        append-only, the judge's hour-file cache (sources.HOURS_HEADER).
-- analyst_verdict.json (`analyst-verdict/1`) and REPORT.md: snapshots.
+- analyst_verdict.json (`analyst-verdict/1`) and REPORT.md: snapshots. Since the sixth review of A6 (R6-2,
+                   R-AN-70) the verdict also carries `violation_first_seen`: for each key of `violation_keys` with a
+                   FINDINGS.csv row, its `first_seen_utc` (A0 keys and `system_error:` entries have none), so that
+                   the analyst retires only for a key first seen after a live clear, by time (R-AN-55 step 2).
 
 VIOLATION keys latch: a key once seen stays in force until its clear row, even when a later run cannot re-find it
 (an API entry that aged out, say). WARNINGs are recomputed every run and count while unadjudicated. A0 findings
@@ -134,7 +137,8 @@ def write_outputs(result, out_dir, now_utc, code_sha8, hour_source=None):
                [{"judge_utc": now_utc, "head_sha": result.head, "analyst_verdict": verdict,
                  "n_violation_keys": len(vkeys), "n_warning_keys": len(wkeys), "code_sha8": code_sha8}])
     vobj = {"schema": "analyst-verdict/1", "asof_utc": now_utc, "head_sha": result.head, "analyst_verdict": verdict,
-            "violation_keys": vkeys, "cleared_keys": ckeys}
+            "violation_keys": vkeys, "cleared_keys": ckeys,
+            "violation_first_seen": {k: first_seen[k]["first_seen_utc"] for k in vkeys if k in first_seen}}
     with open(os.path.join(out_dir, "analyst_verdict.json"), "w", encoding="utf-8") as f:
         f.write(json.dumps(vobj, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
     with open(os.path.join(out_dir, "REPORT.md"), "w", encoding="utf-8") as f:

@@ -556,13 +556,20 @@ def test_retire_unsupported(m):
                                             key_of("retire_unsupported", unarmed[0], s2)])
 
 
-def test_retirement_after_a_live_clear_is_supported(m):
-    """Armed: a live integrity pause the owner cleared; a new integrity key after it retires the analyst."""
+def test_retirement_after_a_live_clear_is_supported(m, tmp_path):
+    """Armed: a live integrity pause the owner cleared; a new integrity key after it retires the analyst. (Sixth
+    review, R6-2: "after" by time, the key's first_seen_utc in the judge's FINDINGS.csv after the clear row's utc.)"""
     plant(m, [("PAUSED", f"judge_violation:{K_INT}", "2026-12-01T10:00:00Z")], "2026-12-01T10:05:00Z")
     plant(m, [("RESUMED", f"clear:judge_violation:{K_INT}", "2026-12-01T13:00:00Z")], "2026-12-01T13:05:00Z",
           adj=[pause_row(f"judge_violation:{K_INT}", "2026-12-01T12:00:00Z")])
     plant(m, [("RETIRED", "violation", "2026-12-02T10:00:00Z")], "2026-12-02T10:05:00Z")
-    assert state_keys(m.judge()) == []
+    out = tmp_path / "out"
+    os.makedirs(out)
+    k2 = "A3|agent_scope|inbox/refs/heads/claude/analyst-y|" + "c" * 40
+    report.append_csv(str(out / "FINDINGS.csv"), report.FINDINGS_HEADER,
+                      [{"first_seen_utc": "2026-12-01T09:50:00Z", "severity": VIOLATION, "check": "A3", "key": K_INT},
+                       {"first_seen_utc": "2026-12-02T09:50:00Z", "severity": VIOLATION, "check": "A3", "key": k2}])
+    assert state_keys(m.judge(out_dir=str(out))) == []
 
 
 def test_an_armed_retirement_dated_before_live_from_is_unsupported(m):

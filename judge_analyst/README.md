@@ -3,8 +3,8 @@
 The independent judge of Analyst v1 (xauusd-quant `research/analyst/ANALYST_V1_PREREG.md` DRAFT v0.6, §8 as amended
 by "Change v0.5" M7 and "Change v0.6"; `research/system/IMPLEMENTATION_REGISTER.md` §16, R-AN-66..R-AN-70 and the items
 they cite, with the dated amendment §16.18 A6, the agent inbox, as revised after its review, its second review, its
-fourth review and its fifth review; xauusd-quant 62a0d80, fourth review 5d7fcdc, fifth review 166c6b0). A6 binds once
-the client approves its text; until then it is the build's target.
+fourth review, its fifth review and its sixth review; xauusd-quant 62a0d80, fourth review 5d7fcdc, fifth review
+166c6b0, sixth review decision 35). A6 binds once the client approves its text; until then it is the build's target.
 It was built **blind**: from the prereg, the register and the record locations the register names, without reading
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
 adjudicate (`spec_gap`, `judge_error` or `system_error`, as J5).
@@ -41,6 +41,9 @@ After J-5 (fifth review, register decision 33): A10 judges calls as inbox main s
 when inbox main first held its PAUSED event (else the event's `utc`) to when it first held its RESUMED event, open while
 that is unknown, and a run is not judged when an interval meets [its created_utc, its window's deadline_utc − T_run]
 (J-D34). Tests: `tests/test_judge_fifth_review.py`.
+After R6-2 (sixth review, register decision 35): the verdict carries each key's first-seen time
+(`violation_first_seen`), and A11 `retire_unsupported` judges a retirement by time: an integrity key first seen
+after the owner's earliest live clear row (J-D35). Tests: `tests/test_judge_sixth_review.py`.
 
 Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
 token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
@@ -119,7 +122,7 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 | A8 | an expected window (MODE.json periods) with zero or two terminal witnesses / no terminal record; a terminal outside the mode's period. A6 `closer_raced`: a closer terminal for window w while a counting inbox entry on a `claude/analyst-*` ref, timed at or before w's deadline, pushed a commit whose diff adds exactly w's call path (key `A8|closer_raced|<terminal path>|<after>`) | VIOLATION |
 | A9 | START.json differs from R-AN-38 (first live called/stay_out, first_day rule, same commit as that terminal) | VIOLATION |
 | A10 | owner-attested (`analyst/runs/*.json`): an in-span run without an attempt (R-AN-60), a run on another model. Calls are disabled as inbox main showed them (R-AN-67, A10's pause intervals; decision 33): from a PAUSED event to its RESUMED (`clear:` or, since the fourth review, `lifted:`) and after RETIRED, each event counted from when inbox main first held it (V); while V is unknown a PAUSED or RETIRED counts from its `utc` and the interval stays open past its RESUMED; in canary and live windows alike (J-D14, J-D31, J-D34). A run is not judged when an interval meets [its created_utc, deadline_utc − T_run] | VIOLATION (owner-attested) |
-| A11 | a re-downloaded hour file whose sha256 differs (its hour is left out of A4); settlement, opposite side, path summary, twin, ledger, E_n, state events or STATE.json recompute mismatch; mirror vs source; unmatched session id (`unverified_model`); vendored eproc/calendar/holiday table/frozen-manifest drift; record bytes not in the R-AN-3 form. Fourth review (J-4; R-AN-55, R-AN-56, R-AN-67): the analyst's state events replayed by seq against the pause rule, with P0 and LS from MODE.json in each event's commit: `resume_unsupported` (a `clear:` without an owner `pause` clear row dated from its PAUSED event to the RESUMED one, or of a mirrored pause or `judge_silent`; a `lifted:` whose commit's STATE.json shows no fresh verdict, of a live integrity pause or a `model:` pause, or of a latched key without the judge's clear row dated at or before it; a resume with no open pause), `retire_unsupported` (a RETIRED `violation` before LS, or with no earlier clear of a live integrity pause), `pause_early` (a PAUSED `judge_violation:` or `judge_silent` before P0, or with no P0) | WARNING + ADJUDICATIONS row |
+| A11 | a re-downloaded hour file whose sha256 differs (its hour is left out of A4); settlement, opposite side, path summary, twin, ledger, E_n, state events or STATE.json recompute mismatch; mirror vs source; unmatched session id (`unverified_model`); vendored eproc/calendar/holiday table/frozen-manifest drift; record bytes not in the R-AN-3 form. Fourth review (J-4; R-AN-55, R-AN-56, R-AN-67): the analyst's state events replayed by seq against the pause rule, with P0 and LS from MODE.json in each event's commit: `resume_unsupported` (a `clear:` without an owner `pause` clear row dated from its PAUSED event to the RESUMED one, or of a mirrored pause or `judge_silent`; a `lifted:` whose commit's STATE.json shows no fresh verdict, of a live integrity pause or a `model:` pause, or of a latched key without the judge's clear row dated at or before it; a resume with no open pause), `retire_unsupported` (a RETIRED `violation` before LS, or with no earlier clear of a live integrity pause; sixth review, R6-2: or with no integrity key of FINDINGS.csv first seen after the earliest live clear row's utc and at most 10 min after the event, unpaused and not cleared with the judge before it, J-D35), `pause_early` (a PAUSED `judge_violation:` or `judge_silent` before P0, or with no P0) | WARNING + ADJUDICATIONS row |
 | A12 | A6, the repository boundary. gold-analyst: `ga_branch` (a branch other than main; pull refs ignored), `ga_tag` (a tag that is no `freeze_tag` of PINS.json in main's first-parent history, or whose peeled commit is not on main), `ga_tag_moved` (an allowed tag away from its first `ga_ref` row), `ga_run_branch` (a run of the day range off main), `ga_run_trigger` (a run from PINS.inbox_from_utc on outside R-AN-75's trigger table), `ga_dynamic_run` (WARNING: a `dynamic/` run). The inbox: `inbox_identity` (404, another id than PINS.inbox_repo_id, or private; fourth review: key `inbox\|<seen>`, `404`, `id-<id read>` or `private`), `inbox_main_foreign` (a counting main entry, or the listed main, not on gold-analyst main after one fresh fetch), `inbox_rewrite` (a counting `force_push` or `branch_deletion`; sha `after`, or `before` for a deletion), `inbox_ref` (a branch other than main and `claude/**`, or any tag; pull refs ignored), `inbox_runs` (`total_count` > 0; fourth review: the count is the key's sha slot), `inbox_rules` (WARNING: rule types missing for `inbox/rules/{main,claude/x,x}`, or `rules/claude/x` of gold-analyst lacking creation), `inbox_stale` (WARNING: inbox main a strict ancestor of gold-analyst main whose oldest missing commit is more than 30 min old). Probes (R-AN-84, self-reported): `probe_failed` (a canary call's `canary_probe` or a `checks/PROBE_<tag>.json` with a pass false, verdict `fail`, or an outcome its probe fails), `probe_incomplete` (WARNING: a canary call whose verdict is not `pass`). Owner-attested (R-AN-60): `inbox_hook` (`inbox_checks` with hooks > 0 or security-log hook events > 0), `inbox_config` (fourth review, J-4: deploy_keys ≠ 1 or Actions on; operational, R-AN-55), `inbox_checks_missing` (WARNING: no complete `inbox_checks` for a week with expected windows; second review: also an `inbox_checks` without a readable `app_repositories`). Second review: `app_scope` (owner-attested, SEC-1: `app_repositories` with a `repository_selection` other than `selected`, or naming gold-analyst, gold-forward-watch or xauusd-quant), `routine_connectors` (owner-attested, SEC-2: a version of `analyst/ROUTINE_CONFIG.json` committed to main at or after PINS.inbox_from_utc, or (fourth review, N3) the version in force at PINS.inbox_from_utc, in which a routine's `raw` lacks `mcp_connections` or `enabled_plugins` or holds a non-empty one; key: that version's commit), `probe_flood` (SEC-3: a listed `claude/probe-*` ref first seen at or after PINS.inbox_from_utc whose name is not `claude/probe-<c3\|del\|wf\|result>-<call_id\|pYYYYMMDDTHHMMSSZ>`, or more than 40 `branch_creation` entries on probe refs in one UTC day, key `inbox/refs/heads/claude/probe-*\|<YYYY-MM-DD>` since the fourth review). Each runs export file is judged on its own, by its path (fourth review, N3) | VIOLATION (the codes marked WARNING: WARNING) |
 
 Independence: E_n and K are recomputed in pure Python (the test suite checks them against the lab's frozen
@@ -134,7 +137,9 @@ register's R-AN-8 table.
   (R-AN-70; P7 and the pause rule). `--site none` skips it.
 
 - `analyst_verdict.json` (`analyst-verdict/1`: schema, asof_utc, head_sha, analyst_verdict SOUND|WARNING|VIOLATION,
-  violation_keys, cleared_keys) and `REPORT.md` (snapshots).
+  violation_keys, cleared_keys; sixth review, R6-2: violation_first_seen, each key of violation_keys with a
+  FINDINGS.csv row mapped to its `first_seen_utc`, so A0 keys and `system_error:` entries have none) and `REPORT.md`
+  (snapshots).
 - `FINDINGS.csv` (first time each key was seen), `VERDICTS.csv` (one row per run; its last head_sha is the A7 anchor),
   `evidence.csv` (R-AN-69, one row per item first seen: `activity` (gold-analyst's log), `inbox_activity` (the
   inbox's log), `comment` (bot comments), `run` (witness runs; since A6 with `ref` = refs/heads/<head_branch> and
@@ -286,6 +291,20 @@ aged out); a cleared key never clears another (R-JV-4).
   The first J-5 build (49c655f), made before the register held J-5's text, ended an interval at the mirror push or 30
   minutes after the RESUMED event's `utc` (`LIFT_GRACE`), kept the PAUSED and RETIRED `utc`s as starts, and excused a
   run only when its created_utc lay inside an interval. All three are replaced by the rules above.
+- J-D35 (sixth review, blocker R6-2; register decision 35, R-AN-55 step 2, R-AN-67, R-AN-70) A retirement is judged
+  by time, not by the order in which analyst-settle runs applied a clear and saw a key. The verdict's
+  `violation_first_seen` maps each key of `violation_keys` that has a FINDINGS.csv row to that row's `first_seen_utc`
+  (a key first found in this run: the run's time). A11 `retire_unsupported` also reports a RETIRED `violation` that
+  no key supports: a VIOLATION key of FINDINGS.csv (the file before this run), not operational, first seen strictly
+  after the arming time A and no later than the RETIRED event's `utc` + 10 min (R-AN-70's tolerance for a verdict
+  dated after the settle run), with no PAUSED event for `judge_violation:<K>` before the RETIRED event (a paused key
+  waits for its own clear, R-AN-55 step 2) and no `ref=latch, decision=clear` row for K in the judge's
+  ADJUDICATIONS.csv dated at or before it. A is the earliest clear time of the live integrity pauses that RESUMED
+  `clear:` events with a lower seq closed; a pause's clear time is the `utc` of its earliest analyst/ADJUDICATIONS.csv
+  clear row dated at or after its PAUSED event (no upper bound: the row step 1 applies), else the RESUMED event's `utc`
+  (a resume without a row is `resume_unsupported` by itself, J-D30). A FINDINGS.csv row whose `first_seen_utc` is not
+  an R-C4 time supports nothing. Not checked: a live integrity key first seen after A that the analyst paused instead
+  of retiring (the register does not ask for it).
 
 ## Open points
 
@@ -327,3 +346,7 @@ aged out); a cleared key never clears another (R-JV-4).
     decision 33. Rebuilt test-first (`tests/test_judge_fifth_review.py`) from register decision 33 and R-AN-67's
     "A10's pause intervals, as inbox main showed them" (xauusd-quant 166c6b0), without reading the analyst code: J-D34
     as rewritten. To log in the register before the freeze: J-D34's points (a) to (e).
+11. **R6-2 (2026-10-23, sixth review), not merged or pushed.** Built test-first (`tests/test_judge_sixth_review.py`,
+    whose first case is the verifier's probe as the judge sees its events) from register decision 35 and R-AN-55,
+    R-AN-62, R-AN-67 and R-AN-70 as amended there, without reading the analyst code: the verdict's
+    `violation_first_seen` and A11 `retire_unsupported` by time (J-D35).
