@@ -136,7 +136,11 @@ FILE_TOOLS = ("Read", "Write", "Edit", "MultiEdit", "NotebookEdit")
 BOOKKEEPING = {"Glob", "Grep", "LS", "LSP", "TodoWrite", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate",
                "TaskOutput", "TaskStop", "BashOutput", "KillShell", "KillBash", "ToolSearch", "EnterPlanMode",
                "ExitPlanMode", "AskUserQuestion", "CronList"}
-_CD = re.compile(r"cd [A-Za-z0-9_./~-]+ ?(&&|;) ?(.+)")
+# R-AN-86 (a) since the first review of A7 (V6-3): the command is cut into parts at `&&`, `||`, `;` and `|`, the
+# two-character separators taken before a single `|`
+_PARTS = re.compile(r"&&|\|\||;|\|")
+_QUIET = (" 2>&1", " 2>/dev/null")
+_CD = re.compile(r"cd [A-Za-z0-9_./~-]+")
 _SAFE_CHARS = re.compile(r"[A-Za-z0-9 _./,:=+@%~-]+")
 _RUN_WINDOW = re.compile(r"(python3|python) analyst/run_window\.py( [^ ]+)*")
 _LOCAL_WORD = re.compile(r"(ls|pwd|date|cat|head|tail|wc|stat|file|echo|true|uname|whoami|which)(?: |\Z)")
@@ -144,20 +148,27 @@ _DRAFT_SUFFIXES = tuple("/.analyst_run/" + name for name in DRAFTS)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
+def _harmless_part(part: str) -> bool:
+    """One part S of R-AN-86 (a): S1 = S without spaces at its ends, less one final ` 2>&1` or ` 2>/dev/null`; S2 =
+    S1 with runs of spaces made single and trimmed; S2 not empty, only the listed characters, and (i) another form of
+    the window script's command line without `..`, (ii) a local read-only word, or (iii) a `cd`."""
+    s1 = part.strip(" ")
+    for end in _QUIET:
+        if s1.endswith(end):
+            s1 = s1[:-len(end)]
+            break
+    s2 = re.sub(" +", " ", s1).strip(" ")
+    if not s2 or not _SAFE_CHARS.fullmatch(s2):
+        return False
+    return bool((_RUN_WINDOW.fullmatch(s2) and ".." not in s2) or _LOCAL_WORD.match(s2) or _CD.fullmatch(s2))
+
+
 def harmless_bash(cmd) -> bool:
-    """R-AN-86 (a): a `cd` prefix, a trailing ` 2>&1`, a local read-only command or another form of the window
-    script's command line."""
+    """R-AN-86 (a): C1 = the command without whitespace at its ends, cut at `&&`, `||`, `;` and `|`; harmless when
+    every part is (a `cd` prefix, a chain of local reads, another form of the window script's command line)."""
     if not isinstance(cmd, str):
         return False
-    c1 = cmd.strip(" \t\r\n")
-    m = _CD.fullmatch(c1)
-    c2 = m.group(2) if m else c1
-    if c2.endswith(" 2>&1"):
-        c2 = c2[:-5]
-    c3 = re.sub(" +", " ", c2).strip(" ")
-    if not c3 or not _SAFE_CHARS.fullmatch(c3):
-        return False
-    return bool((_RUN_WINDOW.fullmatch(c3) and ".." not in c3) or _LOCAL_WORD.match(c3))
+    return all(_harmless_part(x) for x in _PARTS.split(cmd.strip(" \t\r\n")))
 
 
 def harmless(tool, ti) -> bool:

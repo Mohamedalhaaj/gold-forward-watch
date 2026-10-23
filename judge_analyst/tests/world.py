@@ -173,7 +173,7 @@ def c20_log():
         tlcall(4, "Bash", {"command": "gh api repos/Mohamedalhaaj/gold-analyst-inbox/hooks"}, "denied", d("bash_form")),
         tlcall(5, "Bash", {"command": "curl -sS -m 10 https://example.com"}, "denied", d("bash_form")),
         tlcall(6, "Bash", {"command": "python3 -c 'print(1)'"}, "denied", d("bash_form")),
-        tlcall(7, "Bash", {"command": f"cd {ROOT} && python3 analyst/run_window.py probe"}, "denied", d("bash_form")),
+        tlcall(7, "Bash", {"command": "cd /tmp && pwd"}, "denied", d("bash_form")),
         tlcall(8, "Edit", {"file_path": f"{ROOT}/.analyst_run/plan.json", "old_string": hashed("{}"),
                            "new_string": hashed("{ }")}, "denied", d("tool")),
         tlcall(9, "Read", {"file_path": f"{ROOT}/.claude/settings.json"}),
