@@ -1,9 +1,9 @@
 key,value
 version,1
-asof_utc,2026-10-22T17:57:28Z
-head_sha,3bbceb8cb8b8da914196cac2f66ab89d44ef7872
-verdict,WARNING
-reason_ar,إعادة الحساب لم تطابق قيد المراجعة
-checks_ok,8
+asof_utc,2026-10-23T00:52:12Z
+head_sha,59ff77511368c0c8f0eb8dec44b85abdeed5778f
+verdict,SOUND
+reason_ar,كل الفحوص سليمة
+checks_ok,9
 checks_total,9
 end,8

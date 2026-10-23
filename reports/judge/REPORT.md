@@ -2,10 +2,10 @@
 
 # تقرير الحَكَم المستقل
 
-**الحكم: تحذير** · السبب: إعادة الحساب لم تطابق، قيد المراجعة
+**الحكم: سليم** · السبب: كل الفحوص سليمة
 
-- وقت الفحص: 2026-10-22T17:57:28Z
-- الفحوص السليمة 7 من 9، ولم يُتحقق من 1
+- وقت الفحص: 2026-10-23T00:52:12Z
+- الفحوص السليمة 8 من 9، ولم يُتحقق من 1
 
 | الفحص | ما يتحقق منه | النتيجة |
 |---|---|---|
@@ -13,7 +13,7 @@
 | J2 | تسجيل كل قاعدة قبل نتائجها وثبات ملفاتها | سليم |
 | J3 | عدم تعديل السجلات والبيانات الخام بعد كتابتها | سليم |
 | J4 | ثبات الملفات المجمدة وكود الحكم | سليم |
-| J5 | إعادة حساب التوقعات والإشارة والمعايرة والصفقات وملف الحالة | تحذير |
+| J5 | إعادة حساب التوقعات والإشارة والمعايرة والصفقات وملف الحالة | سليم |
 | J6 | أداء التوقع ونسبة لمس الوقف على البيانات الجديدة | لا بيانات بعد |
 | J7 | حداثة ملف الحالة وخلو آخر تشغيل من الأعطال | سليم |
 | J8 | عدم إعادة كتابة تاريخ المستودع | سليم |
@@ -25,17 +25,17 @@
 
 ## Evidence
 
-- Verdict: **WARNING** (reason code `j5_mismatch`), checks ok 8 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `3bbceb8cb8b8da914196cac2f66ab89d44ef7872`
+- Verdict: **SOUND** (reason code `sound`), checks ok 9 of 9; of these, nothing was verified in this run by: J6
+- HEAD checked: `59ff77511368c0c8f0eb8dec44b85abdeed5778f`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-10-22T17:57:28Z; data root repo
+- judge run 2026-10-23T00:52:12Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 259 (checked now: 259); older days sampled: 20; sides compared equal: 14; revised: 0; known revisions: 0; unverified downloads: 544
-- unverified: 544 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 253 (checked now: 253); older days sampled: 20; sides compared equal: 31; revised: 0; known revisions: 0; unverified downloads: 515
+- unverified: 515 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -58,7 +58,7 @@
 - raw folders: 10 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
 - v1 append-only files: 15 files, 11 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 3 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 3 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 6 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -66,15 +66,10 @@
 - analysis/system/lab_v2/FROZEN_V2.sha256: 26 pinned entries, 0 problems
 - reports/system/L3_ZSTAR.json unchanged since lab-v1-freeze
 
-### J5: WARNING
+### J5: OK
 
 - recomputed: {'forecasts': {'store_rows': 853, 'compared': 853}, 'l1': {'blocks': 0, 'green_ok': 1, 'trials': 0}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 0, 'trades': 0}, 'v2': {'days': 0, 'checked_days': [], 'trades': 0}, 'summary': {'asof': '2026-10-22T14:34:15Z'}, 'status': {'asof': '2026-10-22T14:32:36Z', 'lines': 28}}
 - lab v2 days recomputed this run: 0 (new 0, rotating sample 0); new adjudication rows: 0
-- awaiting adjudication: J5-202610220842-1 v2|v2 summary first_day (since 2026-10-22T08:42:57Z)
-- awaiting adjudication: J5-202610220842-2 v2|v2 summary S2 (since 2026-10-22T08:42:57Z)
-- awaiting adjudication: J5-202610220842-3 v2|v2 summary S3 (since 2026-10-22T08:42:57Z)
-- awaiting adjudication: J5-202610220842-4 v2|v2 summary S4 (since 2026-10-22T08:42:57Z)
-- awaiting adjudication: J5-202610220842-5 v2|v2 summary S5 (since 2026-10-22T08:42:57Z)
 
 ### J6: OK
 
@@ -86,14 +81,14 @@
 ### J7: OK
 
 - latest commit of reports/forward_site/system/VolMapSystem.csv: f3a82aea9e22 at 2026-10-22T14:34:13Z
-- age 0 trading day(s) (limit 2)
+- age 1 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 3558adaeaab0 is an ancestor of HEAD 3bbceb8cb8b8
-- the published VolMapJudge.csv head 3558adaeaab0 is an ancestor of HEAD 3bbceb8cb8b8
-- the deployed VolMapJudge.csv head 3558adaeaab0 is an ancestor of HEAD 3bbceb8cb8b8
+- the previous VERDICTS.csv row head 3bbceb8cb8b8 is an ancestor of HEAD 59ff77511368
+- the published VolMapJudge.csv head 3bbceb8cb8b8 is an ancestor of HEAD 59ff77511368
+- the deployed VolMapJudge.csv head 3bbceb8cb8b8 is an ancestor of HEAD 59ff77511368
 
 ### J9: OK
 
