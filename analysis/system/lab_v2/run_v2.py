@@ -228,11 +228,14 @@ def one_run(P, now, mode, run_id, head, fetch_on=True, log=print):
     else:
         v2_ledger.update_states(P.rep, recs, sts, events, asof, True, run_id, head, today)
     events = v1reg.read_events(ev_path)
-    sts = v1reg.states(recs, events, start)
     state = "RUNNING" if lab_running else "PAUSED"
     if lab_running and mode in ("cloud", "synthetic") and start is None and v1_start:
         v2_publish.write_json(P.rep / "START.json", v2_registry.start_record(now, run_id, head, v1_start))
         start = read_json(P.rep / "START.json")["start"]
+    # OPS ops-v2-publish-order: publish after registration. The summary's states are taken from this run's final
+    # events and START, so the run that registers the seeds and writes START.json publishes their first_day (lab v2's
+    # first cloud run, 78c13fa, published first_day None: its states had been computed before START was written).
+    sts = v1reg.states(recs, events, start)
     s = v2_publish.summary(P.rep, recs, sts, events, state, asof, start, P.v1lab, bars_m15=b15, halt=halt,
                            today=today, lookback_complete=lb_done)
     lbs = v2_data.final_status(v2_data.read_days(P.lb / "days.csv"))
