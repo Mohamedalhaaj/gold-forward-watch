@@ -1,8 +1,8 @@
 {
  "analyst_verdict": "SOUND",
- "asof_utc": "2026-10-23T15:44:02Z",
+ "asof_utc": "2026-10-23T20:24:32Z",
  "cleared_keys": [],
- "head_sha": "69f55f24dc67346e384d7edd45563c67a6cb279c",
+ "head_sha": "8605d221cd6b48f0a3bef3b94b822007faa9a0b0",
  "schema": "analyst-verdict/1",
  "violation_keys": []
 }

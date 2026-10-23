@@ -1,7 +1,7 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-23T15:44:02Z
-- head_sha (gold-analyst main checked): 69f55f24dc67346e384d7edd45563c67a6cb279c
+- asof_utc: 2026-10-23T20:24:32Z
+- head_sha (gold-analyst main checked): 8605d221cd6b48f0a3bef3b94b822007faa9a0b0
 - judge code_sha8: 4eb45783
 - **analyst_verdict: SOUND**
 
@@ -28,7 +28,7 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.5) and IMPLEMENTATION_
 - accepted_push_diffs_unverified: 0
 - canary_expected_windows: 0
 - canary_terminals: 0
-- head: 69f55f24dc67346e384d7edd45563c67a6cb279c
+- head: 8605d221cd6b48f0a3bef3b94b822007faa9a0b0
 - live_expected_windows: 0
 - live_terminals: 0
 - settled_checked: 0
