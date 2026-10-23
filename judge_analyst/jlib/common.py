@@ -72,27 +72,27 @@ def parse_utc(s: str) -> dt.datetime:
     """Parse an R-C4 time (also accepts the ms form and the store's `YYYY-MM-DD HH:MM` complete form)."""
     if not isinstance(s, str):
         raise ValueError(f"not a time string: {s!r}")
-    if _RE_UTC.match(s):
+    if _RE_UTC.fullmatch(s):
         return dt.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
-    if _RE_UTC_MS.match(s):
+    if _RE_UTC_MS.fullmatch(s):
         return dt.datetime.strptime(s, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC)
     raise ValueError(f"not an R-C4 time: {s!r}")
 
 
 def is_utc(s) -> bool:
-    return isinstance(s, str) and bool(_RE_UTC.match(s))
+    return isinstance(s, str) and bool(_RE_UTC.fullmatch(s))
 
 
 def is_utc_ms(s) -> bool:
-    return isinstance(s, str) and bool(_RE_UTC_MS.match(s))
+    return isinstance(s, str) and bool(_RE_UTC_MS.fullmatch(s))
 
 
 def is_day(s) -> bool:
-    return isinstance(s, str) and bool(_RE_DAY.match(s))
+    return isinstance(s, str) and bool(_RE_DAY.fullmatch(s))
 
 
 def is_server(s) -> bool:
-    return isinstance(s, str) and bool(_RE_SERVER.match(s))
+    return isinstance(s, str) and bool(_RE_SERVER.fullmatch(s))
 
 
 def norm_api_time(s: str) -> str:

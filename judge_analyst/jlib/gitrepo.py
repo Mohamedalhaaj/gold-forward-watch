@@ -63,7 +63,10 @@ class GitRepo:
 
     # ---------------------------------------------------------------- blobs
     def show(self, commit: str, path: str):
-        """Bytes of path at commit, or None if absent."""
+        """Bytes of path at commit, or None if absent. A path holding a newline or NUL is absent: `cat-file --batch`
+        takes one name per line, and such a name would shift every later read (R-AN-33 clarification A3)."""
+        if "\n" in path or "\0" in path or "\n" in commit:
+            return None
         key = (commit, path)
         if key in self._cache:
             return self._cache[key]

@@ -55,20 +55,24 @@ EVIDENCE_HEADER = ["judge_utc", "source", "ref", "push_after", "activity_id", "a
 def allow_patterns(prefix: str):
     p = re.escape(prefix)
     return {
-        "attempt": re.compile(rf"^{p}attempts/(({CALL_ID_RE})|lesson-({CALL_ID_RE})|revision-v[1-9][0-9]*)_[12]\.json$"),
-        "call": re.compile(rf"^{p}calls/{CALL_ID_RE}\.json$"),
-        "lesson": re.compile(rf"^{p}lessons/{CALL_ID_RE}\.json$"),
-        "revision": re.compile(rf"^{p}playbooks/v[1-9][0-9]*\.md$"),
+        "attempt": re.compile(rf"{p}attempts/(({CALL_ID_RE})|lesson-({CALL_ID_RE})|revision-v[1-9][0-9]*)_[12]\.json"),
+        "call": re.compile(rf"{p}calls/{CALL_ID_RE}\.json"),
+        "lesson": re.compile(rf"{p}lessons/{CALL_ID_RE}\.json"),
+        "revision": re.compile(rf"{p}playbooks/v[1-9][0-9]*\.md"),
     }
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
 def classify_path(path: str):
-    """(mode, kind) of an allowlisted agent path, or None (R-AN-33)."""
-    if path.startswith(".github/"):
+    """(mode, kind) of an allowlisted agent path, or None (R-AN-33; clarification A3 of 2026-10-23: the whole path
+    must match one pattern and hold no control character)."""
+    if path.startswith(".github/") or _CONTROL.search(path):
         return None
     for mode in ("canary", "live"):
         for kind, rx in allow_patterns(PREFIX[mode]).items():
-            if rx.match(path):
+            if rx.fullmatch(path):
                 return mode, kind
     return None
 
@@ -474,7 +478,7 @@ class Judge:
                     if (p, sha256_bytes(self.bytes_at_head(p))) not in accepted_paths:
                         self.F.v("A3", "unwitnessed_record", p, self.commit_of(p), "no accepted witness for it")
             for p in self.git.ls_tree(self.head, pre + "playbooks/"):
-                if re.match(rf"^{re.escape(pre)}playbooks/v[1-9][0-9]*\.md$", p) and \
+                if re.fullmatch(rf"{re.escape(pre)}playbooks/v[1-9][0-9]*\.md", p) and \
                         (p, sha256_bytes(self.bytes_at_head(p))) not in accepted_paths:
                     self.F.v("A3", "unwitnessed_record", p, self.commit_of(p), "no accepted witness for it")
         # pushes seen by GitHub
