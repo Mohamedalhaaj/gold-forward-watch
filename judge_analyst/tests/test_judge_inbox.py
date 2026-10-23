@@ -450,10 +450,12 @@ def test_A12_ga_runs(w, tmp_path):
 
 
 # ---------------------------------------------------------------- A12: the inbox
-@pytest.mark.parametrize("info", [None, {"id": 1, "private": False}, {"id": 424242, "private": True}])
-def test_A12_inbox_identity(w, info):
+@pytest.mark.parametrize("info,seen", [(None, "404"), ({"id": 1, "private": False}, "id-1"),
+                                       ({"id": 424242, "private": True}, "private")])
+def test_A12_inbox_identity(w, info, seen):
+    """Fourth review of A6 (J-4): the key names what was seen, so a re-created inbox is a new key."""
     w.api["repos"][INBOX] = info
-    assert keys(w.judge()) == ["A12|inbox_identity|inbox|-"]
+    assert keys(w.judge()) == [f"A12|inbox_identity|inbox|{seen}"]
 
 
 def test_A12_inbox_main_foreign_and_the_fresh_fetch(w):
@@ -489,7 +491,7 @@ def test_A12_inbox_ref(w):
 
 def test_A12_inbox_runs(w):
     w.api["runs_total"][INBOX] = 2
-    assert keys(w.judge()) == ["A12|inbox_runs|inbox/actions/runs|-"]
+    assert keys(w.judge()) == ["A12|inbox_runs|inbox/actions/runs|2"]           # fourth review: the count read
 
 
 def test_A12_inbox_rules_are_warnings(w):
@@ -585,10 +587,15 @@ def test_A12_inbox_hook_and_checks_missing(tmp_path):
     p48, p49 = "analyst/runs/2026-W48.json", "analyst/runs/2026-W49.json"
     f = {x.key: x for x in res.findings.items if x.check == "A12"}
     assert sorted(f) == sorted([f"A12|inbox_checks_missing|{p48}|{first_add(world, p48)}",
-                                f"A12|inbox_hook|{p49}|{first_add(world, p49)}"])
+                                f"A12|inbox_hook|{p49}|{first_add(world, p49)}",
+                                f"A12|inbox_config|{p49}|{first_add(world, p49)}"])
     hook = f[f"A12|inbox_hook|{p49}|{first_add(world, p49)}"]
     assert hook.severity == VIOLATION and hook.owner_attested
-    assert all(x in hook.detail for x in ("hooks", "deploy_keys", "actions_enabled", "security_log_hook_events"))
+    assert all(x in hook.detail for x in ("hooks", "security_log_hook_events"))
+    # fourth review of A6 (J-4): the deploy keys and the Actions switch are their own code, `inbox_config`
+    config = f[f"A12|inbox_config|{p49}|{first_add(world, p49)}"]
+    assert config.severity == VIOLATION and config.owner_attested
+    assert all(x in config.detail for x in ("deploy_keys", "actions_enabled")) and "hooks" not in config.detail
     assert f[f"A12|inbox_checks_missing|{p48}|{first_add(world, p48)}"].severity == WARNING
 
 

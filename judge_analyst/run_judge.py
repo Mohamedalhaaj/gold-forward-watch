@@ -228,9 +228,10 @@ def main(argv=None):
         fresh = make_fresh_main(root, f"https://github.com/{ga_repo}.git")
     ok, code_sha8 = manifest_status(JUDGE_ROOT)
     evidence = report.read_csv(os.path.join(out, "evidence.csv"), EVIDENCE_HEADER)
+    adjudications = report.read_csv(os.path.join(out, "ADJUDICATIONS.csv"), report.ADJ_HEADER)
     judge = Judge(git, now, api=api, hours=hours, store_git=store_git, fetch_commit=fetch, evidence_rows=evidence,
                   prev_anchor=report.last_anchor(out), judge_manifest_ok=ok, fresh_main=fresh,
-                  prev_judge_utc=report.last_judge_utc(out))
+                  prev_judge_utc=report.last_judge_utc(out), judge_adjudications=adjudications)
     res = judge.run()
     v = report.write_outputs(res, out, now, code_sha8, hours)
     if a.site:                               # R-AN-70: the feed analyst-settle reads, byte-identical to the record

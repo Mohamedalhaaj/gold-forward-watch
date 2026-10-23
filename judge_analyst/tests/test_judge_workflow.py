@@ -51,9 +51,17 @@ def top():
 def test_triggers_are_script_only_and_never_an_agent_push():
     t = top()
     assert re.search(r"^on:\n  workflow_run:\n    workflows: \[analyst-export\]\n    types: \[completed\]\n"
-                     r"  schedule:\n    - cron: \"40 23 \* \* \*\"[^\n]*\n  workflow_dispatch:\n", t, re.M)
+                     r"  schedule:\n    - cron: \"40 23 \* \* \*\"[^\n]*\n    - cron: \"40 11 \* \* 0\"[^\n]*\n"
+                     r"  workflow_dispatch:\n", t, re.M)
     for bad in ("push:", "pull_request", "pull_request_target", "issue_comment", "repository_dispatch"):
         assert bad not in t, bad
+
+
+def test_the_sunday_backstop():
+    """R-AN-70 (fourth review of §16.18 A6, J-3): a second scheduled backstop `40 11 * * 0`, so that Sunday, the only
+    day without an analyst-export run, has two judge runs and no day has a single one. Exactly these two crons."""
+    crons = re.findall(r"^    - cron: \"([^\"]+)\"", top(), re.M)
+    assert crons == ["40 23 * * *", "40 11 * * 0"]
 
 
 def test_no_model_and_no_model_key():

@@ -3,11 +3,14 @@ with amendment §16.18 A6, the agent inbox).
 
 A0 is the judge's own input check (a shallow clone, an unreachable API, an unreadable source store or hour file, a
 PINS.json without the inbox pins): WARNING, never SOUND, never latched. The one A0 VIOLATION, `inbox_blind` (second
-review of A6, SEC-3: no complete read of the inbox's activity for more than 24 h), holds the verdict at VIOLATION while
-it lasts, and is never latched either. A1-A12 follow R-AN-67's table; A12 is the repository boundary of A6
-(gold-analyst's refs, tags and runs; the inbox's identity, main, refs, rewrites, runs and rules; the session probes;
-the owner's inbox checks; the mirror's lag; after the second review the App's repository list, the routines'
-connectors and a flood of probe branches).
+review of A6, SEC-3; rewritten in the fourth review, J-3: no complete read of the inbox's activity for more than 24 h
+and at least two failed runs after it, keyed by its episode), holds the verdict at VIOLATION while it lasts, and is
+never latched either. A1-A12 follow R-AN-67's table; A12 is the repository boundary of A6 (gold-analyst's refs, tags
+and runs; the inbox's identity, main, refs, rewrites, runs and rules; the session probes; the owner's inbox checks;
+the mirror's lag; after the second review the App's repository list, the routines' connectors and a flood of probe
+branches; after the fourth review the inbox's deploy keys and Actions switch, `inbox_config`). Since the fourth review
+every VIOLATION key names its incident, and A11 checks the analyst's pause, lift and retirement events against the
+pause rule of R-AN-55.
 
 Since A6 the agent's pushes are entries of the inbox's activity log (PINS.inbox_repo), counted only at or after
 PINS.inbox_from_utc. Without the inbox pins (a gold-analyst main from before A6) the judge reads pushes from
@@ -24,8 +27,8 @@ from dataclasses import dataclass, field
 
 from . import derive, settle, stats
 from .clock import Events, Holidays, Window, add_months_12, iso_week, parse_call_id, windows_between
-from .common import (UTC, ZERO64, Findings, compact_form, fmt_utc, is_utc, load_json_bytes, norm_api_time, num_exact,
-                     parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes, sha256_compact)
+from .common import (UTC, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes, norm_api_time,
+                     num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes, sha256_compact)
 from .context import compare_context, rebuild_context
 from .m1 import DaysTable, Store
 
@@ -90,6 +93,11 @@ CONNECTOR_LISTS = ("mcp_connections", "enabled_plugins")                # each m
 PROBE_NAME = re.compile(rf"refs/heads/claude/probe-(c3|del|wf|result)-({CALL_ID_RE}|p[0-9]{{8}}T[0-9]{{6}}Z)")
 PROBE_DAY_CAP = 40                             # A12 probe_flood (SEC-3): probe branch creations in one UTC day
 BLIND = dt.timedelta(hours=24)                 # A0 inbox_blind (SEC-3): age of the last complete activity read
+BLIND_RUNS = 2                                 # A0 inbox_blind (fourth review, J-3): failed judge runs after it
+# The fourth review of A6 (2026-10-23, register §16.18 A6 decisions 24-32; R-AN-55, R-AN-67): the operational A12
+# codes. With every A0 key and every `system_error:` entry they pause the analyst while the verdict carries them and
+# never retire it; every other VIOLATION key is an integrity key.
+OPERATIONAL_A12 = {"probe_failed", "app_scope", "routine_connectors", "inbox_identity", "inbox_config"}
 
 
 def _int(x) -> bool:
@@ -102,6 +110,33 @@ def _zero(sha) -> bool:
 
 def _id_key(aid: str):
     return (0, int(aid), "") if aid.isdigit() else (1, 0, aid)
+
+
+def operational(key: str) -> bool:
+    """R-AN-55, R-AN-67 (fourth review of A6, J-4): a `violation_keys` entry that starts with `A0|` or
+    `system_error:`, or whose check and code are A12 `probe_failed`, `app_scope`, `routine_connectors`,
+    `inbox_identity` or `inbox_config`."""
+    if key.startswith(("A0|", "system_error:")):
+        return True
+    parts = key.split("|")
+    return len(parts) >= 2 and parts[0] == "A12" and parts[1] in OPERATIONAL_A12
+
+
+def resumed_subject(reason):
+    """(`clear` | `lifted`, subject) of a RESUMED event's reason, or (None, None) (R-AN-56: the subject of a RESUMED
+    event is its reason after the first `clear:` or `lifted:`)."""
+    r = str(reason or "")
+    for kind in ("clear", "lifted"):
+        if r.startswith(kind + ":"):
+            return kind, r[len(kind) + 1:]
+    return None, None
+
+
+def _utc_or_none(s):
+    try:
+        return parse_utc(s)
+    except (TypeError, ValueError):
+        return None
 
 
 # R-AN-84: an outcome its probe's "Pass iff" column fails, whatever the record's own pass flag says (the session
@@ -172,10 +207,11 @@ class Result:
 class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
-                 prev_judge_utc=None):
+                 prev_judge_utc=None, judge_adjudications=None):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
-        judge_utc of VERDICTS.csv (the runs day range, R-AN-66)."""
+        judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
+        ADJUDICATIONS.csv (R-AN-70; the A11 check of a `lifted:` resume of a latched key, fourth review of A6)."""
         self.git = git
         self.now_s = now_utc
         self.now = parse_utc(now_utc)
@@ -189,6 +225,8 @@ class Judge:
         self.events = events or Events.judge_copies()
         self.fresh_main = fresh_main
         self.prev_judge_utc = prev_judge_utc
+        self.judge_adjudications = judge_adjudications or []
+        self._mode_at = {}
         self._fresh = False
         self._diffs = {}
         self.F = Findings()
@@ -394,24 +432,39 @@ class Judge:
             self.check_inbox_blind()
 
     def check_inbox_blind(self):
-        """A0 `inbox_blind` (VIOLATION; second review of A6, SEC-3): the judge's last complete read of the inbox's
-        activity is more than 24 h before this run, so `closer_raced` and the other inbox checks are blind. A shorter
-        failure stays `inbox_api_unreachable` (WARNING). The time is kept across runs in the evidence file: an
-        `inbox_read` row for each complete read (one per judge_utc), and the `inbox_activity` rows, which only a
-        complete read writes (judge decision J-D25). With no read recorded it counts from PINS.inbox_from_utc."""
+        """A0 `inbox_blind` (VIOLATION; second review of A6, SEC-3; rewritten in the fourth review, J-3, decision 24):
+        this run's read of the inbox's activity failed, the last complete read L is more than 24 h before this run,
+        and at least two judge runs after L failed that read, this one included. Then `closer_raced` and the other
+        inbox checks are blind. Any other failed read stays `inbox_api_unreachable` (WARNING): one failed run after a
+        long gap, such as Sunday's, is not blindness.
+        L is the newest judge_utc of an `inbox_read` row (one per complete read) or of an `inbox_activity` row (only a
+        complete read writes them), else PINS.inbox_from_utc (judge decision J-D25). The failed runs are the
+        `inbox_read_failed` rows (R-AN-69: one per run whose read failed, written only while PINS.inbox_repo and
+        PINS.inbox_from_utc are set; a run without an API client reads nothing, so its read failed too). They are
+        written with the run's other outputs, so a run that publishes nothing counts for nothing.
+        Key `A0|inbox_blind|api|<L>`: each episode has its own key (J-D27 as amended)."""
+        seen = [r["judge_utc"] for r in self.evidence_rows
+                if r["source"] in ("inbox_read", "inbox_activity") and is_utc(r["judge_utc"])]
         if self.inbox_read_ok:
             if not any(r["source"] == "inbox_read" and r["judge_utc"] == self.now_s for r in self.evidence_rows):
                 self.evidence_new.append(self._ev("inbox_read", ref=self.inbox))
-            last = self.now_s
-        else:
-            seen = [r["judge_utc"] for r in self.evidence_rows
-                    if r["source"] in ("inbox_read", "inbox_activity") and is_utc(r["judge_utc"])]
-            last = max(seen) if seen else None
+            self.summary["inbox_last_complete_read_utc"] = self.now_s
+            return
+        last = max(seen) if seen else None
         self.summary["inbox_last_complete_read_utc"] = last or "-"
-        since = last or self.inbox_from
-        if since is not None and self.now - parse_utc(since) > BLIND:
-            self.F.v("A0", "inbox_blind", "api", "-", safe_detail("last complete read", last) if last else
-                     safe_detail("no complete read since inbox_from", since))
+        if self.inbox_from is None:
+            return
+        if not any(r["source"] == "inbox_read_failed" and r["judge_utc"] == self.now_s for r in self.evidence_rows):
+            self.evidence_new.append(self._ev("inbox_read_failed", ref=self.inbox))
+        L = last or self.inbox_from
+        failed = {r["judge_utc"] for r in self.evidence_rows if r["source"] == "inbox_read_failed" and
+                  is_utc(r["judge_utc"]) and L < r["judge_utc"] <= self.now_s}
+        failed.add(self.now_s)
+        self.summary["inbox_failed_runs_since_last_read"] = len(failed)
+        if self.now - parse_utc(L) > BLIND and len(failed) >= BLIND_RUNS:
+            self.F.v("A0", "inbox_blind", "api", L,
+                     safe_detail("last complete read" if last else "no complete read since inbox_from", L,
+                                 f"{len(failed)} failed runs since"))
 
     def _read(self, code, name, *args):
         try:
@@ -1230,12 +1283,14 @@ class Judge:
     def check_runs_exports(self):
         self.overlay = {}
         runs = []
-        exports = {}
+        exports = {}                     # by path: each export file is judged on its own (fourth review of A6, N3)
+        export_weeks = set()
         for p, r in self.records("analyst/runs/").items():
             if not isinstance(r.rec, dict) or r.rec.get("schema") != "analyst-runs/1":
                 self.F.w("A10", "runs_export_form", p, r.commit, "unreadable export", owner_attested=True)
                 continue
-            exports[r.rec.get("iso_week")] = r
+            exports[p] = r
+            export_weeks |= self.export_weeks(r)
             for x in r.rec.get("runs") or []:
                 if isinstance(x, dict):
                     runs.append((r, x))
@@ -1274,7 +1329,7 @@ class Judge:
                 hi = w.deadline - dt.timedelta(minutes=t_run + t_setup)
                 if not (w.span_lo <= cu <= hi) or self.holidays.window_holiday(w):
                     continue
-                if mode == "live" and any(a <= cu < b for a, b in pauses):
+                if any(a <= cu < b for a, b in pauses):          # J-D31: canary windows too (R-AN-55)
                     continue
                 if cid not in acc_by_mode[mode]:
                     self.F.v("A10", "in_span_without_attempt", r.path, r.commit, safe_detail("run", x.get("run_id"),
@@ -1296,7 +1351,7 @@ class Judge:
             if not match:
                 wk = iso_week(win.day)
                 week_end = win.day + dt.timedelta(days=7 - win.day.weekday())
-                if wk in exports or self.now.date() > week_end + dt.timedelta(days=3):
+                if wk in export_weeks or self.now.date() > week_end + dt.timedelta(days=3):
                     self.F.w("A11", "unverified_model", info["term"].path, info["term"].commit,
                              "no owner-exported run matches this call", owner_attested=True)
                 continue
@@ -1304,16 +1359,27 @@ class Judge:
             if x.get("model") is not None and x.get("model") != model:
                 self.overlay[win.call_id] = str(x.get("run_id"))
 
+    @staticmethod
+    def export_weeks(r):
+        """The weeks a runs export stands for: the `<iso_week>` of its path `analyst/runs/<iso_week>.json` (R-AN-60)
+        and the `iso_week` it claims (judge decision J-D33)."""
+        out = {r.path.rsplit("/", 1)[-1][:-len(".json")]}
+        if isinstance(r.rec.get("iso_week"), str):
+            out.add(r.rec["iso_week"])
+        return out
+
     def check_inbox_checks(self, exports):
         """A12 (A6, review blocker B3; R-AN-60), owner-attested: `inbox_hook` for a runs export whose `inbox_checks`
-        has hooks > 0, security_log_hook_events > 0, deploy_keys != 1 or actions_enabled true; `inbox_checks_missing`
-        (WARNING) for an export without complete `inbox_checks` for a week with expected canary or live windows, and
-        (second review) one whose `inbox_checks` lacks a readable `app_repositories`; `app_scope` (second review,
-        SEC-1) for an export whose `app_repositories` has a `repository_selection` other than `selected`, or names
-        gold-analyst, gold-forward-watch or xauusd-quant (judge decision J-D24: by repository name, any owner, case
-        ignored as GitHub ignores it)."""
+        has hooks > 0 or security_log_hook_events > 0; (fourth review, J-4) `inbox_config` for deploy_keys != 1 or
+        actions_enabled true; `inbox_checks_missing` (WARNING) for an export without complete `inbox_checks` for a
+        week with expected canary or live windows, and (second review) one whose `inbox_checks` lacks a readable
+        `app_repositories`; `app_scope` (second review, SEC-1) for an export whose `app_repositories` has a
+        `repository_selection` other than `selected`, or names gold-analyst, gold-forward-watch or xauusd-quant (judge
+        decision J-D24: by repository name, any owner, case ignored as GitHub ignores it). `exports` is keyed by path:
+        each file is judged on its own, whatever `iso_week` it claims (fourth review, N3)."""
         weeks = {iso_week(w.day) for mode in ("canary", "live") for w in self.windows.get(mode, [])}
-        for wk, r in sorted(exports.items(), key=lambda x: str(x[0])):
+        for _path, r in sorted(exports.items()):
+            wk_judged = bool(self.export_weeks(r) & weeks)
             ic = r.rec.get("inbox_checks")
             complete = isinstance(ic, dict) and all(k in ic and isinstance(ic[k], t) and
                                                     (t != (int,) or _int(ic[k]))
@@ -1321,7 +1387,7 @@ class Judge:
             app = ic.get("app_repositories") if isinstance(ic, dict) else None
             app_ok = isinstance(app, dict) and isinstance(app.get("repository_selection"), str) and \
                 isinstance(app.get("full_names"), list) and all(isinstance(n, str) for n in app["full_names"])
-            if not (complete and app_ok) and wk in weeks:
+            if not (complete and app_ok) and wk_judged:
                 self.F.w("A12", "inbox_checks_missing", r.path, r.commit,
                          "no complete inbox_checks for a judged week" if not complete else
                          "inbox_checks lacks a readable app_repositories for a judged week", owner_attested=True)
@@ -1336,41 +1402,54 @@ class Judge:
                     self.F.v("A12", "app_scope", r.path, r.commit, safe_detail(*bad), owner_attested=True)
             if not isinstance(ic, dict):
                 continue
-            bad = []
+            hook, config = [], []
             if _int(ic.get("hooks")) and ic["hooks"] > 0:
-                bad.append("hooks")
+                hook.append("hooks")
             if _int(ic.get("security_log_hook_events")) and ic["security_log_hook_events"] > 0:
-                bad.append("security_log_hook_events")
+                hook.append("security_log_hook_events")
             if _int(ic.get("deploy_keys")) and ic["deploy_keys"] != 1:
-                bad.append("deploy_keys")
+                config.append("deploy_keys")
             if ic.get("actions_enabled") is True:
-                bad.append("actions_enabled")
-            if bad:
-                self.F.v("A12", "inbox_hook", r.path, r.commit, safe_detail(*bad), owner_attested=True)
+                config.append("actions_enabled")
+            if hook:
+                self.F.v("A12", "inbox_hook", r.path, r.commit, safe_detail(*hook), owner_attested=True)
+            if config:
+                self.F.v("A12", "inbox_config", r.path, r.commit, safe_detail(*config), owner_attested=True)
 
     # ================================================================ the routines' connectors (A12, R-AN-61)
     def check_routine_config(self):
         """A12 `routine_connectors` (second review of A6, SEC-2), owner-attested: every version of
         `analyst/ROUTINE_CONFIG.json` committed to gold-analyst main (first-parent history; committer time, judge
-        decision J-D26) at or after PINS.inbox_from_utc in which a routine's `raw` lacks `mcp_connections` or
-        `enabled_plugins`, or holds anything but the empty list in one. A version that is not a JSON record with a
-        `routines` list, or a routine that is not an object with an object `raw`, cannot show the empty lists and is
-        reported too. Key: the version's commit."""
+        decision J-D26) at or after PINS.inbox_from_utc, and (fourth review, N3) the version in force at
+        PINS.inbox_from_utc, in which a routine's `raw` lacks `mcp_connections` or `enabled_plugins`, or holds anything
+        but the empty list in one. The version in force is the last commit of the first-parent history that adds or
+        changes the file with a committer time before PINS.inbox_from_utc (none when a later such commit deletes it;
+        judge decision J-D32); it is judged whether or not a later version replaced it. A version that is not a JSON
+        record with a `routines` list, or a routine that is not an object with an object `raw`, cannot show the empty
+        lists and is reported too. Key: the version's commit."""
         if self.inbox_from is None:
             return
         since = parse_utc(self.inbox_from)
-        n = 0
+        judged = []
+        in_force = None
         for sha, _parent, changes in self.log:
-            if not any(p == ROUTINE_CONFIG and st[:1] in ("A", "M", "T") for st, p in changes):
+            sts = {st[:1] for st, p in changes if p == ROUTINE_CONFIG}
+            if not sts:
                 continue
             ct = self.git.commit_time(sha)
-            if ct is None or dt.datetime.fromtimestamp(ct, UTC) < since:
+            if ct is None:
                 continue
-            n += 1
+            if dt.datetime.fromtimestamp(ct, UTC) < since:
+                in_force = sha if sts & {"A", "M", "T"} else None
+            elif sts & {"A", "M", "T"}:
+                judged.append(sha)
+        if in_force is not None:
+            judged.insert(0, in_force)
+        for sha in judged:
             bad = self.connector_breaches(self.git.show(sha, ROUTINE_CONFIG))
             if bad:
                 self.F.v("A12", "routine_connectors", ROUTINE_CONFIG, sha, safe_detail(*bad), owner_attested=True)
-        self.summary["routine_config_versions_checked"] = n
+        self.summary["routine_config_versions_checked"] = len(judged)
 
     @staticmethod
     def connector_breaches(b):
@@ -1523,17 +1602,21 @@ class Judge:
 
     def check_inbox(self):
         """The inbox (PINS.inbox_repo): `inbox_identity`, `inbox_runs`, `inbox_rules` (WARNING), `inbox_ref`,
-        `inbox_main_foreign`, `inbox_rewrite` and `inbox_stale` (WARNING), as R-AN-67's A6 table defines them."""
+        `inbox_main_foreign`, `inbox_rewrite` and `inbox_stale` (WARNING), as R-AN-67's A6 table defines them. Since
+        the fourth review (J-4) `inbox_identity` names what was seen (`404`, `id-<id read>` or `private`, the first
+        that applies) and `inbox_runs` the `total_count` read, so a later incident is a new key."""
         if self.inbox_info_ok:
             info = self.inbox_info
             if not isinstance(info, dict):
-                self.F.v("A12", "inbox_identity", "inbox", "-", "GET /repos answers 404")
+                self.F.v("A12", "inbox_identity", "inbox", "404", "GET /repos answers 404")
             elif self.inbox_id is not None and info.get("id") != self.inbox_id:
-                self.F.v("A12", "inbox_identity", "inbox", "-", safe_detail("id", info.get("id")))
+                seen = "id-" + safe_detail(info.get("id")).replace("|", "?").replace(" ", "?")
+                self.F.v("A12", "inbox_identity", "inbox", seen, safe_detail("id", info.get("id")))
             elif info.get("private") is True:
-                self.F.v("A12", "inbox_identity", "inbox", "-", "the inbox is private")
+                self.F.v("A12", "inbox_identity", "inbox", "private", "the inbox is private")
         if _int(self.inbox_runs) and self.inbox_runs > 0:
-            self.F.v("A12", "inbox_runs", "inbox/actions/runs", "-", safe_detail("total_count", self.inbox_runs))
+            self.F.v("A12", "inbox_runs", "inbox/actions/runs", str(self.inbox_runs),
+                     safe_detail("total_count", self.inbox_runs))
         for br, need in INBOX_RULES.items():
             if br in self.inbox_rules:
                 got = {x.get("type") for x in self.inbox_rules[br] if isinstance(x, dict)}
@@ -1570,7 +1653,8 @@ class Judge:
         """A12 `probe_flood` (VIOLATION; second review of A6, SEC-3): a `refs/heads/claude/probe-*` ref the inbox lists
         whose earliest inbox activity entry counts (timestamp >= PINS.inbox_from_utc) and whose name is not
         `claude/probe-<c3|del|wf|result>-<call_id | pYYYYMMDDTHHMMSSZ>` (R-AN-84); and more than 40 counting
-        `branch_creation` entries on probe refs in one UTC day (key path `inbox/refs/heads/claude/probe-*`, sha `-`).
+        `branch_creation` entries on probe refs in one UTC day (key path `inbox/refs/heads/claude/probe-*`; fourth
+        review, J-4: the sha slot holds that day, `YYYY-MM-DD`, so a later day's flood is a new key).
         The entries are the live list and the `inbox_activity` evidence rows, so a month-old flood still counts. A
         listed ref without a known entry is not judged (judge decision J-D28: its first entry predates the judge's
         reads, or this run's read failed)."""
@@ -1588,14 +1672,15 @@ class Judge:
         for e in self.inbox_entries:
             if self.counts(e) and e["type"] == "branch_creation" and e["ref"].startswith(PROBE_REF):
                 per_day[e["ts"][:10]] = per_day.get(e["ts"][:10], 0) + 1
-        over = sorted(d for d, n in per_day.items() if n > PROBE_DAY_CAP)
-        if over:
-            self.F.v("A12", "probe_flood", "inbox/refs/heads/claude/probe-*", "-",
-                     safe_detail(*(f"{d} {per_day[d]} creations" for d in over)))
+        for d in sorted(d for d, n in per_day.items() if n > PROBE_DAY_CAP):   # fourth review: one key per day
+            self.F.v("A12", "probe_flood", "inbox/refs/heads/claude/probe-*", d,
+                     safe_detail(f"{d} {per_day[d]} creations"))
         self.summary["probe_creations_max_day"] = max(per_day.values(), default=0)
 
     def pause_intervals(self):
-        """[(start, end)] UTC datetimes when live calls were disabled (PAUSED..RESUMED, RETIRED..)."""
+        """[(start, end)] UTC datetimes when calls were disabled (PAUSED..RESUMED, RETIRED..; judge decision J-D14).
+        A RESUMED event closes the subject after its first `clear:` or `lifted:` (fourth review of A6, R-AN-67), and
+        the intervals cover canary and live windows alike (J-D31)."""
         out = []
         evs = []
         for p, r in sorted(self.records("analyst/state/").items()):
@@ -1609,10 +1694,10 @@ class Judge:
             except (ValueError, TypeError):
                 continue
             if e.get("event") == "PAUSED":
-                open_[e.get("reason")] = t
+                open_.setdefault(e.get("reason"), t)
             elif e.get("event") == "RESUMED":
-                subj = str(e.get("reason") or "")[len("clear:"):]
-                if subj in open_:
+                _kind, subj = resumed_subject(e.get("reason"))
+                if subj is not None and subj in open_:
                     out.append((open_.pop(subj), t))
             elif e.get("event") == "RETIRED":
                 out.append((t, dt.datetime.max.replace(tzinfo=UTC)))
@@ -1874,24 +1959,13 @@ class Judge:
         elif len(want) > len(got):
             last = want[len(got)]
             self.F.w("A11", "state_event_missing", "analyst/state/", "-", safe_detail(last[0], last[1], last[2]))
-        # PAUSED model:<run_id> needs an overlay; RESUMED clear:<subject> needs an owner ADJUDICATIONS row
-        adj = self.bytes_at_head("analyst/ADJUDICATIONS.csv") or b""
-        clears = set()
-        try:
-            for r in csv.DictReader(io.StringIO(adj.decode("utf-8"))):
-                if r.get("decision") == "clear":
-                    clears.add(r.get("subject"))
-        except Exception:  # noqa: BLE001
-            pass
+        # PAUSED model:<run_id> needs an overlay; pauses, resumes and retirements follow R-AN-55 (check_state_events)
         for r in evs:
             e = r.rec
             if e.get("event") == "PAUSED" and str(e.get("reason", "")).startswith("model:"):
                 if str(e["reason"])[6:] not in set(self.overlay.values()):
                     self.F.w("A11", "pause_unsupported", r.path, r.commit, "no exported run on another model")
-            if e.get("event") == "RESUMED":
-                subj = str(e.get("reason", ""))[len("clear:"):]
-                if subj not in clears:
-                    self.F.w("A11", "resume_unsupported", r.path, r.commit, "no owner clear row")
+        self.check_state_events(evs)
         for run_id in set(self.overlay.values()):
             if not any(r.rec.get("event") == "PAUSED" and r.rec.get("reason") == f"model:{run_id}" for r in evs):
                 self.F.w("A11", "overlay_missing", "analyst/state/", "-", safe_detail("run", run_id))
@@ -1934,6 +2008,134 @@ class Judge:
                 bad.append("paused_display")
         if bad:
             self.F.w("A11", "state_snapshot", "analyst/STATE.json", "-", safe_detail(*bad))
+
+    def mode_at(self, commit):
+        """(P0, LS) from analyst/MODE.json in `commit` (HEAD when unknown), R-AN-55: P0 is 00:00:00Z of the earliest
+        of `canary_from` and `live_from` that is set, LS 00:00:00Z of `live_from`; None when unset."""
+        cache = self._mode_at
+        c = commit if commit and commit != "-" else self.head
+        if c not in cache:
+            b = self.git.show(c, "analyst/MODE.json")
+            try:
+                m = load_json_bytes(b) if b is not None else None
+            except Exception:  # noqa: BLE001
+                m = None
+            m = m if isinstance(m, dict) else {}
+
+            def day0(k):
+                v = m.get(k)
+                if not is_day(v):
+                    return None
+                try:
+                    return dt.datetime.combine(dt.date.fromisoformat(v), dt.time(), UTC)
+                except ValueError:
+                    return None
+            starts = [x for x in (day0("canary_from"), day0("live_from")) if x is not None]
+            cache[c] = (min(starts) if starts else None, day0("live_from"))
+        return cache[c]
+
+    def fresh_at(self, commit) -> bool:
+        """analyst/STATE.json in `commit` shows `judge_verdict.fresh` true (R-AN-56, fourth review of A6, N2)."""
+        if not commit or commit == "-":
+            return False
+        b = self.git.show(commit, "analyst/STATE.json")
+        try:
+            S = load_json_bytes(b) if b is not None else None
+        except Exception:  # noqa: BLE001
+            return False
+        jv = S.get("judge_verdict") if isinstance(S, dict) else None
+        return isinstance(jv, dict) and jv.get("fresh") is True
+
+    @staticmethod
+    def mirrored(subject, paused, LS) -> bool:
+        """R-AN-55: a pause of subject `judge_violation:K` is mirrored when K is operational, or LS is none, or its
+        PAUSED event's utc < LS. Every other judge pause is a live integrity pause."""
+        K = subject[len("judge_violation:"):]
+        return operational(K) or LS is None or paused < LS
+
+    def check_state_events(self, evs):
+        """A11 (WARNING; fourth review of §16.18 A6, J-4; R-AN-55, R-AN-56, R-AN-67): the pause rule's events.
+        The open pauses are replayed by seq (PAUSED opens its reason; RESUMED closes the subject after its first
+        `clear:` or `lifted:`); P0 and LS come from analyst/MODE.json in the commit that added each event.
+        - `resume_unsupported`: a RESUMED `clear:<S>` without an analyst/ADJUDICATIONS.csv row for S, ref `pause`,
+          decision `clear`, dated at or after S's PAUSED event and at or before the RESUMED event, or whose S is a
+          mirrored pause (or `judge_silent`: only `model:` and live integrity pauses are cleared, R-AN-55 step 1);
+          a RESUMED `lifted:<S>` whose commit's analyst/STATE.json does not show `judge_verdict.fresh` true, or whose S
+          is a live integrity pause (or a `model:` pause: only mirrored pauses and `judge_silent` are lifted, steps 3
+          and 4), or, for S = `judge_violation:K` with K latched (not A0, not `system_error:`), without a clear row
+          for K in the judge's ADJUDICATIONS.csv dated at or before the RESUMED event; and (judge decision J-D30) a
+          RESUMED whose reason is neither, or whose subject has no open pause;
+        - `retire_unsupported`: a RETIRED `violation` dated before LS, or with no earlier RESUMED
+          `clear:judge_violation:K'` event for a live integrity pause (the analyst was not armed);
+        - `pause_early`: a PAUSED `judge_violation:<K>` or `judge_silent` dated before P0, or with no P0."""
+        pause_rows = {}
+        adj = self.bytes_at_head("analyst/ADJUDICATIONS.csv") or b""
+        try:
+            for a in csv.DictReader(io.StringIO(adj.decode("utf-8"))):
+                t = _utc_or_none(a.get("utc"))
+                if a.get("ref") == "pause" and a.get("decision") == "clear" and t is not None:
+                    pause_rows.setdefault(a.get("subject"), []).append(t)
+        except Exception:  # noqa: BLE001
+            pass
+        judge_rows = {}
+        for a in self.judge_adjudications:
+            t = _utc_or_none(a.get("utc"))
+            if a.get("ref") == "latch" and a.get("decision") == "clear" and t is not None:
+                judge_rows.setdefault(a.get("subject"), []).append(t)
+        open_ = {}
+        armed = False
+        for r in evs:
+            e = r.rec
+            ev, reason = e.get("event"), str(e.get("reason") or "")
+            t = _utc_or_none(e.get("utc"))
+            P0, LS = self.mode_at(r.commit)
+            if ev == "PAUSED":
+                if (reason.startswith("judge_violation:") or reason == "judge_silent") and t is not None and \
+                        (P0 is None or t < P0):
+                    self.F.w("A11", "pause_early", r.path, r.commit,
+                             safe_detail("paused before P0", fmt_utc(P0) if P0 else "no period set"))
+                if t is not None:
+                    open_.setdefault(reason, t)
+            elif ev == "RESUMED":
+                kind, subj = resumed_subject(reason)
+                paused = open_.get(subj) if kind else None
+                why, live_int = None, False
+                if kind is None:
+                    why = "neither clear: nor lifted:"
+                elif paused is None:
+                    why = "no open pause for its subject"
+                elif t is None:
+                    why = "event time unreadable"
+                else:
+                    judge_pause = subj.startswith("judge_violation:")
+                    mir = judge_pause and self.mirrored(subj, paused, LS)
+                    live_int = judge_pause and not mir
+                    if kind == "clear":
+                        if not (subj.startswith("model:") or live_int):
+                            why = "a clear of a pause the verdict lifts"
+                        elif not any(paused <= c <= t for c in pause_rows.get(subj, [])):
+                            why = "no owner clear row dated from the pause to the resume"
+                    else:
+                        K = subj[len("judge_violation:"):] if judge_pause else None
+                        if not (subj == "judge_silent" or mir):
+                            why = "a lift of a pause only a clear ends"
+                        elif not self.fresh_at(r.commit):
+                            why = "its commit's STATE.json shows no fresh verdict"
+                        elif K is not None and not K.startswith(("A0|", "system_error:")) and \
+                                not any(c <= t for c in judge_rows.get(K, [])):
+                            why = "a latched key without the judge's clear row"
+                if why:
+                    self.F.w("A11", "resume_unsupported", r.path, r.commit, why)
+                if kind == "clear" and live_int:
+                    armed = True                      # a live integrity pause the owner cleared (R-AN-55 step 2)
+                if subj is not None and subj in open_:
+                    open_.pop(subj)
+            elif ev == "RETIRED" and reason == "violation":
+                if t is None or LS is None or t < LS:
+                    self.F.w("A11", "retire_unsupported", r.path, r.commit, "a retirement before live_from")
+                elif not armed:
+                    self.F.w("A11", "retire_unsupported", r.path, r.commit,
+                             "no earlier clear of a live integrity pause")
 
     # ================================================================ mirror vs source (A11)
     def check_mirror_source(self):

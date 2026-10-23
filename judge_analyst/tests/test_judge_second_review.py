@@ -12,7 +12,9 @@ Written from the register text, not from the analyst code:
   not `claude/probe-<c3|del|wf|result>-<call_id | pYYYYMMDDTHHMMSSZ>`, or more than 40 `branch_creation` entries on
   probe refs in one UTC day; VIOLATION;
 - A0 `inbox_blind` (SEC-3): the judge's last complete read of the inbox's activity is more than 24 h old, a
-  VIOLATION that holds the verdict at VIOLATION while it lasts; the time is kept across runs in the evidence file;
+  VIOLATION that holds the verdict at VIOLATION while it lasts; the time is kept across runs in the evidence file
+  (fourth review, J-3: and at least two failed runs after it, key `A0|inbox_blind|api|<L>`; more cases in
+  tests/test_judge_fourth_review.py);
 - the inbox's activity is read with `time_period=month`; older entries come from the `inbox_activity` evidence rows.
 """
 import datetime as dt
@@ -31,8 +33,12 @@ from world import GA, INBOX, OWNER, T, World, routine_config
 SMALL = dict(canary_days=(), live_from="2026-11-30", live_to="2026-12-01", now="2026-12-02T23:00:00Z")
 P49 = "analyst/runs/2026-W49.json"
 RC = "analyst/ROUTINE_CONFIG.json"
-FLOOD = "A12|probe_flood|inbox/refs/heads/claude/probe-*|-"
-BLIND = "A0|inbox_blind|api|-"
+FLOOD = "A12|probe_flood|inbox/refs/heads/claude/probe-*|2026-12-02"    # fourth review: the sha slot holds the day
+
+
+def blind(L):
+    """A0 inbox_blind's key names its episode by L, the last complete read (fourth review of A6, J-3, J-4)."""
+    return f"A0|inbox_blind|api|{L}"
 
 
 @pytest.fixture(scope="module")
@@ -73,7 +79,7 @@ def test_the_clean_world_has_none_of_the_new_codes(small_base, tmp_path):
     the probe session's four branches under R-AN-84's names."""
     res = small_base.judge(out_dir=str(tmp_path))
     assert keys(res) == []
-    assert res.summary["routine_config_versions_checked"] == 1
+    assert res.summary["routine_config_versions_checked"] == 2           # fourth review: and the version in force
     assert res.summary["inbox_last_complete_read_utc"] == small_base.now
 
 
@@ -160,7 +166,7 @@ def test_A12_routine_connectors_every_version_from_inbox_from(m):
     assert f1.severity == f2.severity == VIOLATION and f1.owner_attested and f2.owner_attested
     assert "analyst-w1" in f1.detail and "mcp_connections" in f1.detail
     assert "analyst-probe" in f2.detail and "enabled_plugins" in f2.detail
-    assert res.summary["routine_config_versions_checked"] == 4
+    assert res.summary["routine_config_versions_checked"] == 5           # with the version in force (fourth review)
     assert s3 not in " ".join(keys(res))
 
 
@@ -193,12 +199,14 @@ def test_A12_routine_connectors_breach_forms(m, make):
 
 
 def test_A12_routine_connectors_counts_from_inbox_from(m):
-    """A version committed before PINS.inbox_from_utc is not judged by the judge (R-AN-67; the build test reads it);
-    one committed at that second is."""
+    """A version committed before PINS.inbox_from_utc is judged only when it is the version in force then (fourth
+    review of A6, N3: the newest committed before it); one committed at that second is judged as a later version."""
     bad = routine_config()
     bad["routines"][0]["raw"]["mcp_connections"] = [{"name": "Drive"}]
-    before = fmt_utc(T(m.inbox_from) - dt.timedelta(seconds=1))
-    commit_config(m, bad, before)
+    commit_config(m, bad, fmt_utc(T(m.inbox_from) - dt.timedelta(seconds=2)))
+    clean = routine_config()
+    clean["exported_utc"] = "2026-11-03T00:00:00Z"
+    commit_config(m, clean, fmt_utc(T(m.inbox_from) - dt.timedelta(seconds=1)))     # supersedes it: not judged
     assert keys(m.judge()) == []
     bad["routines"][0]["raw"]["mcp_connections"] = [{"name": "Calendar"}]      # a new version (an empty commit is none)
     sha = commit_config(m, bad, m.inbox_from)
@@ -297,19 +305,27 @@ def failing(world):
     return FakeGitHub(world.api_data(), repo=GA, fail={"repo_activity"})
 
 
+def failed_run(when):
+    """An `inbox_read_failed` evidence row (fourth review of A6, J-3; R-AN-69): a judge run whose read failed."""
+    return dict({k: "" for k in EVIDENCE_HEADER}, judge_utc=when, source="inbox_read_failed", ref=INBOX)
+
+
 def test_A0_inbox_blind_after_24_hours_without_a_complete_read(m, tmp_path):
     ev = evidence_of(m, tmp_path / "ev")
     assert [r["judge_utc"] for r in ev if r["source"] == "inbox_read"] == [m.now]
     now = T(m.now)
+    before = [failed_run(fmt_utc(now - dt.timedelta(hours=1)))]          # fourth review: a second failed run
     day = aged(ev, fmt_utc(now - dt.timedelta(hours=24)))
-    assert keys(m.judge(api=failing(m), evidence=day)) == ["A0|inbox_api_unreachable|api|-"]
-    late = aged(ev, fmt_utc(now - dt.timedelta(hours=24, seconds=1)))
-    res = m.judge(api=failing(m), evidence=late)
-    assert sorted(keys(res)) == sorted(["A0|inbox_api_unreachable|api|-", BLIND])
-    assert finding(res, BLIND).severity == VIOLATION
+    assert keys(m.judge(api=failing(m), evidence=day + before)) == ["A0|inbox_api_unreachable|api|-"]
+    L = fmt_utc(now - dt.timedelta(hours=24, seconds=1))
+    late = aged(ev, L)
+    assert keys(m.judge(api=failing(m), evidence=late)) == ["A0|inbox_api_unreachable|api|-"]   # one run only
+    res = m.judge(api=failing(m), evidence=late + before)
+    assert sorted(keys(res)) == sorted(["A0|inbox_api_unreachable|api|-", blind(L)])
+    assert finding(res, blind(L)).severity == VIOLATION
     assert finding(res, "A0|inbox_api_unreachable|api|-").severity == WARNING
     # a complete read ends it, and records its own time
-    res = m.judge(evidence=late)
+    res = m.judge(evidence=late + before)
     assert keys(res) == [] and [r["source"] for r in res.evidence_new] == ["inbox_read"]
 
 
@@ -323,44 +339,53 @@ def test_A0_inbox_blind_keeps_the_time_of_a_read_that_listed_nothing_new(m, tmp_
     assert keys(m.judge(api=failing(m), evidence=only_read)) == ["A0|inbox_api_unreachable|api|-"]
     no_read_rows = [r for r in aged(ev, recent, ("inbox_activity",)) if r["source"] != "inbox_read"]
     assert keys(m.judge(api=failing(m), evidence=no_read_rows)) == ["A0|inbox_api_unreachable|api|-"]
-    both_old = aged(ev, old)
-    assert BLIND in keys(m.judge(api=failing(m), evidence=both_old))
+    both_old = aged(ev, old) + [failed_run(recent)]
+    assert blind(old) in keys(m.judge(api=failing(m), evidence=both_old))
 
 
 def test_A0_inbox_blind_with_no_read_recorded_counts_from_inbox_from(m):
-    assert BLIND in keys(m.judge(api=failing(m)))                            # inbox_from + 5 days, never read
+    prior = [failed_run(fmt_utc(T(m.now) - dt.timedelta(hours=12)))]
+    assert blind(m.inbox_from) in keys(m.judge(api=failing(m), evidence=prior))   # inbox_from + 5 days, never read
     just = fmt_utc(T(m.inbox_from) + dt.timedelta(hours=23))
-    assert BLIND not in keys(m.judge(api=failing(m), now=just))
+    prior = [failed_run(fmt_utc(T(m.inbox_from) + dt.timedelta(hours=22)))]
+    assert not [k for k in keys(m.judge(api=failing(m), now=just, evidence=prior)) if "inbox_blind" in k]
 
 
 def test_A0_inbox_blind_without_an_api_client(m):
-    """No API client (an offline run) reads nothing: blind once the inbox has counted for more than a day."""
-    git = GitRepo(m.repo.path)
-    try:
-        res = Judge(git, m.now, api=None).run()
-    finally:
-        git.close()
-    assert {BLIND, "A0|inbox_api_unreachable|api|-"} <= set(keys(res, "A0"))
+    """No API client (an offline run) reads nothing: a failed read (fourth review: blind once a second failed run
+    follows a last complete read more than a day old)."""
+    def run(evidence):
+        git = GitRepo(m.repo.path)
+        try:
+            return Judge(git, m.now, api=None, evidence_rows=evidence).run()
+        finally:
+            git.close()
+    assert "A0|inbox_api_unreachable|api|-" in keys(run([]), "A0")
+    assert not [k for k in keys(run([]), "A0") if "inbox_blind" in k]
+    res = run([failed_run(fmt_utc(T(m.now) - dt.timedelta(hours=2)))])
+    assert {blind(m.inbox_from), "A0|inbox_api_unreachable|api|-"} <= set(keys(res, "A0"))
 
 
 def test_A0_inbox_blind_is_in_force_while_it_lasts_and_never_latched(m, tmp_path):
-    """The verdict is VIOLATION while the judge is blind (P7 is then false and the pause rule sees the key). The key
-    carries no incident, so it is never latched or cleared (judge decision J-D27): it is in force exactly while the
-    condition holds, and a second episode after an earlier one is reported again."""
+    """The verdict is VIOLATION while the judge is blind (P7 is then false and the pause rule sees the key). It is
+    never latched or cleared (judge decision J-D27; fourth review: the key names its episode, L): it is in force
+    exactly while the condition holds, and a second run of the same episode reports it again."""
     out = tmp_path / "out"
     ev = evidence_of(m, out)
-    late = aged(ev, fmt_utc(T(m.now) - dt.timedelta(days=2)))
+    L = fmt_utc(T(m.now) - dt.timedelta(days=2))
+    late = aged(ev, L) + [failed_run(fmt_utc(T(m.now) - dt.timedelta(days=1)))]
     res = m.judge(api=failing(m), evidence=late)
     report.append_csv(str(out / "ADJUDICATIONS.csv"), report.ADJ_HEADER,
-                      [{"utc": m.now, "ref": "latch", "check": "A0", "subject": BLIND, "decision": "clear", "note": "x"}])
+                      [{"utc": m.now, "ref": "latch", "check": "A0", "subject": blind(L), "decision": "clear",
+                        "note": "x"}])
     v = report.write_outputs(res, str(out), m.now, "x")
-    assert v["analyst_verdict"] == "VIOLATION" and v["violation_keys"] == [BLIND]
-    assert BLIND not in (out / "FINDINGS.csv").read_text(encoding="utf-8")
-    assert BLIND in (out / "REPORT.md").read_text(encoding="utf-8")
+    assert v["analyst_verdict"] == "VIOLATION" and v["violation_keys"] == [blind(L)]
+    assert "inbox_blind" not in (out / "FINDINGS.csv").read_text(encoding="utf-8")
+    assert blind(L) in (out / "REPORT.md").read_text(encoding="utf-8")
     v = report.write_outputs(m.judge(evidence=late), str(out), m.now, "x")
     assert v["analyst_verdict"] == "SOUND" and v["violation_keys"] == []
     v = report.write_outputs(m.judge(api=failing(m), evidence=late), str(out), m.now, "x")
-    assert v["violation_keys"] == [BLIND]
+    assert v["violation_keys"] == [blind(L)]
 
 
 # ---------------------------------------------------------------- the activity read (SEC-3)

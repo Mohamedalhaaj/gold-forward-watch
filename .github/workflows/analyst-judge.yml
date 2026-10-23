@@ -7,7 +7,8 @@
 # `git ls-remote`; no write permission is added for them.
 # Script only: no model and no model key. The judge job holds no secret; it reads with the GITHUB_TOKEN.
 # Triggers: after analyst-export (its push to gold-analyst starts analyst-settle there), a daily backstop after
-# analyst-settle's 23:15 run, and manual dispatch. Never on a push or a pull request.
+# analyst-settle's 23:15 run, a Sunday backstop at 11:40 (R-AN-70, fourth review of §16.18 A6, J-3: Sunday has no
+# analyst-export run, so no day has a single judge run), and manual dispatch. Never on a push or a pull request.
 # Concurrency: its own group `analyst-judge`. Only the short `publish` job takes the shared group `forward-watch`
 # (job level) for its commit and deploy, as the judge workflow does.
 # The `judge` job hands ONLY reports/judge_analyst/** and reports/forward_site/judge_analyst/** to `publish` as an
@@ -23,6 +24,7 @@ on:
     types: [completed]
   schedule:
     - cron: "40 23 * * *"   # after analyst-settle's 23:15 backstop in gold-analyst
+    - cron: "40 11 * * 0"   # Sunday: a second judge run (R-AN-70; A0 inbox_blind counts failed runs)
   workflow_dispatch:
 
 concurrency:

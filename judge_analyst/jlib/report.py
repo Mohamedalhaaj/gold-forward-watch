@@ -16,9 +16,10 @@ Files (all written by the judge workflow only, except ADJUDICATIONS.csv, which i
 VIOLATION keys latch: a key once seen stays in force until its clear row, even when a later run cannot re-find it
 (an API entry that aged out, say). WARNINGs are recomputed every run and count while unadjudicated. A0 findings
 (unverifiable inputs) are never adjudicated: they make that run WARNING at best (never SOUND). The one A0 VIOLATION,
-`A0|inbox_blind|api|-` (second review of A6, SEC-3), makes every run that finds it VIOLATION and is in
-violation_keys exactly then: it is never written to FINDINGS.csv, latched or cleared, since its key names no incident
-and a latched key would hide a later episode behind an earlier clear (judge decision J-D27).
+`A0|inbox_blind|api|<L>` (second review of A6, SEC-3; fourth review, J-3: L is the last complete read, so each blind
+episode has its own key), makes every run that finds it VIOLATION and is in violation_keys exactly then: it is never
+written to FINDINGS.csv, latched or cleared (judge decision J-D27 as amended); the analyst treats it as operational,
+paused while a fresh verdict carries it (R-AN-55).
 """
 from __future__ import annotations
 
@@ -104,7 +105,8 @@ def decide(findings, out_dir, now_utc):
             elif a.get("decision") == "resolved":
                 sys_err.pop(subj, None)
     latched = {k for k, r in first_seen.items() if r["severity"] == VIOLATION}
-    # an A0 VIOLATION (inbox_blind, second review of A6) is in force while this run finds it: never latched or cleared
+    # an A0 VIOLATION (inbox_blind, second and fourth reviews of A6) is in force while this run finds it: never
+    # latched or cleared (J-D27)
     a0_now = {f.key for f in findings.items if f.check == "A0" and f.severity == VIOLATION}
     violation_keys = sorted((latched - cleared) | a0_now) + sorted(f"system_error:{k}" for k in sys_err)
     current_warn = sorted({f.key for f in findings.items if f.severity == WARNING and f.key not in warn_done})

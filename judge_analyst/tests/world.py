@@ -9,8 +9,9 @@ from analyst-settle runs, all on main; canary calls carry a passing `canary_prob
 `inbox_checks`. The API double also answers the public reads of R-AN-66 (the inbox's repository, activity, runs and
 rules, gold-analyst's runs by day and rules, and `git ls-remote` of both).
 After the second review of A6 the owner's runs exports also carry `inbox_checks.app_repositories` (the inbox only), and
-gold-analyst main holds two ROUTINE_CONFIG.json exports: one from before PINS.inbox_from_utc, with the connectors
-claude.ai had attached, and the fresh export after it, with none (R-AN-60, R-AN-61).
+gold-analyst main holds ROUTINE_CONFIG.json exports (R-AN-60, R-AN-61): one with the connectors claude.ai had attached,
+superseded before PINS.inbox_from_utc; since the fourth review (N3, the version in force at PINS.inbox_from_utc is
+judged) the cleared one in force at PINS.inbox_from_utc; and the fresh export after it, with none.
 
 It is built from the register's schemas (§16) by the judge's author, not from the analyst code, and it uses the
 judge's own functions to fill derived fields, so a clean world must judge SOUND and every tamper must be found.
@@ -364,13 +365,18 @@ class World:
         self.inbox_activity("refs/heads/main", sha, build_time + dt.timedelta(minutes=5), OWNER, "branch_creation")
 
     def make_routine_config(self, first):
-        """The owner's routine exports (R-AN-61): one committed before PINS.inbox_from_utc, with the connectors claude.ai
-        attached (the judge does not judge it), and the fresh export after the routines were cleared and repointed
-        (second review of A6, SEC-2), committed after PINS.inbox_from_utc and before the probe session."""
+        """The owner's routine exports (R-AN-61): one with the connectors claude.ai attached, superseded before
+        PINS.inbox_from_utc (the judge does not judge it); the export after the connectors were cleared, the version
+        in force at PINS.inbox_from_utc (judged since the fourth review of A6, N3); and the fresh export after the
+        routines were repointed (second review of A6, SEC-2), committed after PINS.inbox_from_utc and before the probe
+        session."""
         r = self.repo
         r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config(connected=True)))
+        r.commit("owner: routine config export", T(self.inbox_from) - dt.timedelta(minutes=60))
+        r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config()))
         r.commit("owner: routine config export", T(self.inbox_from) - dt.timedelta(minutes=30))
         rec = routine_config()
+        rec["exported_utc"] = "2026-11-02T00:00:00Z"
         if "routine_config" in self.hooks:
             self.hooks["routine_config"](self, rec)
         r.write("analyst/ROUTINE_CONFIG.json", record_form(rec))
@@ -940,13 +946,18 @@ class World:
         return data
 
     def judge(self, out_dir=None, api=None, hours=None, store=True, now=None, prev_anchor=None, evidence=None,
-              fetch=None, fresh_main=None, prev_judge_utc=None):
+              fetch=None, fresh_main=None, prev_judge_utc=None, adjudications=None):
+        """adjudications: the judge's own ADJUDICATIONS.csv rows (R-AN-70); default: that file in out_dir, if any."""
+        from jlib import report
         from jlib.gitrepo import GitRepo
+        if adjudications is None and out_dir:
+            adjudications = report.read_csv(os.path.join(out_dir, "ADJUDICATIONS.csv"), report.ADJ_HEADER)
         git = GitRepo(self.repo.path)
         hs = hours or HourSource(FakeHourFetcher(self.hour_files), os.path.join(out_dir, "hours.csv")
                                  if out_dir else None, now or self.now)
         sg = GitRepo(self.src.path) if store else None
-        extra = {k: v for k, v in (("fresh_main", fresh_main), ("prev_judge_utc", prev_judge_utc)) if v is not None}
+        extra = {k: v for k, v in (("fresh_main", fresh_main), ("prev_judge_utc", prev_judge_utc),
+                                   ("judge_adjudications", adjudications or None)) if v is not None}
         j = Judge(git, now or self.now, api=api if api is not None else FakeGitHub(self.api_data(), repo=GA),
                   hours=hs, store_git=sg, evidence_rows=evidence or [], prev_anchor=prev_anchor, fetch_commit=fetch,
                   **extra)
