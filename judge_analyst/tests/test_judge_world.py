@@ -562,3 +562,64 @@ def test_malformed_records_are_findings_not_crashes(w):
     assert has(res, "A6", "unreadable_witness", VIOLATION)
     assert has(res, "A6", "unreadable_terminal", VIOLATION)
     assert not keys(res, "A0", code="check_crashed")
+
+
+# ---------------------------------------------------------------- the merge's B2 witnesses (register §16, 2026-10-23)
+def test_B2_rejections_of_malformed_pushes_are_violations_not_crashes(w):
+    """analyst-merge now turns a malformed push into a rejected witness instead of halting: `agent_scope` for an
+    orphan/unfetchable commit (path null) or a path naming no window, `invalid_content` for an allowed file whose
+    content could not be checked or recovered. The judge reports each as an A3 VIOLATION and does not crash."""
+    base_rec = {"file_sha256": None, "run": None, "window": None, "terminal": None, "writes": [],
+                "written_utc": "2026-12-06T10:00:00Z", "push": {"ref": "refs/heads/claude/analyst-x",
+                                                                 "before": "0" * 40, "after": "a" * 40,
+                                                                 "activity_id": None, "activity_type": None,
+                                                                 "activity_utc": None, "actor": None}}
+    add_witness_with_comment(w, dict(base_rec, kind="push", id=None, status="rejected", reason="agent_scope",
+                                     path=None))
+    add_witness_with_comment(w, dict(base_rec, kind="push", id=None, status="rejected", reason="agent_scope",
+                                     path="analyst/attempts/2026-02-30_W1_1.json"))
+    add_witness_with_comment(w, dict(base_rec, kind="attempt", id="2026-12-04_W1", status="rejected",
+                                     reason="invalid_content", path="analyst/attempts/2026-12-04_W1_2.json"))
+    owner_commit(w)
+    res = w.judge()
+    assert len(keys(res, "A3", VIOLATION, "agent_scope")) == 2
+    assert has(res, "A3", "invalid_content", VIOLATION)
+    assert not keys(res, "A0", code="check_crashed")
+
+
+# ---------------------------------------------------------------- blindness (review blocker B3)
+def test_the_judge_reads_no_analyst_code(w, monkeypatch):
+    """The judge reads gold-analyst through git objects only, and only records, mirrored inputs, owner files and frozen
+    inputs. An analyst code file is never read, unless the analyst's own FROZEN_ANALYST.sha256 lists it: then its bytes
+    are only hashed against that line (A11 frozen_drift); they are never parsed, imported or executed."""
+    import re
+    from jlib import gitrepo
+    w.repo.write("analyst/ga/merge.py", b"raise SystemExit('analyst code')\n")
+    w.repo.write("analyst/run_window.py", b"raise SystemExit('analyst code')\n")
+    w.repo.write("analyst/jobs/merge_job.py", b"raise SystemExit('analyst code')\n")
+    owner_commit(w)
+    reads = []
+    real = gitrepo.GitRepo.show
+
+    def show(self, commit, path):
+        if os.path.realpath(self.path) == os.path.realpath(w.repo.path):
+            reads.append(path)
+        return real(self, commit, path)
+
+    monkeypatch.setattr(gitrepo.GitRepo, "show", show)
+    w.judge()
+    assert reads
+    with open(os.path.join(w.repo.path, "analyst/FROZEN_ANALYST.sha256"), encoding="utf-8") as f:
+        listed = {ln.partition("  ")[2] for ln in f.read().split("\n") if ln.strip()}
+    data = re.compile(
+        r"^mirror/"
+        r"|^analyst/(canary/)?(attempts|calls|lessons|witness|terminal|settled|twins|revisions|state|playbooks|hours|"
+        r"checks)/"
+        r"|^analyst/(runs|usage)/"
+        r"|^analyst/(MODE|PARAMS|PINS|START|STATE|ROUTINE_CONFIG)\.json$"
+        r"|^analyst/(ledger|ADJUDICATIONS|ops_changes)\.csv$"
+        r"|^analyst/(tables|calendars)/"
+        r"|^analyst/FROZEN_ANALYST\.sha256$")
+    hashed_only = sorted({p for p in reads if not data.match(p)})
+    assert set(hashed_only) <= listed, hashed_only
+    assert not {"analyst/ga/merge.py", "analyst/run_window.py", "analyst/jobs/merge_job.py"} & set(reads)

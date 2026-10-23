@@ -6,27 +6,49 @@ It was built **blind**: from the prereg, the register and the record locations t
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
 adjudicate (`spec_gap`, `judge_error` or `system_error`, as J5).
 
-Script only. It never receives the Anthropic key or the Cloudflare token, runs no model, executes nothing from an
-agent-pushed commit (pushed commits are fetched as data and read with `git diff`/`git cat-file`), and prints only
-enums, counts, keys and hashes (no model text reaches stdout, a report or a commit message).
+**Location (R-AN-1; prereg R1(a)).** The judge lives in gold-forward-watch, beside judge v1 (`judge/`, untouched),
+on the branch `analyst-judge` until it is merged. It was moved here from gold-analyst on 2026-10-23 (review blocker
+B3; register §16 dated note): the move changed only `run_judge.py` (paths and arguments), the workflow, this README and
+the tests; `jlib/` is byte-identical to the blind build. gold-analyst holds no judge code and no judge outputs.
+
+**Blind.** It reads the public gold-analyst as data only: a full clone named with `--repo`, read through git objects
+(`cat-file`, `ls-tree`, `log`, `diff`), never from its working tree, never imported or executed. It reads records,
+mirrored inputs, owner files and frozen inputs; an analyst code file is read only when the analyst's own
+`FROZEN_ANALYST.sha256` lists it, and then only hashed against that line (A11 `frozen_drift`). Tests:
+`tests/test_judge_location.py` (imports: standard library and `jlib` only) and `test_the_judge_reads_no_analyst_code`.
+
+Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
+token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
+with `git diff`/`git cat-file`), and prints only enums, counts, keys and hashes (no model text reaches stdout, a
+report or a commit message).
 
 ## Run
 
+From the gold-forward-watch root:
+
 ```
-python -I judge_analyst/run_judge.py --out reports/judge_analyst --fetch-pushes            # in CI (analyst-judge.yml)
-python -I judge_analyst/run_judge.py --api none --hours none --now 2026-12-07T12:00:00Z    # offline dry run
-python -I judge_analyst/run_judge.py --store ../gold-forward-watch                         # with the source store
+python -I judge_analyst/run_judge.py --repo ../ga --fetch-pushes                                 # in CI
+python -I judge_analyst/run_judge.py --repo ../gold-analyst --api none --hours none \
+    --now 2026-12-07T12:00:00Z --out <scratch>/out --site none                                  # offline dry run
+python -I judge_analyst/run_judge.py --write-manifest                                            # after a change
 ```
 
-Inputs (R-AN-66): a full clone of gold-analyst `main`; the GitHub API for it (`/activity`, the pinned witness issue's
-comments, the witness runs; `actions: read`, `issues: read`, token from `GITHUB_TOKEN`); Dukascopy re-downloads of the
-recorded hour files (cached once in `hours.csv`); optionally gold-forward-watch (`--store`); PINS.json and the
-manifests.
+Inputs (R-AN-66): a full clone of gold-analyst `main` (`--repo`, required); the GitHub API for it (`/activity`, the
+pinned witness issue's comments, the witness runs; public data read with `GITHUB_TOKEN`); Dukascopy re-downloads of
+the recorded hour files (cached once in `hours.csv`); gold-forward-watch at HEAD, the system store (`--store`, default
+this checkout; `none` skips it and gives A0 `source_store_unavailable`); PINS.json and the manifests. Relative
+`--out`, `--site` and `--store` are taken from the gold-forward-watch root.
+
+Workflow `.github/workflows/analyst-judge.yml`: after `analyst-export` (whose push starts analyst-settle in
+gold-analyst), daily at 23:40 UTC and on dispatch. The judge job checks out this repository (`gfw/`) and gold-analyst
+(`ga/`, full, no stored credentials), runs the judge, refuses to publish if anything outside its two folders or in
+the gold-analyst clone changed, and hands its folders to `publish`, which commits them (group `forward-watch`) and
+deploys `reports/forward_site/`.
 
 Tests (synthetic world + tamper suite; about 10 minutes, most of it building git worlds):
 
 ```
-uv run --frozen pytest -p no:cacheprovider judge_analyst/tests
+uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 ```
 
 ## Checks (R-AN-67) and what they implement
@@ -51,7 +73,11 @@ Independence: E_n and K are recomputed in pure Python (the test suite checks the
 event calendars are the judge's sha-pinned copies (R-V1-15); windows come from zoneinfo and are unit-tested against the
 register's R-AN-8 table.
 
-## Outputs (`reports/judge_analyst/`, the only path the workflow may commit)
+## Outputs (`reports/judge_analyst/` and `reports/forward_site/judge_analyst/`, the only paths the workflow may commit)
+
+- `reports/forward_site/judge_analyst/analyst_verdict.json`: a byte-identical copy of the verdict below, deployed with
+  the gold-watch site, so analyst-settle reads it at `<PINS.judge_site_url>/judge_analyst/analyst_verdict.json`
+  (R-AN-70; P7 and the pause rule). `--site none` skips it.
 
 - `analyst_verdict.json` (`analyst-verdict/1`: schema, asof_utc, head_sha, analyst_verdict SOUND|WARNING|VIOLATION,
   violation_keys, cleared_keys) and `REPORT.md` (snapshots).
@@ -94,15 +120,11 @@ aged out); a cleared key never clears another (R-JV-4).
 
 ## Open points
 
-1. **Location.** R-AN-1 puts the analyst judge in gold-forward-watch, and R1(a) says gold-analyst holds no judge
-   outputs. The build task placed it here, in gold-analyst. Consequences: the routine sessions can read the judge's
-   reports in their checkout (R1(a)); gold-forward-watch is private, so without a read token this judge cannot compare
-   the mirror with its source (`A0 source_store_unavailable`, so the verdict is never SOUND); R-AN-70's verdict URL.
-   The code is repository-agnostic (`--repo`, `--store`), so moving `judge_analyst/` and the workflow into
-   gold-forward-watch (checking out the public gold-analyst as data) is a copy. Needs the owner's decision.
-2. **Verdict feed.** analyst-settle reads `<PINS.judge_site_url>/judge_analyst/analyst_verdict.json`. This judge has
-   no deploy step and no Cloudflare token; the file is committed at `reports/judge_analyst/analyst_verdict.json`. Either
-   analyst-deploy publishes it, or judge_site_url points at the raw file of the public repository.
+1. **Location: resolved 2026-10-23.** Moved to gold-forward-watch as R-AN-1 says (review blocker B3). The store is
+   this checkout, so `A0 source_store_unavailable` no longer fires in CI.
+2. **Verdict feed: resolved 2026-10-23.** The verdict is copied to `reports/forward_site/judge_analyst/` and deployed
+   by the publish job (R-AN-70), the URL analyst-settle already reads. It goes live only when this branch is merged
+   into gold-forward-watch main (with `analyst-mirror`), which needs the owner's approval.
 3. **Witness issue.** Anyone can comment on an issue of a public repository; the judge trusts only comments by
    `github-actions[bot]`. Locking the pinned issue to collaborators is recommended.
 4. **Cross-run.** The judge has not yet judged records written by the analyst code. Before the freeze it runs on the
