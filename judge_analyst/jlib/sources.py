@@ -4,7 +4,8 @@
   Since register §16.18 A6 also the public reads of R-AN-66: the inbox's repository, activity, runs and rules,
   gold-analyst's runs by day and its rules, and `git ls-remote` of both repositories. These reads are complete or
   they fail (`ApiError`): every page must answer 200 with the expected JSON, so a failed read can never look like an
-  empty list. GETs only; `git ls-remote` runs without any credential.
+  empty list. GETs only; `git ls-remote` runs without any credential. The inbox's activity is read for the last
+  month (`time_period=month`, second review of A6).
 - Dukascopy hour files (re-downloads, R-AN-66): `HttpHourFetcher` / `FakeHourFetcher`, behind `HourSource`, which keeps
   the judge's own append-only cache `hours.csv` so a file is downloaded once and later runs reuse its summary.
 
@@ -194,7 +195,10 @@ class GitHubAPI:
         return data if status == 200 else None
 
     def repo_activity(self, repo: str):
-        return self._pages(f"{self.base}/repos/{repo}/activity?per_page=100")
+        """The inbox's activity for the last month only (R-AN-66, second review of A6, SEC-3: as analyst-merge reads
+        it, so a flood of branches cannot make the read grow without bound); older entries are the judge's
+        `inbox_activity` evidence rows."""
+        return self._pages(f"{self.base}/repos/{repo}/activity?per_page=100&time_period=month")
 
     def runs_total(self, repo: str) -> int:
         url = f"{self.base}/repos/{repo}/actions/runs?per_page=1"

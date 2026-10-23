@@ -231,7 +231,8 @@ def test_A3_unwitnessed_inbox_push_out_of_scope(w):
 
 
 def test_A3_a_probe_push_gives_no_finding(w):
-    inbox_push(w, BAD, "claude/probe-x-p1", "2026-12-05T07:00:00Z")
+    # a name of R-AN-84 (second review of A6: any other probe name is A12 probe_flood, test_judge_second_review.py)
+    inbox_push(w, BAD, "claude/probe-c3-p20261205T070000Z", "2026-12-05T07:00:00Z")
     assert keys(w.judge()) == []
 
 

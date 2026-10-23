@@ -2,8 +2,8 @@
 
 The independent judge of Analyst v1 (xauusd-quant `research/analyst/ANALYST_V1_PREREG.md` DRAFT v0.6, §8 as amended
 by "Change v0.5" M7 and "Change v0.6"; `research/system/IMPLEMENTATION_REGISTER.md` §16, R-AN-66..R-AN-70 and the items
-they cite, with the dated amendment §16.18 A6, the agent inbox, as revised after its review; xauusd-quant 1994513).
-A6 binds once the client approves its text; until then it is the build's target.
+they cite, with the dated amendment §16.18 A6, the agent inbox, as revised after its review and its second review;
+xauusd-quant 62a0d80). A6 binds once the client approves its text; until then it is the build's target.
 It was built **blind**: from the prereg, the register and the record locations the register names, without reading
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
 adjudicate (`spec_gap`, `judge_error` or `system_error`, as J5).
@@ -25,6 +25,10 @@ pushes from the inbox's activity log, counted only at or after PINS.inbox_from_u
 the inbox into the gold-analyst clone (data only), and judges the repository boundary as check A12. Every A6 input is
 a public read (GETs and `git ls-remote`); no write permission was added. Tests: `tests/test_judge_inbox.py` (the
 planted cases of every new code, written from the register text) and `tests/test_judge_sources.py` (the reads).
+After A6's second review (decisions 20-23; SEC-1, SEC-2, SEC-3) the judge also reports the App's repository list
+(`app_scope`) and the routines' connectors (`routine_connectors`), both owner-attested, a flood of probe branches
+(`probe_flood`), and a judge blind to the inbox for more than a day (A0 `inbox_blind`, a VIOLATION); the inbox's
+activity is read for the last month only. Tests: `tests/test_judge_second_review.py`.
 
 Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
 token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
@@ -51,7 +55,9 @@ PINS.json and the manifests. Relative `--out`, `--site` and `--store` are taken 
 Since A6, also these public reads (`jlib/sources.py`; each is complete or it fails, so a failed read never looks like
 an empty list; the token first, and once without it if GitHub refuses it):
 
-- the inbox: `GET /repos/{inbox}` (`id`, `private`); `/activity?per_page=100`, all pages; `/actions/runs?per_page=1`
+- the inbox: `GET /repos/{inbox}` (`id`, `private`); `/activity?per_page=100&time_period=month`, all pages (the last
+  month, as analyst-merge reads it; older entries are the judge's `inbox_activity` evidence rows, so a flood cannot
+  make the read grow without bound); `/actions/runs?per_page=1`
   (`total_count`); `/rules/branches/main`, `.../claude/x`, `.../x`; `git ls-remote https://github.com/{inbox}.git`;
 - gold-analyst: `git ls-remote`; `/actions/runs?created=<day>&per_page=100`, all pages, one UTC day per query from D0
   (two days before the newest `judge_utc` of `VERDICTS.csv`, or the day of PINS.inbox_from_utc on a first run) to
@@ -60,11 +66,14 @@ an empty list; the token first, and once without it if GitHub refuses it):
   inbox; else `https://github.com/<PINS.inbox_repo>.git`) into the gold-analyst clone, without credentials, 180 s per
   fetch, and no more fetches after 3 failed pushes; and one fresh fetch of gold-analyst main (FETCH_HEAD only), which
   A4 `repo_head_foreign` and A12 `inbox_main_foreign` retest against;
-- the owner's runs exports' `inbox_checks` (webhooks, deploy keys, the Actions switch, security-log webhook events;
-  R-AN-60) and the session's probe records (R-AN-84), which are owner-attested and self-reported respectively.
+- the owner's runs exports' `inbox_checks` (webhooks, deploy keys, the Actions switch, security-log webhook events,
+  and since the second review the App's `app_repositories`; R-AN-60), every version of `analyst/ROUTINE_CONFIG.json`
+  on gold-analyst main (R-AN-61), both owner-attested, and the session's probe records (R-AN-84), self-reported.
 
 A failed read is A0 `inbox_api_unreachable` (the inbox) or `api_unreachable` (gold-analyst): WARNING, never SOUND; push
-times then come from the judge's own `inbox_activity` evidence rows.
+times then come from the judge's own `inbox_activity` evidence rows. When the last complete read of the inbox's
+activity is more than 24 h old, A0 `inbox_blind` is a VIOLATION (second review, SEC-3): the verdict is VIOLATION, so
+P7 is false and the pause rule sees the key, for as long as the judge stays blind.
 
 Workflow `.github/workflows/analyst-judge.yml`: after `analyst-export` (whose push starts analyst-settle in
 gold-analyst), daily at 23:40 UTC and on dispatch. The judge job (contents, actions, issues: read; no secret) checks out
@@ -83,7 +92,7 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 
 | Check | Prereg §8 item | Severity |
 |---|---|---|
-| A0 | "Shallow clone or unreachable run record: WARNING, never SOUND" (also: API, hour files or source store unreadable; the judge's own manifest differs; A6: `inbox_api_unreachable`, and `inbox_unpinned` when PINS lacks `inbox_repo`, `inbox_repo_id` or `inbox_from_utc`) | WARNING, never latched |
+| A0 | "Shallow clone or unreachable run record: WARNING, never SOUND" (also: API, hour files or source store unreadable; the judge's own manifest differs; A6: `inbox_api_unreachable`, and `inbox_unpinned` when PINS lacks `inbox_repo`, `inbox_repo_id` or `inbox_from_utc`). Second review (SEC-3): `inbox_blind`, the last complete read of the inbox's activity more than 24 h before the run (kept across runs in the evidence file's `inbox_read` and `inbox_activity` rows; with none, counted from PINS.inbox_from_utc) | WARNING, never latched; `inbox_blind`: VIOLATION in force while it holds, never latched |
 | A1 | server lock_time > entry − 15 on a call not recorded as `no_call:late` (lock recomputed as A2's push time) | VIOLATION |
 | A2 | an attempt push outside [entry − 45, deadline] marked non-void; more than 2 accepted attempts; a call without an earlier accepted attempt for its attempt_n; a counted call whose attempt is void. A6: `time_source`, a witness of an agent push whose `push.repo` is not PINS.inbox_repo or whose `window.time_source` is not `activity`. A push's time is the earliest (timestamp, id) inbox entry at or after PINS.inbox_from_utc on a `claude/analyst-*` ref with the pushed sha (live API, else the `inbox_activity` evidence rows; other refs never count), else the witness run's created_at | VIOLATION |
 | A3 | `agent_scope`, `rewrite`, `invalid_content`, `attempt_cap` witnesses; an accepted push whose diff breaks R-AN-33; a record on main without an accepted witness; an unwitnessed `claude/analyst-*` push after 24 h whose diff breaks R-AN-33 (conforming: WARNING); a push to main by an actor other than the workflow bot or the owner (`main_push_actor`, gold-analyst's log); a `CLAUDE.md`, `AGENTS.md` or `.claude/` anywhere (R1(a)); the other witness codes of R-AN-33. A6: the pushes are the inbox's entries at or after PINS.inbox_from_utc; a `claude/probe-*` push gives nothing; any other `claude/` ref is WARNING `other_claude_ref` | VIOLATION / WARNING as R-AN-33 |
@@ -95,7 +104,7 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 | A9 | START.json differs from R-AN-38 (first live called/stay_out, first_day rule, same commit as that terminal) | VIOLATION |
 | A10 | owner-attested (`analyst/runs/*.json`): an in-span run without an attempt (R-AN-60), a run on another model | VIOLATION (owner-attested) |
 | A11 | a re-downloaded hour file whose sha256 differs (its hour is left out of A4); settlement, opposite side, path summary, twin, ledger, E_n, state events or STATE.json recompute mismatch; mirror vs source; unmatched session id (`unverified_model`); vendored eproc/calendar/holiday table/frozen-manifest drift; record bytes not in the R-AN-3 form | WARNING + ADJUDICATIONS row |
-| A12 | A6, the repository boundary. gold-analyst: `ga_branch` (a branch other than main; pull refs ignored), `ga_tag` (a tag that is no `freeze_tag` of PINS.json in main's first-parent history, or whose peeled commit is not on main), `ga_tag_moved` (an allowed tag away from its first `ga_ref` row), `ga_run_branch` (a run of the day range off main), `ga_run_trigger` (a run from PINS.inbox_from_utc on outside R-AN-75's trigger table), `ga_dynamic_run` (WARNING: a `dynamic/` run). The inbox: `inbox_identity` (404, another id than PINS.inbox_repo_id, or private), `inbox_main_foreign` (a counting main entry, or the listed main, not on gold-analyst main after one fresh fetch), `inbox_rewrite` (a counting `force_push` or `branch_deletion`; sha `after`, or `before` for a deletion), `inbox_ref` (a branch other than main and `claude/**`, or any tag; pull refs ignored), `inbox_runs` (`total_count` > 0), `inbox_rules` (WARNING: rule types missing for `inbox/rules/{main,claude/x,x}`, or `rules/claude/x` of gold-analyst lacking creation), `inbox_stale` (WARNING: inbox main a strict ancestor of gold-analyst main whose oldest missing commit is more than 30 min old). Probes (R-AN-84, self-reported): `probe_failed` (a canary call's `canary_probe` or a `checks/PROBE_<tag>.json` with a pass false, verdict `fail`, or an outcome its probe fails), `probe_incomplete` (WARNING: a canary call whose verdict is not `pass`). Owner-attested (R-AN-60): `inbox_hook` (`inbox_checks` with hooks > 0, security-log hook events > 0, deploy_keys ≠ 1 or Actions on), `inbox_checks_missing` (WARNING: no complete `inbox_checks` for a week with expected windows) | VIOLATION (the codes marked WARNING: WARNING) |
+| A12 | A6, the repository boundary. gold-analyst: `ga_branch` (a branch other than main; pull refs ignored), `ga_tag` (a tag that is no `freeze_tag` of PINS.json in main's first-parent history, or whose peeled commit is not on main), `ga_tag_moved` (an allowed tag away from its first `ga_ref` row), `ga_run_branch` (a run of the day range off main), `ga_run_trigger` (a run from PINS.inbox_from_utc on outside R-AN-75's trigger table), `ga_dynamic_run` (WARNING: a `dynamic/` run). The inbox: `inbox_identity` (404, another id than PINS.inbox_repo_id, or private), `inbox_main_foreign` (a counting main entry, or the listed main, not on gold-analyst main after one fresh fetch), `inbox_rewrite` (a counting `force_push` or `branch_deletion`; sha `after`, or `before` for a deletion), `inbox_ref` (a branch other than main and `claude/**`, or any tag; pull refs ignored), `inbox_runs` (`total_count` > 0), `inbox_rules` (WARNING: rule types missing for `inbox/rules/{main,claude/x,x}`, or `rules/claude/x` of gold-analyst lacking creation), `inbox_stale` (WARNING: inbox main a strict ancestor of gold-analyst main whose oldest missing commit is more than 30 min old). Probes (R-AN-84, self-reported): `probe_failed` (a canary call's `canary_probe` or a `checks/PROBE_<tag>.json` with a pass false, verdict `fail`, or an outcome its probe fails), `probe_incomplete` (WARNING: a canary call whose verdict is not `pass`). Owner-attested (R-AN-60): `inbox_hook` (`inbox_checks` with hooks > 0, security-log hook events > 0, deploy_keys ≠ 1 or Actions on), `inbox_checks_missing` (WARNING: no complete `inbox_checks` for a week with expected windows; second review: also an `inbox_checks` without a readable `app_repositories`). Second review: `app_scope` (owner-attested, SEC-1: `app_repositories` with a `repository_selection` other than `selected`, or naming gold-analyst, gold-forward-watch or xauusd-quant), `routine_connectors` (owner-attested, SEC-2: a version of `analyst/ROUTINE_CONFIG.json` committed to main at or after PINS.inbox_from_utc in which a routine's `raw` lacks `mcp_connections` or `enabled_plugins` or holds a non-empty one; key: that version's commit), `probe_flood` (SEC-3: a listed `claude/probe-*` ref first seen at or after PINS.inbox_from_utc whose name is not `claude/probe-<c3\|del\|wf\|result>-<call_id\|pYYYYMMDDTHHMMSSZ>`, or more than 40 `branch_creation` entries on probe refs in one UTC day, key `inbox/refs/heads/claude/probe-*\|-`) | VIOLATION (the codes marked WARNING: WARNING) |
 
 Independence: E_n and K are recomputed in pure Python (the test suite checks them against the lab's frozen
 `eproc.py`, sha256 ee8d456a…, kept in `tests/fixtures/` only); the holiday rows are the register's own (R-AN-9), the
@@ -114,8 +123,9 @@ register's R-AN-8 table.
   `evidence.csv` (R-AN-69, one row per item first seen: `activity` (gold-analyst's log), `inbox_activity` (the
   inbox's log), `comment` (bot comments), `run` (witness runs; since A6 with `ref` = refs/heads/<head_branch> and
   `push_after` = head_sha), `ga_ref` (a ref first seen at a sha: `refs/...` of gold-analyst, `inbox/refs/...` of the
-  inbox; pull refs and HEAD not recorded) and `ga_run` (a gold-analyst run that gave an A12 finding)), `hours.csv` (the
-  judge's hour-file cache): append-only.
+  inbox; pull refs and HEAD not recorded), `ga_run` (a gold-analyst run that gave an A12 finding) and, since the
+  second review, `inbox_read` (a complete read of the inbox's activity: `judge_utc` and `ref` = PINS.inbox_repo, one
+  per run time; A0 `inbox_blind`)), `hours.csv` (the judge's hour-file cache): append-only.
 - `ADJUDICATIONS.csv` (the owner's, append-only): `utc,ref,check,subject,decision,note`. A VIOLATION key is cleared by
   `ref=latch, decision=clear` with `utc` at or after its first_seen_utc (R-JV-2). A WARNING key is adjudicated by
   `ref=warning` with `judge_error`, `spec_gap`, `accepted` or `ops`; `system_error` puts a VIOLATION in force until a
@@ -169,6 +179,26 @@ aged out); a cleared key never clears another (R-JV-4).
 - J-D22 (A6) `inbox_rewrite` is reported only for entries the API lists in that run (an evidence row keeps `after`
   only, so a deletion's `before` could not rebuild the same key); VIOLATIONs latch, so an aged-out entry stays in force.
 - J-D23 (A6) `--fetch-pushes` also allows the one fresh fetch of gold-analyst main (into FETCH_HEAD only).
+- J-D24 (second review) `app_scope` matches a `full_names` entry by its repository name (the part after `/`), case
+  ignored as GitHub ignores it, for any owner; `gold-analyst-inbox` and `gold-analyst-exam` are other names (R-AN-67's
+  row names only the three; the exam window of R-AN-60 is not judged). A `repository_selection` key present with any
+  value but `selected` (null included) is `app_scope`; an absent one, a non-list `full_names` or a non-string name is
+  `inbox_checks_missing` for a judged week.
+- J-D25 (second review) The last complete read of the inbox's activity is kept in the evidence file: an `inbox_read`
+  row for each complete read (one per `judge_utc`), and the `inbox_activity` rows, which only a complete read writes
+  (so the rows of runs from before this change count). With neither, `inbox_blind` counts from PINS.inbox_from_utc; a
+  run without an API client reads nothing.
+- J-D26 (second review) "Committed at or after PINS.inbox_from_utc" (`routine_connectors`) is the commit's committer
+  time, for the commits of main's first-parent history that add or change the file. A version that is not a JSON
+  record with a `routines` list, or a routine that is not an object with an object `raw`, is reported too (it cannot
+  show the empty lists); any value other than the empty JSON list counts as non-empty.
+- J-D27 (second review) `A0|inbox_blind|api|-` is in `violation_keys` (verdict VIOLATION) in every run that finds it,
+  and only then: never written to FINDINGS.csv, latched or cleared. Its key names no incident, so a latched key would
+  let one clear hide every later episode. analyst-settle latches its own PAUSED event from the key (R-AN-56).
+- J-D28 (second review) `probe_flood` judges a listed probe ref by its earliest known entry (live list or evidence
+  rows); a listed ref with no known entry is not judged (its entry predates the judge's reads, or this run's read
+  failed, which `inbox_blind` covers after 24 h). Names are matched case-sensitively; `<tag>` is matched as a pattern
+  (a call_id, or `p` + 8 digits + `T` + 6 digits + `Z`), not as a valid date.
 
 ## Open points
 
@@ -192,3 +222,8 @@ aged out); a cleared key never clears another (R-JV-4).
 7. Not covered by a code of the register, so not reported: a gold-analyst branch created and deleted between two judge
    reads (`ga_branch` reads `git ls-remote` only; gold-analyst's own activity log would show it), and a webhook created
    and deleted inside one session (the residual risk A6 discloses).
+8. **A6 second review (2026-10-23), branch `analyst-judge-inbox`, not merged or pushed.** Built test-first from register
+   §16.18 A6 decisions 20-23 and R-AN-60/61/66/67 at xauusd-quant 62a0d80, without reading the analyst code. To log in
+   the register before the freeze: the `inbox_read` evidence source (R-AN-69 does not list it) and J-D24..J-D28, in
+   particular that `inbox_blind` is never latched (J-D27). A ROUTINE_CONFIG.json version committed before
+   PINS.inbox_from_utc and still at HEAD is not judged here (R-AN-67's row); R-AN-61's build test covers it.

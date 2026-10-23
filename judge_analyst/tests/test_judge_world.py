@@ -94,7 +94,7 @@ def test_clean_world_is_sound(base, tmp_path):
                  "ADJUDICATIONS.csv"):
         assert os.path.exists(tmp_path / name)
     ev = report.read_csv(str(tmp_path / "evidence.csv"), EVIDENCE_HEADER)
-    assert {r["source"] for r in ev} == {"activity", "comment", "run", "inbox_activity", "ga_ref"}
+    assert {r["source"] for r in ev} == {"activity", "comment", "run", "inbox_activity", "ga_ref", "inbox_read"}
     # a second run with the evidence and the anchor: still SOUND, no evidence row repeated
     res2 = base.judge(out_dir=str(tmp_path), evidence=ev, prev_anchor=report.last_anchor(str(tmp_path)))
     assert res2.findings.items == [] and res2.evidence_new == []

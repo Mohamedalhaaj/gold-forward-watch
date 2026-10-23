@@ -3,6 +3,7 @@
 - `git ls-remote` of a repository, with peeled tags, and no credential;
 - the GitHub reads are complete or they fail: every page 200 with the expected JSON and no further page; the token
   first, and once without it when GitHub refuses the token (401, 403, 404), since the repositories are public;
+  the inbox's activity is read for the last month only (second review of A6, SEC-3);
 - `--fetch-pushes` / `--inbox`: a pushed commit is fetched by sha (else by its ref) from the inbox into the
   gold-analyst clone as data, without credentials, and a stuck fetch is bounded;
 - the runs day range starts two days before the newest verdict.
@@ -109,7 +110,7 @@ def api(monkeypatch, script, token="t0ken"):
 
 
 def test_activity_pages_with_the_token_then_anonymously_when_refused(monkeypatch):
-    u1 = f"{B}/repos/{INBOX}/activity?per_page=100"
+    u1 = f"{B}/repos/{INBOX}/activity?per_page=100&time_period=month"
     u2 = f"{B}/repositories/1/activity?per_page=100&after=x"
     a, seen = api(monkeypatch, {(u1, True): [(403, None, "")],
                                 (u1, False): [(200, [{"id": 1}], f'<{u2}>; rel="next", <{u1}>; rel="first"')],
@@ -118,9 +119,18 @@ def test_activity_pages_with_the_token_then_anonymously_when_refused(monkeypatch
     assert seen == [(u1, True), (u1, False), (u2, False)]          # the anonymous read restarts once, then holds
 
 
+def test_the_inbox_activity_is_read_for_the_last_month(monkeypatch):
+    """R-AN-66 (second review of A6, SEC-3): the read is bounded to `time_period=month`, as the merge reads it, so a
+    flood of branches cannot make it grow without bound; older entries are the judge's evidence rows."""
+    u1 = f"{B}/repos/{INBOX}/activity?per_page=100&time_period=month"
+    a, seen = api(monkeypatch, {u1: [(200, [{"id": 1}], "")]})
+    assert a.repo_activity(INBOX) == [{"id": 1}]
+    assert seen == [(u1, True)]
+
+
 @pytest.mark.parametrize("second", [(500, None, ""), (200, {"not": "a list"}, ""), (404, None, "")])
 def test_an_incomplete_activity_read_fails(monkeypatch, second):
-    u1 = f"{B}/repos/{INBOX}/activity?per_page=100"
+    u1 = f"{B}/repos/{INBOX}/activity?per_page=100&time_period=month"
     u2 = f"{B}/repositories/1/activity?page=2"
     a, _ = api(monkeypatch, {u1: [(200, [{"id": 1}], f'<{u2}>; rel="next"')], u2: [second]})
     with pytest.raises(ApiError):

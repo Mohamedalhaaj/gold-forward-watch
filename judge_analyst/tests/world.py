@@ -8,6 +8,9 @@ proxy attributes them); inbox main follows gold-analyst main; witnesses come fro
 from analyst-settle runs, all on main; canary calls carry a passing `canary_probe`; the owner's runs exports carry
 `inbox_checks`. The API double also answers the public reads of R-AN-66 (the inbox's repository, activity, runs and
 rules, gold-analyst's runs by day and rules, and `git ls-remote` of both).
+After the second review of A6 the owner's runs exports also carry `inbox_checks.app_repositories` (the inbox only), and
+gold-analyst main holds two ROUTINE_CONFIG.json exports: one from before PINS.inbox_from_utc, with the connectors
+claude.ai had attached, and the fresh export after it, with none (R-AN-60, R-AN-61).
 
 It is built from the register's schemas (§16) by the judge's author, not from the analyst code, and it uses the
 judge's own functions to fill derived fields, so a clean world must judge SOUND and every tamper must be found.
@@ -65,6 +68,28 @@ def probe_record(tag, kind, head, when):
     passes = {k: (None if k in ("net.api_root", "activity_seen_s", "workflow_push") else True) for k in outcomes}
     return {"schema": "analyst-probe/1", "tag": tag, "kind": kind, "repo_head_sha": head, "probe_utc": fmt_utc(when),
             "outcomes": outcomes, "pass": passes, "verdict": "pass"}
+
+
+ROUTINES = ("analyst-w1", "analyst-w2", "analyst-lesson", "analyst-revision", "analyst-probe")
+
+
+def routine_config(connected=False):
+    """`analyst/ROUTINE_CONFIG.json` (`analyst-routine-config/1`, R-AN-61) for the four routines and `analyst-probe`.
+    `raw` stands for the RemoteTrigger get response; only its two lists matter to the judge. connected=True is an
+    export as claude.ai leaves a new routine: every account connector and a plugin attached (second review, SEC-2)."""
+    routines = []
+    for i, name in enumerate(ROUTINES):
+        raw = {"id": f"trig_{i}", "mcp_connections": [], "enabled_plugins": []}
+        if connected:
+            raw["mcp_connections"] = [{"name": "Gmail", "connector_uuid": f"c{i}"}]
+            raw["enabled_plugins"] = ["example@plugins"]
+        routines.append({"name": name, "trigger_id": f"trig_{i}", "prompt_sha256": "0" * 64, "model": "claude-opus-5-5",
+                         "effort": "high", "allowed_tools": ["Bash", "Read", "Write"],
+                         "network": {"level": "custom", "hosts": ["datafeed.dukascopy.com"]},
+                         "environment": "gold-analyst", "crons": [], "repo": INBOX, "enabled": False, "raw": raw})
+    return {"schema": "analyst-routine-config/1", "exported_utc": "2026-11-01T00:00:00Z", "routines": routines}
+
+
 FORECAST_HEADER = "day,slot,origin_model,origin_utc,F_H1,F_S,price,y_bp,nfp,cpi,fomc,hol,computed_utc"
 _REC24 = struct.Struct(">iiiiif")
 _TICK = struct.Struct(">IIIff")
@@ -190,6 +215,7 @@ class World:
         self.gv = GitRepo(self.repo.path)
         self.make_source_store()
         self.make_build_commit(first)
+        self.make_routine_config(first)
         self.make_probe_session(first)
         self.mirrored_until = None
         day = first - dt.timedelta(days=1)
@@ -336,6 +362,19 @@ class World:
         sha = r.commit("analyst build", build_time)
         # analyst-inbox-mirror creates inbox main (before PINS.inbox_from_utc, so the judge ignores the entry)
         self.inbox_activity("refs/heads/main", sha, build_time + dt.timedelta(minutes=5), OWNER, "branch_creation")
+
+    def make_routine_config(self, first):
+        """The owner's routine exports (R-AN-61): one committed before PINS.inbox_from_utc, with the connectors claude.ai
+        attached (the judge does not judge it), and the fresh export after the routines were cleared and repointed
+        (second review of A6, SEC-2), committed after PINS.inbox_from_utc and before the probe session."""
+        r = self.repo
+        r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config(connected=True)))
+        r.commit("owner: routine config export", T(self.inbox_from) - dt.timedelta(minutes=30))
+        rec = routine_config()
+        if "routine_config" in self.hooks:
+            self.hooks["routine_config"](self, rec)
+        r.write("analyst/ROUTINE_CONFIG.json", record_form(rec))
+        r.commit("owner: routine config export", T(f"{(first - dt.timedelta(days=2)).isoformat()}T09:00:00Z"))
 
     def make_probe_session(self, first):
         """The one-off probe session (R-AN-84 `run_window.py probe`) after PINS.inbox_from_utc: its probe pushes in the
@@ -879,9 +918,11 @@ class World:
                                 {"name": "analyst-w2", "trigger_id": "t2", "model": "claude-opus-5-5",
                                  "effort": "high", "crons": ["50 12,13 * * 1-5"], "enabled": True}],
                    "runs": rows,
-                   # R-AN-60 (A6, blocker B3): the owner's weekly read of the inbox's hooks, keys and Actions switch
+                   # R-AN-60 (A6, blocker B3): the owner's weekly read of the inbox's hooks, keys and Actions switch;
+                   # (second review, SEC-1) and of the Claude GitHub App's repository selection
                    "inbox_checks": {"checked_utc": "2026-12-07T08:55:00Z", "hooks": 0, "deploy_keys": 1,
-                                    "actions_enabled": False, "security_log_hook_events": 0}}
+                                    "actions_enabled": False, "security_log_hook_events": 0,
+                                    "app_repositories": {"repository_selection": "selected", "full_names": [INBOX]}}}
             if "runs_record" in self.hooks:
                 self.hooks["runs_record"](self, wk, rec)
             self.repo.write(f"analyst/runs/{wk}.json", record_form(rec))

@@ -15,7 +15,10 @@ Files (all written by the judge workflow only, except ADJUDICATIONS.csv, which i
 
 VIOLATION keys latch: a key once seen stays in force until its clear row, even when a later run cannot re-find it
 (an API entry that aged out, say). WARNINGs are recomputed every run and count while unadjudicated. A0 findings
-(unverifiable inputs) are never adjudicated: they make that run WARNING at best (never SOUND).
+(unverifiable inputs) are never adjudicated: they make that run WARNING at best (never SOUND). The one A0 VIOLATION,
+`A0|inbox_blind|api|-` (second review of A6, SEC-3), makes every run that finds it VIOLATION and is in
+violation_keys exactly then: it is never written to FINDINGS.csv, latched or cleared, since its key names no incident
+and a latched key would hide a later episode behind an earlier clear (judge decision J-D27).
 """
 from __future__ import annotations
 
@@ -101,7 +104,9 @@ def decide(findings, out_dir, now_utc):
             elif a.get("decision") == "resolved":
                 sys_err.pop(subj, None)
     latched = {k for k, r in first_seen.items() if r["severity"] == VIOLATION}
-    violation_keys = sorted(latched - cleared) + sorted(f"system_error:{k}" for k in sys_err)
+    # an A0 VIOLATION (inbox_blind, second review of A6) is in force while this run finds it: never latched or cleared
+    a0_now = {f.key for f in findings.items if f.check == "A0" and f.severity == VIOLATION}
+    violation_keys = sorted((latched - cleared) | a0_now) + sorted(f"system_error:{k}" for k in sys_err)
     current_warn = sorted({f.key for f in findings.items if f.severity == WARNING and f.key not in warn_done})
     if violation_keys:
         verdict = "VIOLATION"
@@ -147,7 +152,8 @@ def render_report(result, verdict, vkeys, ckeys, wkeys, wdone, first_seen, adj, 
     L.append("Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 "
              "(with amendment 16.18 A6, the agent inbox). Model text is "
              "never printed here: findings carry enums, field names, hashes and numbers only. Findings marked "
-             "(owner-attested) rest on the owner's weekly runs export (R-AN-60). Session probe outcomes (A12 "
+             "(owner-attested) rest on the owner's weekly runs export (R-AN-60) or routine config export (R-AN-61). "
+             "Session probe outcomes (A12 "
              "probe_failed, probe_incomplete) are self-reported by the session (R-AN-84).")
     L.append("")
     L.append(f"## VIOLATION keys in force ({len(vkeys)})")

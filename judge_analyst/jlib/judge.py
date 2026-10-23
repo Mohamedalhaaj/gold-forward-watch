@@ -2,9 +2,12 @@
 with amendment §16.18 A6, the agent inbox).
 
 A0 is the judge's own input check (a shallow clone, an unreachable API, an unreadable source store or hour file, a
-PINS.json without the inbox pins): WARNING, never SOUND, never latched. A1-A12 follow R-AN-67's table; A12 is the
-repository boundary of A6 (gold-analyst's refs, tags and runs; the inbox's identity, main, refs, rewrites, runs and
-rules; the session probes; the owner's inbox checks; the mirror's lag).
+PINS.json without the inbox pins): WARNING, never SOUND, never latched. The one A0 VIOLATION, `inbox_blind` (second
+review of A6, SEC-3: no complete read of the inbox's activity for more than 24 h), holds the verdict at VIOLATION while
+it lasts, and is never latched either. A1-A12 follow R-AN-67's table; A12 is the repository boundary of A6
+(gold-analyst's refs, tags and runs; the inbox's identity, main, refs, rewrites, runs and rules; the session probes;
+the owner's inbox checks; the mirror's lag; after the second review the App's repository list, the routines'
+connectors and a flood of probe branches).
 
 Since A6 the agent's pushes are entries of the inbox's activity log (PINS.inbox_repo), counted only at or after
 PINS.inbox_from_utc. Without the inbox pins (a gold-analyst main from before A6) the judge reads pushes from
@@ -80,6 +83,13 @@ GA_RULES = {"claude/x": {"creation"}}
 STALE = dt.timedelta(minutes=30)               # A12 inbox_stale (R-AN-83)
 INBOX_CHECK_TYPES = {"checked_utc": (str,), "hooks": (int,), "deploy_keys": (int,), "actions_enabled": (bool,),
                      "security_log_hook_events": (int, type(None))}
+# The second review of A6 (2026-10-23, register §16.18 A6 decisions 20-23; R-AN-60, R-AN-61, R-AN-66, R-AN-67).
+APP_FORBIDDEN = {"gold-analyst", "gold-forward-watch", "xauusd-quant"}   # A12 app_scope (SEC-1): repository names
+ROUTINE_CONFIG = "analyst/ROUTINE_CONFIG.json"                          # A12 routine_connectors (SEC-2)
+CONNECTOR_LISTS = ("mcp_connections", "enabled_plugins")                # each must be [] in every routine's raw
+PROBE_NAME = re.compile(rf"refs/heads/claude/probe-(c3|del|wf|result)-({CALL_ID_RE}|p[0-9]{{8}}T[0-9]{{6}}Z)")
+PROBE_DAY_CAP = 40                             # A12 probe_flood (SEC-3): probe branch creations in one UTC day
+BLIND = dt.timedelta(hours=24)                 # A0 inbox_blind (SEC-3): age of the last complete activity read
 
 
 def _int(x) -> bool:
@@ -251,6 +261,7 @@ class Judge:
             self.safe(f"mode_{mode}", self.check_mode, mode)
         self.safe("start", self.check_start)
         self.safe("runs_exports", self.check_runs_exports)
+        self.safe("routine_config", self.check_routine_config)
         self.safe("probes", self.check_probes)
         self.safe("boundary", self.check_boundary)
         self.safe("settlement_state", self.check_settlement_and_state)
@@ -339,7 +350,7 @@ class Judge:
         self.inbox_entries = []
         self.inbox_lock = {}
         self.inbox_info = self.inbox_runs = self.inbox_ls = self.ga_ls = self.ga_runs = None
-        self.inbox_info_ok = False
+        self.inbox_info_ok = self.inbox_read_ok = False
         self.inbox_rules = {}
         self.ga_rules = {}
         self.ga_ref_rows = {}
@@ -358,7 +369,7 @@ class Judge:
         else:
             if self.inbox:
                 self.inbox_info_ok, self.inbox_info = self._read("inbox_api_unreachable", "repo_info", self.inbox)
-                ok, api_list = self._read("inbox_api_unreachable", "repo_activity", self.inbox)
+                self.inbox_read_ok, api_list = self._read("inbox_api_unreachable", "repo_activity", self.inbox)
                 ok, self.inbox_runs = self._read("inbox_api_unreachable", "runs_total", self.inbox)
                 for br in INBOX_RULES:
                     ok, lst = self._read("inbox_api_unreachable", "branch_rules", self.inbox, br)
@@ -380,6 +391,27 @@ class Judge:
             self.ga_runs = runs
         if self.inbox:
             self.merge_inbox_activity(api_list)
+            self.check_inbox_blind()
+
+    def check_inbox_blind(self):
+        """A0 `inbox_blind` (VIOLATION; second review of A6, SEC-3): the judge's last complete read of the inbox's
+        activity is more than 24 h before this run, so `closer_raced` and the other inbox checks are blind. A shorter
+        failure stays `inbox_api_unreachable` (WARNING). The time is kept across runs in the evidence file: an
+        `inbox_read` row for each complete read (one per judge_utc), and the `inbox_activity` rows, which only a
+        complete read writes (judge decision J-D25). With no read recorded it counts from PINS.inbox_from_utc."""
+        if self.inbox_read_ok:
+            if not any(r["source"] == "inbox_read" and r["judge_utc"] == self.now_s for r in self.evidence_rows):
+                self.evidence_new.append(self._ev("inbox_read", ref=self.inbox))
+            last = self.now_s
+        else:
+            seen = [r["judge_utc"] for r in self.evidence_rows
+                    if r["source"] in ("inbox_read", "inbox_activity") and is_utc(r["judge_utc"])]
+            last = max(seen) if seen else None
+        self.summary["inbox_last_complete_read_utc"] = last or "-"
+        since = last or self.inbox_from
+        if since is not None and self.now - parse_utc(since) > BLIND:
+            self.F.v("A0", "inbox_blind", "api", "-", safe_detail("last complete read", last) if last else
+                     safe_detail("no complete read since inbox_from", since))
 
     def _read(self, code, name, *args):
         try:
@@ -1275,16 +1307,33 @@ class Judge:
     def check_inbox_checks(self, exports):
         """A12 (A6, review blocker B3; R-AN-60), owner-attested: `inbox_hook` for a runs export whose `inbox_checks`
         has hooks > 0, security_log_hook_events > 0, deploy_keys != 1 or actions_enabled true; `inbox_checks_missing`
-        (WARNING) for an export without complete `inbox_checks` for a week with expected canary or live windows."""
+        (WARNING) for an export without complete `inbox_checks` for a week with expected canary or live windows, and
+        (second review) one whose `inbox_checks` lacks a readable `app_repositories`; `app_scope` (second review,
+        SEC-1) for an export whose `app_repositories` has a `repository_selection` other than `selected`, or names
+        gold-analyst, gold-forward-watch or xauusd-quant (judge decision J-D24: by repository name, any owner, case
+        ignored as GitHub ignores it)."""
         weeks = {iso_week(w.day) for mode in ("canary", "live") for w in self.windows.get(mode, [])}
         for wk, r in sorted(exports.items(), key=lambda x: str(x[0])):
             ic = r.rec.get("inbox_checks")
             complete = isinstance(ic, dict) and all(k in ic and isinstance(ic[k], t) and
                                                     (t != (int,) or _int(ic[k]))
                                                     for k, t in INBOX_CHECK_TYPES.items())
-            if not complete and wk in weeks:
-                self.F.w("A12", "inbox_checks_missing", r.path, r.commit, "no complete inbox_checks for a judged week",
-                         owner_attested=True)
+            app = ic.get("app_repositories") if isinstance(ic, dict) else None
+            app_ok = isinstance(app, dict) and isinstance(app.get("repository_selection"), str) and \
+                isinstance(app.get("full_names"), list) and all(isinstance(n, str) for n in app["full_names"])
+            if not (complete and app_ok) and wk in weeks:
+                self.F.w("A12", "inbox_checks_missing", r.path, r.commit,
+                         "no complete inbox_checks for a judged week" if not complete else
+                         "inbox_checks lacks a readable app_repositories for a judged week", owner_attested=True)
+            if isinstance(app, dict):
+                bad = []
+                if "repository_selection" in app and app["repository_selection"] != "selected":
+                    bad.append(safe_detail("repository_selection", str(app["repository_selection"])))
+                names = app.get("full_names") if isinstance(app.get("full_names"), list) else []
+                bad += sorted({n for n in names if isinstance(n, str) and
+                               n.rsplit("/", 1)[-1].lower() in APP_FORBIDDEN})
+                if bad:
+                    self.F.v("A12", "app_scope", r.path, r.commit, safe_detail(*bad), owner_attested=True)
             if not isinstance(ic, dict):
                 continue
             bad = []
@@ -1298,6 +1347,54 @@ class Judge:
                 bad.append("actions_enabled")
             if bad:
                 self.F.v("A12", "inbox_hook", r.path, r.commit, safe_detail(*bad), owner_attested=True)
+
+    # ================================================================ the routines' connectors (A12, R-AN-61)
+    def check_routine_config(self):
+        """A12 `routine_connectors` (second review of A6, SEC-2), owner-attested: every version of
+        `analyst/ROUTINE_CONFIG.json` committed to gold-analyst main (first-parent history; committer time, judge
+        decision J-D26) at or after PINS.inbox_from_utc in which a routine's `raw` lacks `mcp_connections` or
+        `enabled_plugins`, or holds anything but the empty list in one. A version that is not a JSON record with a
+        `routines` list, or a routine that is not an object with an object `raw`, cannot show the empty lists and is
+        reported too. Key: the version's commit."""
+        if self.inbox_from is None:
+            return
+        since = parse_utc(self.inbox_from)
+        n = 0
+        for sha, _parent, changes in self.log:
+            if not any(p == ROUTINE_CONFIG and st[:1] in ("A", "M", "T") for st, p in changes):
+                continue
+            ct = self.git.commit_time(sha)
+            if ct is None or dt.datetime.fromtimestamp(ct, UTC) < since:
+                continue
+            n += 1
+            bad = self.connector_breaches(self.git.show(sha, ROUTINE_CONFIG))
+            if bad:
+                self.F.v("A12", "routine_connectors", ROUTINE_CONFIG, sha, safe_detail(*bad), owner_attested=True)
+        self.summary["routine_config_versions_checked"] = n
+
+    @staticmethod
+    def connector_breaches(b):
+        """What keeps a ROUTINE_CONFIG.json version from showing `raw.mcp_connections` = [] and `raw.enabled_plugins`
+        = [] for every routine (R-AN-61): routine names and field names only (enums for the report)."""
+        try:
+            rec = load_json_bytes(b) if b is not None else None
+        except Exception:  # noqa: BLE001
+            rec = None
+        if not isinstance(rec, dict) or not isinstance(rec.get("routines"), list):
+            return ["export unreadable or without routines"]
+        bad = []
+        for i, rt in enumerate(rec["routines"]):
+            name = rt.get("name") if isinstance(rt, dict) and isinstance(rt.get("name"), str) else f"routine #{i}"
+            raw = rt.get("raw") if isinstance(rt, dict) else None
+            if not isinstance(raw, dict):
+                bad.append(f"{name} raw unreadable")
+                continue
+            for k in CONNECTOR_LISTS:
+                if k not in raw:
+                    bad.append(f"{name} lacks {k}")
+                elif raw[k] != []:
+                    bad.append(f"{name} {k} not empty")
+        return bad
 
     # ================================================================ session probes (A12, R-AN-84)
     def check_probes(self):
@@ -1338,7 +1435,8 @@ class Judge:
     # ================================================================ the repository boundary (A12)
     def check_boundary(self):
         """A12 (A6): gold-analyst's branches, tags and runs; gold-analyst's rules for `claude/x`; and, with the inbox
-        pinned, the inbox's identity, runs, rules, refs, main, rewrites and lag. Each part needs its read (A0 else)."""
+        pinned, the inbox's identity, runs, rules, refs, main, rewrites and lag, and (second review) a flood of probe
+        branches. Each part needs its read (A0 else)."""
         self.check_ga_refs()
         self.check_ga_runs()
         for br, need in GA_RULES.items():
@@ -1348,6 +1446,7 @@ class Judge:
                     self.F.w("A12", "inbox_rules", f"rules/{br}", "-", safe_detail("lacks", *sorted(need - got)))
         if self.inbox is not None:
             self.check_inbox()
+            self.safe("probe_flood", self.check_probe_flood)
 
     def freeze_tags(self):
         """The `freeze_tag` values of analyst/PINS.json at every commit of main's first-parent history."""
@@ -1466,6 +1565,34 @@ class Judge:
                 if lag > STALE:
                     self.F.w("A12", "inbox_stale", "inbox/refs/heads/main", inbox_main,
                              safe_detail("lacks", old[0][:12], "minutes", int(lag.total_seconds() // 60)))
+
+    def check_probe_flood(self):
+        """A12 `probe_flood` (VIOLATION; second review of A6, SEC-3): a `refs/heads/claude/probe-*` ref the inbox lists
+        whose earliest inbox activity entry counts (timestamp >= PINS.inbox_from_utc) and whose name is not
+        `claude/probe-<c3|del|wf|result>-<call_id | pYYYYMMDDTHHMMSSZ>` (R-AN-84); and more than 40 counting
+        `branch_creation` entries on probe refs in one UTC day (key path `inbox/refs/heads/claude/probe-*`, sha `-`).
+        The entries are the live list and the `inbox_activity` evidence rows, so a month-old flood still counts. A
+        listed ref without a known entry is not judged (judge decision J-D28: its first entry predates the judge's
+        reads, or this run's read failed)."""
+        first = {}
+        for e in self.inbox_entries:                       # sorted by (timestamp, id)
+            if e["ts"] and e["ref"] not in first:
+                first[e["ref"]] = e
+        for sha, ref in self.inbox_ls or []:
+            if not ref.startswith(PROBE_REF) or ref.endswith("^{}"):
+                continue
+            e = first.get(ref)
+            if e is not None and self.counts(e) and not PROBE_NAME.fullmatch(ref):
+                self.F.v("A12", "probe_flood", f"inbox/{ref}", sha, "a probe branch outside R-AN-84's names")
+        per_day = {}
+        for e in self.inbox_entries:
+            if self.counts(e) and e["type"] == "branch_creation" and e["ref"].startswith(PROBE_REF):
+                per_day[e["ts"][:10]] = per_day.get(e["ts"][:10], 0) + 1
+        over = sorted(d for d, n in per_day.items() if n > PROBE_DAY_CAP)
+        if over:
+            self.F.v("A12", "probe_flood", "inbox/refs/heads/claude/probe-*", "-",
+                     safe_detail(*(f"{d} {per_day[d]} creations" for d in over)))
+        self.summary["probe_creations_max_day"] = max(per_day.values(), default=0)
 
     def pause_intervals(self):
         """[(start, end)] UTC datetimes when live calls were disabled (PAUSED..RESUMED, RETIRED..)."""

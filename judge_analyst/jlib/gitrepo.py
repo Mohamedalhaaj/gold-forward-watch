@@ -131,6 +131,12 @@ class GitRepo:
                 return parts[0], int(parts[1])
         return None
 
+    def commit_time(self, sha: str):
+        """The committer unix time of a commit, or None (A12 routine_connectors: a version committed at or after
+        PINS.inbox_from_utc)."""
+        out = self.run("log", "-1", "--format=%ct", sha, check=False).strip()
+        return int(out) if out.isdigit() else None
+
     def diff_name_status(self, base: str, after: str):
         out = self.run("diff", "--no-renames", "--name-status", base, after)
         res = []
