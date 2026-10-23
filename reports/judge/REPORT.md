@@ -4,7 +4,7 @@
 
 **الحكم: سليم** · السبب: كل الفحوص سليمة
 
-- وقت الفحص: 2026-10-23T14:23:06Z
+- وقت الفحص: 2026-10-23T17:52:00Z
 - الفحوص السليمة 8 من 9، ولم يُتحقق من 1
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **SOUND** (reason code `sound`), checks ok 9 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `9991eaa7a9b06cbfa132940da04c31437e5d9eea`
+- HEAD checked: `7052ffa28bb5520f1be481fb621887c87e3fe0c7`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-10-23T14:23:06Z; data root repo
+- judge run 2026-10-23T17:52:00Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 231 (checked now: 231); older days sampled: 20; sides compared equal: 23; revised: 0; known revisions: 0; unverified downloads: 479
-- unverified: 479 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 220 (checked now: 220); older days sampled: 20; sides compared equal: 30; revised: 0; known revisions: 0; unverified downloads: 450
+- unverified: 450 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -58,7 +58,7 @@
 - raw folders: 11 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
 - v1 append-only files: 15 files, 13 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 4 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 8 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 9 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -86,9 +86,9 @@
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head acdca8bc6fdc is an ancestor of HEAD 9991eaa7a9b0
-- the published VolMapJudge.csv head acdca8bc6fdc is an ancestor of HEAD 9991eaa7a9b0
-- the deployed VolMapJudge.csv head acdca8bc6fdc is an ancestor of HEAD 9991eaa7a9b0
+- the previous VERDICTS.csv row head 9991eaa7a9b0 is an ancestor of HEAD 7052ffa28bb5
+- the published VolMapJudge.csv head 9991eaa7a9b0 is an ancestor of HEAD 7052ffa28bb5
+- the deployed VolMapJudge.csv head 9991eaa7a9b0 is an ancestor of HEAD 7052ffa28bb5
 
 ### J9: OK
 
