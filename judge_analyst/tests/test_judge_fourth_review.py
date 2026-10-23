@@ -624,9 +624,14 @@ def test_A10_both_runs_are_found_without_a_pause(a10):
 
 @pytest.mark.parametrize("lift,found", [("2026-12-01T20:00:00Z", False), ("2026-12-01T10:00:00Z", True)])
 def test_A10_a_lifted_resume_ends_the_pause_interval(a10, lift, found):
-    """J-D14 (R-AN-67, fourth review): calls are disabled from a PAUSED event to its RESUMED, `lifted:` included."""
-    plant(a10, [("PAUSED", f"judge_violation:{K_OP}", "2026-12-01T00:00:00Z")], "2026-12-01T00:05:00Z")
-    plant(a10, [("RESUMED", f"lifted:judge_violation:{K_OP}", lift)], lift, fresh=True)
+    """J-D14 (R-AN-67, fourth review): calls are disabled from a PAUSED event to its RESUMED, `lifted:` included.
+    Since the fifth review (J-5, decision 33) both ends are the times inbox main first held the events, so
+    analyst-inbox-mirror pushes each settle commit 5 minutes after it (an interval stays open while no push of the
+    lift is known; tests/test_judge_fifth_review.py)."""
+    _, paused = plant(a10, [("PAUSED", f"judge_violation:{K_OP}", "2026-12-01T00:00:00Z")], "2026-12-01T00:05:00Z")
+    a10.inbox_activity("refs/heads/main", paused, T("2026-12-01T00:10:00Z"), OWNER, "push")
+    _, lifted = plant(a10, [("RESUMED", f"lifted:judge_violation:{K_OP}", lift)], lift, fresh=True)
+    a10.inbox_activity("refs/heads/main", lifted, T(lift) + dt.timedelta(minutes=5), OWNER, "push")
     live = [d for d in in_span(a10.judge()) if "2026-12-01_W2" in d]
     assert bool(live) is found
 
