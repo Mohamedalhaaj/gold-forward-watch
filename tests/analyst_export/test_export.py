@@ -1,0 +1,90 @@
+"""The analyst input mirror (xauusd-quant IMPLEMENTATION_REGISTER.md R-AN-12)."""
+import datetime as dt
+import hashlib
+import importlib.util
+import shutil
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location("analyst_export", ROOT / "analysis/analyst_export/export.py")
+ex = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ex)
+NOW = dt.datetime(2026, 10, 23, 5, 10, tzinfo=dt.timezone.utc)
+
+
+def source(tmp, days=("2026-10-20", "2026-10-21"), fc_rows=None):
+    src = tmp / "gfw"
+    lines = ["day,side,status,bytes,sha256,records,vol_minutes,fetched_utc"]
+    for d in days:
+        for side in ("BID", "ASK"):
+            body = f"{d}{side}".encode() * 10
+            p = src / "data/system/raw" / ex.raw_rel(d, side)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(body)
+            lines.append(f"{d},{side},ok,{len(body)},{hashlib.sha256(body).hexdigest()},1440,1380,2026-10-22T08:00:00Z")
+    lines.append("2026-08-31,BID,ok,1,x,1440,1380,2026-10-17T00:00:00Z")          # before 2026-09-01: never copied
+    lines.append("2026-10-19,ASK,missing,,,,,2026-10-23T00:00:00Z")
+    (src / "data/system").mkdir(parents=True, exist_ok=True)
+    (src / "data/system/days.csv").write_text("\n".join(lines) + "\n")
+    rows = fc_rows or [f"2026-10-21,{s},2026-10-21 {s + 1:02d}:00,2026-10-21T00:00Z,1.0,2.0,4000.0,,0,0,0,0,"
+                       f"2026-10-22T08:40:00Z" for s in range(23)]
+    (src / "data/system/forecasts.csv").write_text(
+        "day,slot,origin_model,origin_utc,F_H1,F_S,price,y_bp,nfp,cpi,fomc,hol,computed_utc\n" + "\n".join(rows) + "\n")
+    return src
+
+
+def test_first_export_and_idempotent_second(tmp_path):
+    src, dst = source(tmp_path), tmp_path / "ga"
+    dst.mkdir()
+    s = ex.export(src, dst, "a" * 40, "7", NOW)
+    assert s["raw_files"] == 4 and s["new_raw_files"] == 4
+    assert (dst / "mirror/system/days.csv").read_bytes() == (src / "data/system/days.csv").read_bytes()
+    slots = (dst / "mirror/system/forecasts_slots.csv").read_text().splitlines()
+    assert slots[0].startswith("day,slot,") and [l.split(",")[1] for l in slots[1:]] == ["9", "10", "15"]
+    for l in slots[1:]:
+        assert l in (src / "data/system/forecasts.csv").read_text()           # exact source lines
+    assert not (dst / "mirror/system/raw/2026/08/31").exists()
+    s2 = ex.export(src, dst, "b" * 40, "8", NOW)
+    assert s2["new_raw_files"] == 0
+    rows = (dst / "mirror/exports.csv").read_text().splitlines()
+    assert rows[0] == ",".join(ex.EXPORT_COLS) and len(rows) == 3 and rows[2].split(",")[1] == "b" * 40
+
+
+def test_prefix_and_sha_checks_write_nothing(tmp_path):
+    src, dst = source(tmp_path), tmp_path / "ga"
+    dst.mkdir()
+    ex.export(src, dst, "a" * 40, "1", NOW)
+    before = {p: p.read_bytes() for p in dst.rglob("*") if p.is_file()}
+    (dst / "mirror/system/days.csv").write_bytes(b"different\n")
+    with pytest.raises(ex.ExportError):
+        ex.export(src, dst, "a" * 40, "2", NOW)
+    (dst / "mirror/system/days.csv").write_bytes(before[dst / "mirror/system/days.csv"])
+    raw = dst / "mirror/system/raw" / ex.raw_rel("2026-10-20", "BID")
+    raw.write_bytes(b"tampered")
+    with pytest.raises(ex.ExportError):
+        ex.export(src, dst, "a" * 40, "3", NOW)
+    raw.write_bytes(before[raw])
+    (src / "data/system/raw" / ex.raw_rel("2026-10-21", "ASK")).write_bytes(b"changed at the source")
+    with pytest.raises(ex.ExportError):
+        ex.export(src, dst, "a" * 40, "4", NOW)
+    after = {p: p.read_bytes() for p in dst.rglob("*") if p.is_file()}
+    assert after == before
+
+
+def test_slots_must_stay_a_prefix(tmp_path):
+    src, dst = source(tmp_path), tmp_path / "ga"
+    dst.mkdir()
+    ex.export(src, dst, "a" * 40, "1", NOW)
+    fc = src / "data/system/forecasts.csv"
+    fc.write_text(fc.read_text().replace("2026-10-21,9,", "2026-10-21,9,X", 1))
+    with pytest.raises(ex.ExportError):
+        ex.export(src, dst, "a" * 40, "2", NOW)
+
+
+def test_the_workflow_pushes_mirror_only_with_a_named_deploy_key():
+    wf = (ROOT / ".github/workflows/analyst-export.yml").read_text()
+    assert "${{ secrets.ANALYST_MIRROR_DEPLOY_KEY }}" in wf
+    assert "grep -v '^mirror/'" in wf and "pull_request" not in wf
+    assert "permissions:\n  contents: read" in wf
