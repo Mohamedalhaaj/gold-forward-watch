@@ -1,11 +1,14 @@
-# The analyst judge (xauusd-quant research/analyst/ANALYST_V1_PREREG.md §8 as amended by v0.5 M7;
-# IMPLEMENTATION_REGISTER R-AN-1, R-AN-66..R-AN-70). It lives here, in gold-forward-watch (R-AN-1; prereg R1(a): the
-# analyst's repository holds no judge outputs), and reads the public repository Mohamedalhaaj/gold-analyst as data
-# only: a full clone read through git objects; pushed agent commits are fetched by sha and read with git; nothing from
-# gold-analyst is imported or executed.
+# The analyst judge (xauusd-quant research/analyst/ANALYST_V1_PREREG.md §8 as amended by v0.5 M7 and v0.6;
+# IMPLEMENTATION_REGISTER R-AN-1, R-AN-66..R-AN-70, amendment §16.18 A6). It lives here, in gold-forward-watch (R-AN-1;
+# prereg R1(a): the analyst's repository holds no judge outputs), and reads the public repositories
+# Mohamedalhaaj/gold-analyst and Mohamedalhaaj/gold-analyst-inbox (the agent inbox, A6) as data only: full clones read
+# through git objects; pushed agent commits are fetched by sha from the inbox clone into the gold-analyst clone and
+# read with git; nothing from either repository is imported or executed. All other reads are public GETs and
+# `git ls-remote`; no write permission is added for them.
 # Script only: no model and no model key. The judge job holds no secret; it reads with the GITHUB_TOKEN.
 # Triggers: after analyst-export (its push to gold-analyst starts analyst-settle there), a daily backstop after
-# analyst-settle's 23:15 run, and manual dispatch. Never on a push or a pull request.
+# analyst-settle's 23:15 run, a Sunday backstop at 11:40 (R-AN-70, fourth review of §16.18 A6, J-3: Sunday has no
+# analyst-export run, so no day has a single judge run), and manual dispatch. Never on a push or a pull request.
 # Concurrency: its own group `analyst-judge`. Only the short `publish` job takes the shared group `forward-watch`
 # (job level) for its commit and deploy, as the judge workflow does.
 # The `judge` job hands ONLY reports/judge_analyst/** and reports/forward_site/judge_analyst/** to `publish` as an
@@ -21,6 +24,7 @@ on:
     types: [completed]
   schedule:
     - cron: "40 23 * * *"   # after analyst-settle's 23:15 backstop in gold-analyst
+    - cron: "40 11 * * 0"   # Sunday: a second judge run (R-AN-70; A0 inbox_blind counts failed runs)
   workflow_dispatch:
 
 concurrency:
@@ -58,11 +62,21 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
+      # The public agent inbox (PINS.inbox_repo), full with every branch: the source the pushed agent commits are
+      # fetched from by sha (R-AN-70, A6). Data only: its files are never read as code, imported or run.
+      - uses: actions/checkout@v4
+        with:
+          repository: Mohamedalhaaj/gold-analyst-inbox
+          ref: main
+          path: inbox
+          fetch-depth: 0
+          persist-credentials: false
+
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.26"
 
-      # A0-A11, the verdict and its outputs. `finished` is set only when the judge returned normally.
+      # A0-A12, the verdict and its outputs. `finished` is set only when the judge returned normally.
       - name: Judge run
         id: judge
         continue-on-error: true
@@ -70,7 +84,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          uv run --frozen --no-dev python -I judge_analyst/run_judge.py --repo ../ga --fetch-pushes
+          uv run --frozen --no-dev python -I judge_analyst/run_judge.py --repo ../ga --inbox ../inbox --fetch-pushes
           echo "finished=1" >> "$GITHUB_OUTPUT"
 
       - name: Check that the judge wrote only its folders
@@ -90,6 +104,14 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
             echo "the gold-analyst clone changed; nothing is published"; exit 1
+          fi
+
+      - name: Check that the judge left the inbox clone untouched
+        if: ${{ steps.judge.outputs.finished == '1' }}
+        working-directory: inbox
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "the inbox clone changed; nothing is published"; exit 1
           fi
 
       - name: Upload the judge records

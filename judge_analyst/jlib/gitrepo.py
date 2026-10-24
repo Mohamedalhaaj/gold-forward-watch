@@ -90,6 +90,29 @@ class GitRepo:
         self._cache[key] = data
         return data
 
+    def object_id(self, commit: str, path: str):
+        """The object id (blob sha) of path at commit, or None (A13 guard_config keys name a file's content)."""
+        if "\n" in path or "\0" in path:
+            return None
+        p = subprocess.run(["git", "-C", self.path, "rev-parse", "--verify", "-q", f"{commit}:{path}"],
+                           capture_output=True, text=True)
+        return p.stdout.strip() if p.returncode == 0 else None
+
+    def has_blob(self, commit: str, path: str) -> bool:
+        """Whether the tree of `commit` holds a file (a blob) at `path`, read from the tree entry only: the blob itself
+        is never read (A13: a session whose commit holds `.claude/hooks/guard.py`, third review of A7)."""
+        if "\n" in path or "\0" in path or "\n" in commit:
+            return False
+        p = subprocess.run(["git", "-c", "core.quotePath=false", "-C", self.path, "ls-tree", commit, "--", path],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            return False
+        for line in p.stdout.split("\n"):
+            meta, _, name = line.partition("\t")
+            if name == path and meta.split(" ")[1:2] == ["blob"]:
+                return True
+        return False
+
     def ls_tree(self, commit: str, prefix: str = ""):
         """Paths of the tree of `commit` under `prefix` (one git call per commit, cached: commits are immutable)."""
         sha = self.rev(commit) if len(commit) != 40 else commit
@@ -120,6 +143,22 @@ class GitRepo:
                 cur[2].append((st.strip(), path))
         commits.reverse()
         return commits
+
+    def oldest_missing(self, a: str, b: str):
+        """(sha, committer unix time) of the oldest commit of b's first-parent history that a lacks, or None (the
+        mirror's lag, A12 inbox_stale)."""
+        out = self.run("log", "--first-parent", "--reverse", "--format=%H %ct", f"{a}..{b}", check=False)
+        for line in out.split("\n"):
+            parts = line.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                return parts[0], int(parts[1])
+        return None
+
+    def commit_time(self, sha: str):
+        """The committer unix time of a commit, or None (A12 routine_connectors: a version committed at or after
+        PINS.inbox_from_utc)."""
+        out = self.run("log", "-1", "--format=%ct", sha, check=False).strip()
+        return int(out) if out.isdigit() else None
 
     def diff_name_status(self, base: str, after: str):
         out = self.run("diff", "--no-renames", "--name-status", base, after)

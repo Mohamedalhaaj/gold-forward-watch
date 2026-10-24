@@ -11,11 +11,18 @@ Files (all written by the judge workflow only, except ADJUDICATIONS.csv, which i
                    head_sha is the anchor of the next run's A7 check.
 - evidence.csv     append-only, R-AN-69's columns, one row per item first seen.
 - hours.csv        append-only, the judge's hour-file cache (sources.HOURS_HEADER).
-- analyst_verdict.json (`analyst-verdict/1`) and REPORT.md: snapshots.
+- analyst_verdict.json (`analyst-verdict/1`) and REPORT.md: snapshots. Since the sixth review of A6 (R6-2,
+                   R-AN-70) the verdict also carries `violation_first_seen`: for each key of `violation_keys` with a
+                   FINDINGS.csv row, its `first_seen_utc` (A0 keys and `system_error:` entries have none), so that
+                   the analyst retires only for a key first seen after a live clear, by time (R-AN-55 step 2).
 
 VIOLATION keys latch: a key once seen stays in force until its clear row, even when a later run cannot re-find it
 (an API entry that aged out, say). WARNINGs are recomputed every run and count while unadjudicated. A0 findings
-(unverifiable inputs) are never adjudicated: they make that run WARNING at best (never SOUND).
+(unverifiable inputs) are never adjudicated: they make that run WARNING at best (never SOUND). The one A0 VIOLATION,
+`A0|inbox_blind|api|<L>` (second review of A6, SEC-3; fourth review, J-3: L is the last complete read, so each blind
+episode has its own key), makes every run that finds it VIOLATION and is in violation_keys exactly then: it is never
+written to FINDINGS.csv, latched or cleared (judge decision J-D27 as amended); the analyst treats it as operational,
+paused while a fresh verdict carries it (R-AN-55).
 """
 from __future__ import annotations
 
@@ -61,6 +68,14 @@ def last_anchor(out_dir):
     return rows[-1]["head_sha"] if rows else None
 
 
+def last_judge_utc(out_dir):
+    """The newest judge_utc in VERDICTS.csv, or None on a first run (R-AN-66, A6: the runs day range starts two days
+    before it)."""
+    rows = read_csv(os.path.join(out_dir, "VERDICTS.csv"), VERDICTS_HEADER)
+    times = [r["judge_utc"] for r in rows if r.get("judge_utc")]
+    return max(times) if times else None
+
+
 def decide(findings, out_dir, now_utc):
     """Apply latching and adjudications. Returns (verdict, violation_keys, cleared_keys, warning_keys,
     adjudicated_warnings, new_finding_rows)."""
@@ -93,7 +108,10 @@ def decide(findings, out_dir, now_utc):
             elif a.get("decision") == "resolved":
                 sys_err.pop(subj, None)
     latched = {k for k, r in first_seen.items() if r["severity"] == VIOLATION}
-    violation_keys = sorted(latched - cleared) + sorted(f"system_error:{k}" for k in sys_err)
+    # an A0 VIOLATION (inbox_blind, second and fourth reviews of A6) is in force while this run finds it: never
+    # latched or cleared (J-D27)
+    a0_now = {f.key for f in findings.items if f.check == "A0" and f.severity == VIOLATION}
+    violation_keys = sorted((latched - cleared) | a0_now) + sorted(f"system_error:{k}" for k in sys_err)
     current_warn = sorted({f.key for f in findings.items if f.severity == WARNING and f.key not in warn_done})
     if violation_keys:
         verdict = "VIOLATION"
@@ -119,7 +137,8 @@ def write_outputs(result, out_dir, now_utc, code_sha8, hour_source=None):
                [{"judge_utc": now_utc, "head_sha": result.head, "analyst_verdict": verdict,
                  "n_violation_keys": len(vkeys), "n_warning_keys": len(wkeys), "code_sha8": code_sha8}])
     vobj = {"schema": "analyst-verdict/1", "asof_utc": now_utc, "head_sha": result.head, "analyst_verdict": verdict,
-            "violation_keys": vkeys, "cleared_keys": ckeys}
+            "violation_keys": vkeys, "cleared_keys": ckeys,
+            "violation_first_seen": {k: first_seen[k]["first_seen_utc"] for k in vkeys if k in first_seen}}
     with open(os.path.join(out_dir, "analyst_verdict.json"), "w", encoding="utf-8") as f:
         f.write(json.dumps(vobj, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
     with open(os.path.join(out_dir, "REPORT.md"), "w", encoding="utf-8") as f:
@@ -136,10 +155,14 @@ def render_report(result, verdict, vkeys, ckeys, wkeys, wdone, first_seen, adj, 
     L.append(f"- judge code_sha8: {code_sha8}")
     L.append(f"- **analyst_verdict: {verdict}**")
     L.append("")
-    L.append("Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.5) and IMPLEMENTATION_REGISTER section 16. "
-             "Model text is "
+    L.append("Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 "
+             "(with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is "
              "never printed here: findings carry enums, field names, hashes and numbers only. Findings marked "
-             "(owner-attested) rest on the owner's weekly runs export (R-AN-60).")
+             "(owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs "
+             "(A13, R-AN-86) and of the security log, or routine config export (R-AN-61). "
+             "Session probe outcomes (A12 "
+             "probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code "
+             "version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).")
     L.append("")
     L.append(f"## VIOLATION keys in force ({len(vkeys)})")
     L.append("")
