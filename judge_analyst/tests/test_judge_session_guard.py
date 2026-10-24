@@ -1,6 +1,8 @@
 """Planted cases of register §16.18 A7, the session guard (2026-10-23; R-AN-60, R-AN-66, R-AN-67, R-AN-70, R-AN-85,
 R-AN-86; prereg v0.6 R1 Isolation (f), §8), at xauusd-quant f16708e, and its first review (V6-2, V6-3: an abbreviated
-logged object and a root that is not absolute are unclassifiable; a chain of harmless commands is harmless).
+logged object and a root that is not absolute are unclassifiable; a chain of harmless commands is harmless), and its
+second review (V7-1, decision 20: the settings file sets both Bash timeouts to 3600000 ms, and check 6(b) refuses a
+`timeout` below that, `bash_option`, harmless by R-AN-86 (a)(i)).
 
 Written from the register text, not from the analyst code (the judge never reads, parses or runs `guard.py`):
 - the guard's string rules (R-AN-85 checks 1-3, 5, 6(a)-(c), 7(a)-(c), 8(a), 8(b), 8(d)) and R-AN-86's classes
@@ -110,7 +112,7 @@ D = guard_denial
 @pytest.mark.parametrize("line", sg.NINE)
 def test_the_nine_lines_are_allowed_also_with_spaces_around(line):
     assert sg.decide("Bash", {"command": line}, [ROOT]) is None
-    assert sg.decide("Bash", {"command": "  " + line + " ", "description": "x", "timeout": 5}, [ROOT]) is None
+    assert sg.decide("Bash", {"command": "  " + line + " ", "description": "x", "timeout": 3600000}, [ROOT]) is None
     assert sg.decide("Bash", {"command": line, "run_in_background": False, "dangerouslyDisableSandbox": None},
                      []) is None
 
@@ -147,11 +149,23 @@ def test_bash_form_refusals(cmd):
     ({"command": "python3 analyst/run_window.py start", "dangerouslyDisableSandbox": True}, "bash_option"),
     ({"command": "python3 analyst/run_window.py start", "run_in_background": 0}, "bash_option"),
     ({"command": "python3 analyst/run_window.py start", "shell": "zsh"}, "bash_option"),
+    # second review of A7 (decision 20): a timeout below 3 600 000 ms, or one that is not a JSON number
+    *[({"command": "python3 analyst/run_window.py context", "timeout": v}, "bash_option")
+      for v in (5, 1000, 120000, 600000, 3599999, 3599999.5, 0, -1, True, False, "3600000", [3600000], {})],
     ({"command": 5}, "input"),
     ({}, "input"),
 ])
 def test_bash_options_and_input(ti, code):
     assert sg.decide("Bash", ti, [ROOT]) == code
+
+
+@pytest.mark.parametrize("v", [None, 3600000, 3600000.0, 7200000])
+def test_a_timeout_absent_null_or_at_least_the_settings_value_is_allowed(v):
+    """R-AN-85 check 6(b) as amended by the second review: `timeout` absent, null, or a number >= 3 600 000."""
+    assert sg.decide("Bash", {"command": "python3 analyst/run_window.py context", "timeout": v}, [ROOT]) is None
+    assert sg.decide("Bash", {"command": "python3 analyst/run_window.py probe"}, [ROOT]) is None
+    assert sg.TIMEOUT_MIN_MS == 3600000
+    assert sg.GUARD_SETTINGS["env"] == {"BASH_DEFAULT_TIMEOUT_MS": "3600000", "BASH_MAX_TIMEOUT_MS": "3600000"}
 
 
 @pytest.mark.parametrize("path,ok", [
@@ -306,6 +320,13 @@ def test_the_clean_world_is_sound_with_its_logs_and_the_probe_run(small_base):
     (tlcall(7, "Edit", {"old_string": hashed("a")}, "denied", D("tool")), "scan_unclassifiable"),
     (tlcall(7, "Bash", {"command": None}, "executed"), "forbidden_executed"),        # present, not a string
     (tlcall(7, "Bash", {"command": "python3 analyst/run_window.py probe"}, "executed"), "probe_elsewhere"),
+    # second review of A7: an allowed line with a short timeout is refused `bash_option`, harmless by (a)(i)
+    (tlcall(7, "Bash", {"command": "python3 analyst/run_window.py context", "timeout": 120000}, "denied",
+            D("bash_option")), "guard_denied_benign"),
+    (tlcall(7, "Bash", {"command": "python3 analyst/run_window.py start", "timeout": 1000}, "executed"),
+     "guard_not_enforced"),
+    (tlcall(7, "Bash", {"command": "python3 analyst/run_window.py context", "run_in_background": True}, "executed"),
+     "guard_not_enforced"),
 ])
 def test_A13_each_row(m, call, code):
     res = one(m, *session_log()["calls"], call)
@@ -546,6 +567,11 @@ def test_guard_config_a_missing_guard_file(m, path):
     GUARD_SETTINGS_BYTES.replace(b'"block"', b'"continue"'),
     GUARD_SETTINGS_BYTES.replace(b'"matcher": "*"', b'"matcher": "Bash"'),
     b"[]\n",
+    # second review of A7: the env block is part of R-AN-85's object
+    GUARD_SETTINGS_BYTES.replace(b'"BASH_DEFAULT_TIMEOUT_MS": "3600000"', b'"BASH_DEFAULT_TIMEOUT_MS": "120000"'),
+    GUARD_SETTINGS_BYTES.replace(b'"BASH_MAX_TIMEOUT_MS": "3600000"', b'"BASH_MAX_TIMEOUT_MS": 3600000'),
+    GUARD_SETTINGS_BYTES.replace(b',\n  "env": {\n    "BASH_DEFAULT_TIMEOUT_MS": "3600000",\n'
+                                 b'    "BASH_MAX_TIMEOUT_MS": "3600000"\n  }', b""),
 ])
 def test_guard_config_settings_other_than_r_an_85s(m, data):
     m.repo.write(".claude/settings.json", data)

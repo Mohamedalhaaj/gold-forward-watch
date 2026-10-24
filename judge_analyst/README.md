@@ -4,8 +4,9 @@ The independent judge of Analyst v1 (xauusd-quant `research/analyst/ANALYST_V1_P
 by "Change v0.5" M7 and "Change v0.6"; `research/system/IMPLEMENTATION_REGISTER.md` §16, R-AN-66..R-AN-70 and the items
 they cite, with the dated amendment §16.18 A6, the agent inbox, as revised after its review, its second review, its
 fourth review, its fifth review and its sixth review; xauusd-quant 62a0d80, fourth review 5d7fcdc, fifth review
-166c6b0, sixth review decision 35; and the dated amendment §16.18 A7, the session guard, xauusd-quant f16708e). A6 and
-A7 bind once the client approves their text; until then they are the build's target.
+166c6b0, sixth review decision 35; and the dated amendment §16.18 A7, the session guard, xauusd-quant f16708e, with
+its first and second reviews, decisions 17 to 20). A6 and A7 bind once the client approves their text; until then
+they are the build's target.
 It was built **blind**: from the prereg, the register and the record locations the register names, without reading
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
 adjudicate (`spec_gap`, `judge_error` or `system_error`, as J5).
@@ -440,3 +441,12 @@ aged out); a cleared key never clears another (R-JV-4).
     call `cat ...; ls -la; ls analyst` is `guard_denied_benign`, not `forbidden_attempt`; J-D36 (b) and (c) are the
     register's rule now (planted: a condensed log without Write's `content`, in a session run and in the probe run,
     gives only `scan_unclassifiable`). The probe session's step 7 is `cd /tmp && pwd` (V6-1; the world's C20 log).
+14. **A7 second review (2026-10-24; V7-1), not merged or pushed.** From register §16.18 A7 decision 20 and R-AN-85 as
+    amended there (the settings file, check 6(b)) and R-AN-86 (a): `GUARD_SETTINGS` holds the `env` block that sets
+    `BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` to `"3600000"`, so A13 `guard_config` compares against it; the
+    string rules refuse a Bash `timeout` that is not absent, null or a number of at least 3 600 000 (`bash_option`),
+    which R-AN-86 (a)(i) classes harmless (planted: `guard_denied_benign` when refused, `guard_not_enforced` when it
+    ran; the world's call session now passes `timeout` 3600000). Not judged: whether a call was moved to the
+    background, which the runs export does not record (C20 checks step 1). Made in the same session as the analyst's
+    side of the fix, from the register text; the session had read the analyst's guard earlier, so this change is not
+    blind in the strict sense, though it follows the register's words only.

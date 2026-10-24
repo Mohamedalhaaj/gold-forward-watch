@@ -100,7 +100,8 @@ def routine_config(connected=False):
 
 
 # ---------------------------------------------------------------- the session guard (register §16.18 A7)
-# `.claude/settings.json`: exactly R-AN-85's block (two-space indent, LF, a final newline).
+# `.claude/settings.json`: exactly R-AN-85's block (two-space indent, LF, a final newline); since the second review of
+# A7 with its `env` block (both Bash timeouts 3600000 ms).
 GUARD_SETTINGS_BYTES = b"""{
   "hooks": {
     "PreToolUse": [
@@ -119,6 +120,10 @@ GUARD_SETTINGS_BYTES = b"""{
   },
   "permissions": {
     "deny": ["WebFetch", "WebSearch", "Agent", "Skill"]
+  },
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "3600000",
+    "BASH_MAX_TIMEOUT_MS": "3600000"
   }
 }
 """
@@ -155,7 +160,7 @@ def session_log(calls=None, form="full", project_dir=ROOT):
     if calls is None:
         calls = [tlcall(1, "Bash", {"command": "python3 analyst/run_window.py start", "description": "start"}),
                  tlcall(2, "Read", {"file_path": f"{ROOT}/analyst/ROUTINE_PROMPT.md"}),
-                 tlcall(3, "Bash", {"command": "python3 analyst/run_window.py context", "timeout": 120000}),
+                 tlcall(3, "Bash", {"command": "python3 analyst/run_window.py context", "timeout": 3600000}),
                  tlcall(4, "Read", {"file_path": f"{ROOT}/.analyst_run/context.json", "offset": 1, "limit": 2000}),
                  tlcall(5, "Write", {"file_path": f"{ROOT}/.analyst_run/plan.json", "content": hashed("{}\n")}),
                  tlcall(6, "Bash", {"command": "python3 analyst/run_window.py lock .analyst_run/plan.json"})]

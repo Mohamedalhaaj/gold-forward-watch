@@ -45,6 +45,9 @@ GUARD_SETTINGS = {
         ]
     },
     "permissions": {"deny": ["WebFetch", "WebSearch", "Agent", "Skill"]},
+    # second review of A7 (decision 20): both Bash timeouts at 3 600 000 ms, so no allowed command is moved to the
+    # background (R-AN-85 "Command time")
+    "env": {"BASH_DEFAULT_TIMEOUT_MS": "3600000", "BASH_MAX_TIMEOUT_MS": "3600000"},
 }
 
 CODES = ("input", "error", "tool", "bash_form", "bash_option", "bash_cwd", "read_path", "write_path", "write_size")
@@ -66,6 +69,7 @@ NINE = (
 )
 DRAFTS = ("plan.json", "lesson.json", "playbook.md")
 BASH_KEYS = {"command", "description", "timeout", "run_in_background", "dangerouslyDisableSandbox"}
+TIMEOUT_MIN_MS = 3_600_000         # check 6(b), second review of A7: `timeout` absent, null or a number >= this
 MAX_STDIN = 8 * 1024 * 1024        # check 2: stdin up to 8 MiB
 MAX_WRITE = 4 * 1024 * 1024        # check 8(d): content up to 4 MiB in UTF-8
 HASHED = re.compile(r"sha256:[0-9a-f]{64} bytes:([0-9]+)")   # R-AN-86: Write content replaced by its hash
@@ -105,6 +109,9 @@ def _decide(tool, ti, roots):
         if set(ti) - BASH_KEYS or any(not (ti.get(k) is None or ti.get(k) is False)
                                       for k in ("run_in_background", "dangerouslyDisableSandbox")):
             return "bash_option"                                                  # 6(b)
+        to = ti.get("timeout")
+        if to is not None and (isinstance(to, bool) or not isinstance(to, (int, float)) or not to >= TIMEOUT_MIN_MS):
+            return "bash_option"                                                  # 6(b), second review of A7
         if cmd.strip(" ") not in NINE:                                            # 6(c): spaces only
             return "bash_form"
         return None                                                               # 6(d) is a file-system rule
