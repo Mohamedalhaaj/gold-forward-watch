@@ -171,7 +171,7 @@ PROBE_FAILS = {
     "rest.ga": lambda o: o == "ok", "rest.gfw": lambda o: o == "ok",
     "rest.hooks": lambda o: _int(o) and o > 0,
     "git.ls_remote_gfw": lambda o: o in _ACC, "git.ls_remote_gfw_proxy": lambda o: o in _ACC,
-    "git.ls_remote_public": lambda o: o in _ACC, "git.ls_remote_public_proxy": lambda o: o in _ACC,
+    # git.ls_remote_public and _proxy are measured since §16.18 A8 (public-repository reads; the guard is the control)
     "push_main": lambda o: o in _ACC, "force_main": lambda o: o in _ACC, "tag_push": lambda o: o in _ACC,
     "other_branch_push": lambda o: o in _ACC, "branch_delete": lambda o: o in _ACC,
     "rest.force_main": lambda o: o == "ok", "rest.tag_create": lambda o: o == "ok",

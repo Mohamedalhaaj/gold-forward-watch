@@ -559,7 +559,7 @@ def test_A12_probe_failed_and_incomplete(tmp_path):
                                      ("rest.tag_create", "ok"), ("rest.delete_branch", "ok"), ("tag_push", "accepted"),
                                      ("other_branch_push", "accepted"), ("branch_delete", "accepted"),
                                      ("rest.ga", "ok"), ("rest.gfw", "ok"), ("git.ls_remote_gfw", "accepted"),
-                                     ("git.ls_remote_public_proxy", "accepted"), ("net.google", 200),
+                                     ("git.ls_remote_gfw_proxy", "accepted"), ("net.google", 200),   # public reads: A8
                                      ("net.raw_public", 200)])
 def test_A12_an_outcome_that_fails_its_probe_is_probe_failed_whatever_pass_says(m, outcome):
     """R-AN-84: the session writes both the outcome and its pass flag; an outcome its "Pass iff" column fails (the
