@@ -9,6 +9,9 @@ here, as R-AN-86 says; every other check is applied in R-AN-85's order.
 The decision D of a logged call is None (the string rules allow it) or the guard's refusal code. A refused call is
 `harmless` (R-AN-86 (a) to (d)) or `forbidden`. `call_findings` turns one logged call into the A13 codes of R-AN-86's
 table, for a run of the four session routines or (probe=True) of `analyst-probe`.
+
+Since the third review of A7 (decision 22) it also holds R-AN-85's Claude Code version rule (`cc_version_class`): the
+guard's `onFailure` needs 2.1.295 or later.
 """
 from __future__ import annotations
 
@@ -73,6 +76,27 @@ TIMEOUT_MIN_MS = 3_600_000         # check 6(b), second review of A7: `timeout` 
 MAX_STDIN = 8 * 1024 * 1024        # check 2: stdin up to 8 MiB
 MAX_WRITE = 4 * 1024 * 1024        # check 8(d): content up to 4 MiB in UTF-8
 HASHED = re.compile(r"sha256:[0-9a-f]{64} bytes:([0-9]+)")   # R-AN-86: Write content replaced by its hash
+
+
+# ---------------------------------------------------------------- R-AN-85 "Claude Code version" (third review of A7,
+# decision 22): `onFailure` needs Claude Code 2.1.295 or later; on an older version a guard that crashes, times out or
+# cannot start lets the call through. The judge reads the session's self-report (R-AN-25, R-AN-29; A13
+# `cc_version_below`, `cc_version_unknown`).
+CC_MIN = (2, 1, 295)
+_CC_FORM = re.compile(r"[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}")      # [0-9] is ASCII only in Python's re
+
+
+def cc_version_class(v) -> str:
+    """`meets`, `below` or `unknown` by R-AN-85's version rule. The part of V before its first space (all of V when it
+    has none) must fully match three dot-separated runs of 1 to 9 ASCII digits; read as integers (major, minor,
+    patch) and compared in that order with 2.1.295 it meets the minimum or is below it. A missing, null or non-string
+    V, or one of another form (`v2.1.309`, `2.1.309-beta`, `2.1`, ""), is unknown."""
+    if not isinstance(v, str):
+        return "unknown"
+    head = v.split(" ", 1)[0]
+    if not _CC_FORM.fullmatch(head):
+        return "unknown"
+    return "meets" if tuple(int(x) for x in head.split(".")) >= CC_MIN else "below"
 
 
 def inside(path: str, x: str) -> bool:

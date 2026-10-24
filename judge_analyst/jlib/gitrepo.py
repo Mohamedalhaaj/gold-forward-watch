@@ -98,6 +98,21 @@ class GitRepo:
                            capture_output=True, text=True)
         return p.stdout.strip() if p.returncode == 0 else None
 
+    def has_blob(self, commit: str, path: str) -> bool:
+        """Whether the tree of `commit` holds a file (a blob) at `path`, read from the tree entry only: the blob itself
+        is never read (A13: a session whose commit holds `.claude/hooks/guard.py`, third review of A7)."""
+        if "\n" in path or "\0" in path or "\n" in commit:
+            return False
+        p = subprocess.run(["git", "-c", "core.quotePath=false", "-C", self.path, "ls-tree", commit, "--", path],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            return False
+        for line in p.stdout.split("\n"):
+            meta, _, name = line.partition("\t")
+            if name == path and meta.split(" ")[1:2] == ["blob"]:
+                return True
+        return False
+
     def ls_tree(self, commit: str, prefix: str = ""):
         """Paths of the tree of `commit` under `prefix` (one git call per commit, cached: commits are immutable)."""
         sha = self.rev(commit) if len(commit) != 40 else commit

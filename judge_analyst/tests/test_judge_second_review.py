@@ -180,24 +180,28 @@ def _set(path_fn):
     return make
 
 
-@pytest.mark.parametrize("make", [
-    _set(lambda r: r["routines"][1]["raw"].update(enabled_plugins=["github@claude-plugins"])),
-    _set(lambda r: r["routines"][2]["raw"].pop("mcp_connections")),
-    _set(lambda r: r["routines"][3]["raw"].update(mcp_connections=None)),
-    _set(lambda r: r["routines"][0]["raw"].update(mcp_connections={})),
-    _set(lambda r: r["routines"][0].update(raw="x")),
-    _set(lambda r: r["routines"][0].pop("raw")),
-    _set(lambda r: r["routines"].append("analyst-extra")),
-    _set(lambda r: r.pop("routines")),
-    None,                                                                   # not JSON
+@pytest.mark.parametrize("make,project", [
+    (_set(lambda r: r["routines"][1]["raw"].update(enabled_plugins=["github@claude-plugins"])), False),
+    (_set(lambda r: r["routines"][2]["raw"].pop("mcp_connections")), False),
+    (_set(lambda r: r["routines"][3]["raw"].update(mcp_connections=None)), False),
+    (_set(lambda r: r["routines"][0]["raw"].update(mcp_connections={})), False),
+    (_set(lambda r: r["routines"][0].update(raw="x")), False),
+    (_set(lambda r: r["routines"][0].pop("raw")), False),
+    (_set(lambda r: r["routines"].append("analyst-extra")), True),
+    (_set(lambda r: r.pop("routines")), True),
+    (None, True),                                                           # not JSON
 ])
-def test_A12_routine_connectors_breach_forms(m, make):
+def test_A12_routine_connectors_breach_forms(m, make, project):
+    """(Third review of §16.18 A7, decision 21; judge decision J-D42:) a version committed at or after
+    PINS.inbox_from_utc that cannot show the empty lists because it has no `routines` list, or an entry that is not an
+    object, cannot show `project` null either, so it is also A13 `routine_project`."""
     if make is None:
         sha = commit_config(m, None, "2026-12-02T10:00:00Z", raw_bytes=b"{not json\n")
     else:
         sha = commit_config(m, make(), "2026-12-02T10:00:00Z")
     res = m.judge()
-    assert keys(res) == [f"A12|routine_connectors|{RC}|{sha}"]
+    assert sorted(keys(res)) == sorted([f"A12|routine_connectors|{RC}|{sha}"] +
+                                       ([f"A13|routine_project|{RC}|{sha}"] if project else []))
 
 
 def test_A12_routine_connectors_counts_from_inbox_from(m):

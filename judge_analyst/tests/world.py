@@ -12,6 +12,9 @@ After the second review of A6 the owner's runs exports also carry `inbox_checks.
 gold-analyst main holds ROUTINE_CONFIG.json exports (R-AN-60, R-AN-61): one with the connectors claude.ai had attached,
 superseded before PINS.inbox_from_utc; since the fourth review (N3, the version in force at PINS.inbox_from_utc is
 judged) the cleared one in force at PINS.inbox_from_utc; and the fresh export after it, with none.
+After the third review of A7 (decision 21, R-AN-60, R-AN-61) the fresh export and the runs exports give every routine
+`project` null; the version in force at PINS.inbox_from_utc has no `project` key, as the export in force on the real
+gold-analyst main (d1725d7) has none (no finding for that version alone).
 
 After §16.18 A7 (the session guard) gold-analyst main holds the guard's two files (`.claude/settings.json` as
 R-AN-85 gives its bytes, and a stand-in `.claude/hooks/guard.py`, which the judge never reads) and
@@ -65,7 +68,8 @@ def rules(repo, *types):
 
 
 def probe_record(tag, kind, head, when):
-    """A passing `analyst-probe/1` record (R-AN-84): every probe at an outcome its "Pass iff" column passes."""
+    """A passing `analyst-probe/1` record (R-AN-84): every probe at an outcome its "Pass iff" column passes. (Third
+    review of A7, decision 22:) it also holds the session's `cc_version`, which is not a probe."""
     outcomes = {"net.dukascopy": 200, "net.google": 0, "net.raw_public": 0, "net.api_root": 200,
                 "rest.inbox": "ok", "rest.ga": "scope", "rest.gfw": "scope", "rest.hooks": 0,
                 "git.ls_remote_inbox": "accepted", "git.ls_remote_gfw": "refused", "git.ls_remote_gfw_proxy": "refused",
@@ -76,16 +80,21 @@ def probe_record(tag, kind, head, when):
                 "ga_push": "refused", "ga_push_proxy": "refused", "workflow_push": "accepted", "admin_probe": "denied"}
     passes = {k: (None if k in ("net.api_root", "activity_seen_s", "workflow_push") else True) for k in outcomes}
     return {"schema": "analyst-probe/1", "tag": tag, "kind": kind, "repo_head_sha": head, "probe_utc": fmt_utc(when),
-            "outcomes": outcomes, "pass": passes, "verdict": "pass"}
+            "outcomes": outcomes, "pass": passes, "verdict": "pass", "cc_version": "2.1.309 (Claude Code)"}
 
 
 ROUTINES = ("analyst-w1", "analyst-w2", "analyst-lesson", "analyst-revision", "analyst-probe")
 
 
-def routine_config(connected=False):
+OMIT = object()        # a key left out of a record (tests)
+
+
+def routine_config(connected=False, project=None):
     """`analyst/ROUTINE_CONFIG.json` (`analyst-routine-config/1`, R-AN-61) for the four routines and `analyst-probe`.
-    `raw` stands for the RemoteTrigger get response; only its two lists matter to the judge. connected=True is an
-    export as claude.ai leaves a new routine: every account connector and a plugin attached (second review, SEC-2)."""
+    `raw` stands for the RemoteTrigger get response; only its two lists (and, after the third review of A7, its
+    project-named fields) matter to the judge. connected=True is an export as claude.ai leaves a new routine: every
+    account connector and a plugin attached (second review, SEC-2). `project` is each routine's `project` (third review
+    of A7, decision 21): null by default; OMIT leaves the key out, as in the exports written before the decision."""
     routines = []
     for i, name in enumerate(ROUTINES):
         raw = {"id": f"trig_{i}", "mcp_connections": [], "enabled_plugins": []}
@@ -96,6 +105,8 @@ def routine_config(connected=False):
                          "effort": "high", "allowed_tools": ["Bash", "Read", "Write"],
                          "network": {"level": "custom", "hosts": ["datafeed.dukascopy.com"]},
                          "environment": "gold-analyst", "crons": [], "repo": INBOX, "enabled": False, "raw": raw})
+        if project is not OMIT:
+            routines[-1]["project"] = project
     return {"schema": "analyst-routine-config/1", "exported_utc": "2026-11-01T00:00:00Z", "routines": routines}
 
 
@@ -471,11 +482,12 @@ class World:
         PINS.inbox_from_utc (the judge does not judge it); the export after the connectors were cleared, the version
         in force at PINS.inbox_from_utc (judged since the fourth review of A6, N3); and the fresh export after the
         routines were repointed (second review of A6, SEC-2), committed after PINS.inbox_from_utc and before the probe
-        session."""
+        session. (Third review of A7, decision 21:) the two exports before PINS.inbox_from_utc have no `project` key;
+        the fresh export names `project` null for each routine."""
         r = self.repo
-        r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config(connected=True)))
+        r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config(connected=True, project=OMIT)))
         r.commit("owner: routine config export", T(self.inbox_from) - dt.timedelta(minutes=60))
-        r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config()))
+        r.write("analyst/ROUTINE_CONFIG.json", record_form(routine_config(project=OMIT)))
         r.commit("owner: routine config export", T(self.inbox_from) - dt.timedelta(minutes=30))
         rec = routine_config()
         rec["exported_utc"] = "2026-11-02T00:00:00Z"
@@ -507,7 +519,7 @@ class World:
         self.runs_rows.append(run)
         c20 = {"schema": "analyst-check-c20/1", "run_id": run["run_id"], "session_id": run["session_id"],
                "created_utc": run["created_utc"], "routine": "analyst-probe", "project_dir": ROOT,
-               "cc_version": "2.1.309", "environment_variables": 0,
+               "cc_version": rec.get("cc_version"), "environment_variables": 0,   # copied from the probe record
                "guard_sha256": {".claude/settings.json": sha256_bytes(GUARD_SETTINGS_BYTES),
                                 ".claude/hooks/guard.py": sha256_bytes(GUARD_PY_BYTES)},
                "tool_log": run["tool_log"], "probe_line_prefix": "probe_pass",
@@ -1043,12 +1055,13 @@ class World:
         for wk, rows in sorted(weeks.items()):
             rec = {"schema": "analyst-runs/1", "iso_week": wk, "exported_utc": "2026-12-07T09:00:00Z",
                    "attested_by": "owner",
+                   # (third review of A7, decision 21) each routine's claude.ai project: none (R-AN-60)
                    "routines": [{"name": "analyst-w1", "trigger_id": "t1", "model": "claude-opus-5-5",
-                                 "effort": "high", "crons": ["20 6,7 * * 1-5"], "enabled": True},
+                                 "effort": "high", "crons": ["20 6,7 * * 1-5"], "enabled": True, "project": None},
                                 {"name": "analyst-w2", "trigger_id": "t2", "model": "claude-opus-5-5",
-                                 "effort": "high", "crons": ["50 12,13 * * 1-5"], "enabled": True},
+                                 "effort": "high", "crons": ["50 12,13 * * 1-5"], "enabled": True, "project": None},
                                 {"name": "analyst-probe", "trigger_id": "t5", "model": "claude-opus-5-5",
-                                 "effort": "high", "crons": [], "enabled": False}],
+                                 "effort": "high", "crons": [], "enabled": False, "project": None}],
                    "runs": rows,
                    # R-AN-60 (A6, blocker B3): the owner's weekly read of the inbox's hooks, keys and Actions switch;
                    # (second review, SEC-1) and of the Claude GitHub App's repository selection; (A7, detection 2)

@@ -5,8 +5,8 @@ by "Change v0.5" M7 and "Change v0.6"; `research/system/IMPLEMENTATION_REGISTER.
 they cite, with the dated amendment §16.18 A6, the agent inbox, as revised after its review, its second review, its
 fourth review, its fifth review and its sixth review; xauusd-quant 62a0d80, fourth review 5d7fcdc, fifth review
 166c6b0, sixth review decision 35; and the dated amendment §16.18 A7, the session guard, xauusd-quant f16708e, with
-its first and second reviews, decisions 17 to 20). A6 and A7 bind once the client approves their text; until then
-they are the build's target.
+its first, second and third reviews, decisions 17 to 22; third review xauusd-quant 12ffdda). A6 and A7 bind once
+the client approves their text; until then they are the build's target.
 It was built **blind**: from the prereg, the register and the record locations the register names, without reading
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
 adjudicate (`spec_gap`, `judge_error` or `system_error`, as J5).
@@ -71,6 +71,28 @@ unsupported (`resume_unsupported`, `retire_unsupported`, the new `promote_unsupp
 P7, J-D37); A11 `frozen_unlisted` for a frozen manifest without the guard's files or the probe session's prompt
 (R-AN-7). Tests: `tests/test_judge_session_guard.py`.
 
+**A7's third review (decisions 21 and 22; notes N1 and N2; R-AN-25, R-AN-60, R-AN-61, R-AN-67, R-AN-85).** Three
+new A13 codes, all operational VIOLATIONs (they pause the analyst while the verdict carries them and never retire it):
+- `routine_project` (owner-attested; decision 21, no routine in a claude.ai project, whose cloud threads run no
+  repository hook): in a version of `analyst/ROUTINE_CONFIG.json` that `routine_connectors` judges, a routine whose
+  `project` is present and not null, or whose `raw` holds, at any depth, a key whose name contains `project` (case
+  ignored) with a value other than null, `""`, `[]` or `{}`; in a version committed at or after PINS.inbox_from_utc,
+  also a routine without `project`. In a runs export, file by file, an entry of `routines` without `project` (only in
+  an export added at or after PINS.inbox_from_utc, J-D41) or with a `project` other than null. What cannot show
+  `project` null where a missing key counts is reported too (J-D42). Key
+  `A13|routine_project|<export path>|<commit>`. The routine export in force on gold-analyst main (d1725d7) has no
+  `project` key, and that alone gives nothing;
+- `cc_version_below` and `cc_version_unknown` (self-reported; decision 22, `onFailure` needs Claude Code 2.1.295 or
+  later): the `*.json` attempt records and call files directly in `analyst/attempts/`, `analyst/calls/` and the same
+  under `analyst/canary/`, at main's head, of a guarded session (its `repo_head_sha` names a commit whose tree holds
+  `.claude/hooks/guard.py`, read from the tree entry only). R-AN-85's version rule (`jlib/sessionguard.py`
+  `cc_version_class`): below 2.1.295 is `cc_version_below`; an attempt record's unknown version (missing, null, not a
+  string, not of the form, or no `self_reported` object) is `cc_version_unknown`; a call file gives `cc_version_below`
+  only. Key `A13|<code>|<record path>|<the commit that added it>`.
+
+A probe record's `cc_version` (R-AN-84) is not judged here (C20 judges it); a probe record that carries one stays
+readable, and A12 `probe_failed` and `probe_incomplete` are unchanged. Tests: `tests/test_judge_guard_third_review.py`.
+
 Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
 token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
 with `git diff`/`git cat-file`), and prints only enums, counts, keys and hashes (no model text reaches stdout, a
@@ -113,7 +135,12 @@ an empty list; the token first, and once without it if GitHub refuses it):
 - since A7, read as data from the gold-analyst clone: each exported run's `tool_log` and the security log's filter and
   events in `inbox_checks` (R-AN-60, R-AN-86; owner-attested); `analyst/canary/checks/C20.json` (its `project_dir`
   only); and at main's head the tree's paths (`.claude/`, the forbidden file names), `.claude/settings.json` parsed as
-  JSON, and `.claude/hooks/guard.py` only hashed against FROZEN_ANALYST.sha256 (R-AN-66).
+  JSON, and `.claude/hooks/guard.py` only hashed against FROZEN_ANALYST.sha256 (R-AN-66);
+- since A7's third review, read as data from the gold-analyst clone: each judged version's routines' `project` and the
+  `raw` fields named like `project`, and each runs export's `routines[].project` (R-AN-60, R-AN-61; owner-attested);
+  the `self_reported.cc_version` and `repo_head_sha` of the attempt records and call files (R-AN-25, R-AN-29;
+  self-reported); and, for each such `repo_head_sha`, whether that commit's tree has an entry for
+  `.claude/hooks/guard.py` (`git ls-tree`; the file is not read).
 
 A failed read is A0 `inbox_api_unreachable` (the inbox) or `api_unreachable` (gold-analyst): WARNING, never SOUND; push
 times then come from the judge's own `inbox_activity` evidence rows. A run whose read of the inbox's activity failed
@@ -154,7 +181,7 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 | A10 | owner-attested (`analyst/runs/*.json`): an in-span run without an attempt (R-AN-60), a run on another model. Calls are disabled as inbox main showed them (R-AN-67, A10's pause intervals; decision 33): from a PAUSED event to its RESUMED (`clear:` or, since the fourth review, `lifted:`) and after RETIRED, each event counted from when inbox main first held it (V); while V is unknown a PAUSED or RETIRED counts from its `utc` and the interval stays open past its RESUMED; in canary and live windows alike (J-D14, J-D31, J-D34). A run is not judged when an interval meets [its created_utc, deadline_utc − T_run] | VIOLATION (owner-attested) |
 | A11 | a re-downloaded hour file whose sha256 differs (its hour is left out of A4); settlement, opposite side, path summary, twin, ledger, E_n, state events or STATE.json recompute mismatch; mirror vs source; unmatched session id (`unverified_model`); vendored eproc/calendar/holiday table/frozen-manifest drift; record bytes not in the R-AN-3 form. Fourth review (J-4; R-AN-55, R-AN-56, R-AN-67): the analyst's state events replayed by seq against the pause rule, with P0 and LS from MODE.json in each event's commit: `resume_unsupported` (a `clear:` without an owner `pause` clear row dated from its PAUSED event to the RESUMED one, or of a mirrored pause or `judge_silent`; a `lifted:` whose commit's STATE.json shows no fresh verdict, of a live integrity pause or a `model:` pause, or of a latched key without the judge's clear row dated at or before it; a resume with no open pause), `retire_unsupported` (a RETIRED `violation` before LS, or with no earlier clear of a live integrity pause; sixth review, R6-2: or with no integrity key of FINDINGS.csv first seen after the earliest live clear row's utc and at most 10 min after the event, unpaused and not cleared with the judge before it, J-D35), `pause_early` (a PAUSED `judge_violation:` or `judge_silent` before P0, or with no P0). A7 (decision 15): a `lifted:` resume or a RETIRED `violation` whose commit's STATE.json shows a verdict older than the newest `last_fresh_asof_utc` of the versions before it; `promote_unsupported`, a PROMOTED event whose commit's STATE.json fails the judge's recompute of P7 (fresh, not VIOLATION, not older; J-D37); `frozen_unlisted`, a frozen manifest without the guard's files or the probe session's prompt (J-D39) | WARNING + ADJUDICATIONS row |
 | A12 | A6, the repository boundary. gold-analyst: `ga_branch` (a branch other than main; pull refs ignored), `ga_tag` (a tag that is no `freeze_tag` of PINS.json in main's first-parent history, or whose peeled commit is not on main), `ga_tag_moved` (an allowed tag away from its first `ga_ref` row), `ga_run_branch` (a run of the day range off main), `ga_run_trigger` (a run from PINS.inbox_from_utc on outside R-AN-75's trigger table), `ga_dynamic_run` (WARNING: a `dynamic/` run). The inbox: `inbox_identity` (404, another id than PINS.inbox_repo_id, or private; fourth review: key `inbox\|<seen>`, `404`, `id-<id read>` or `private`), `inbox_main_foreign` (a counting main entry, or the listed main, not on gold-analyst main after one fresh fetch), `inbox_rewrite` (a counting `force_push` or `branch_deletion`; sha `after`, or `before` for a deletion), `inbox_ref` (a branch other than main and `claude/**`, or any tag; pull refs ignored), `inbox_runs` (`total_count` > 0; fourth review: the count is the key's sha slot), `inbox_rules` (WARNING: rule types missing for `inbox/rules/{main,claude/x,x}`, or `rules/claude/x` of gold-analyst lacking creation), `inbox_stale` (WARNING: inbox main a strict ancestor of gold-analyst main whose oldest missing commit is more than 30 min old). Probes (R-AN-84, self-reported): `probe_failed` (a canary call's `canary_probe` or a `checks/PROBE_<tag>.json` with a pass false, verdict `fail`, or an outcome its probe fails), `probe_incomplete` (WARNING: a canary call whose verdict is not `pass`). Owner-attested (R-AN-60): `inbox_hook` (`inbox_checks` with hooks > 0 or security-log hook events > 0), `inbox_config` (fourth review, J-4: deploy_keys ≠ 1 or Actions on; operational, R-AN-55), `inbox_checks_missing` (WARNING: no complete `inbox_checks` for a week with expected windows; second review: also an `inbox_checks` without a readable `app_repositories`). Second review: `app_scope` (owner-attested, SEC-1: `app_repositories` with a `repository_selection` other than `selected`, or naming gold-analyst, gold-forward-watch or xauusd-quant), `routine_connectors` (owner-attested, SEC-2: a version of `analyst/ROUTINE_CONFIG.json` committed to main at or after PINS.inbox_from_utc, or (fourth review, N3) the version in force at PINS.inbox_from_utc, in which a routine's `raw` lacks `mcp_connections` or `enabled_plugins` or holds a non-empty one; key: that version's commit), `probe_flood` (SEC-3: a listed `claude/probe-*` ref first seen at or after PINS.inbox_from_utc whose name is not `claude/probe-<c3\|del\|wf\|result>-<call_id\|pYYYYMMDDTHHMMSSZ>`, or more than 40 `branch_creation` entries on probe refs in one UTC day, key `inbox/refs/heads/claude/probe-*\|<YYYY-MM-DD>` since the fourth review). Each runs export file is judged on its own, by its path (fourth review, N3). A7 (detection 2, R-AN-60): `inbox_hook` also for any entry of `security_log_events`; `inbox_checks_missing` also, while `security_log_hook_events` is not null, for `security_log_events` missing, not a list or of another length, an entry that is not `{action, created_utc, actor}`, or a `security_log_filter` other than `repo:<inbox> action:hook` (J-D38) | VIOLATION (the codes marked WARNING: WARNING) |
-| A13 | A7, the session guard (R-AN-85, R-AN-86). From each runs export's `tool_log` (owner-attested; runs from PINS.inbox_from_utc on, file by file): each logged call decided by the guard's string rules (`jlib/sessionguard.py`; P from the log, else C20.json) and classed harmless or forbidden. `forbidden_attempt` (a forbidden call refused or of unknown outcome) and `forbidden_executed` (one that ran): integrity; `guard_not_enforced` (a harmless refused call that ran, or a refused call whose denial holds no guard message; in `analyst-probe`, any refused call that ran): operational; WARNINGs `guard_denied_benign` (a harmless call refused), `allowed_call_refused` (an allowed call refused), `scan_unclassifiable` (no decision can be formed, or a harmless refused call of unknown outcome), `probe_elsewhere` (the probe line run outside `analyst-probe`), `tool_log_missing` (a run without a readable log). Keys `A13\|<code>\|<export path>\|<run_id>#<seq>` (`<run_id>` alone for `tool_log_missing`). `guard_config` (operational, from git at main's head): the guard's settings missing or not R-AN-85's object, `guard.py` missing, any other `.claude/` file, a `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md` anywhere; key `<path>\|<blob sha or absent>` (J-D36, J-D40) | VIOLATION (`guard_denied_benign`, `allowed_call_refused`, `scan_unclassifiable`, `probe_elsewhere`, `tool_log_missing`: WARNING) |
+| A13 | A7, the session guard (R-AN-85, R-AN-86). From each runs export's `tool_log` (owner-attested; runs from PINS.inbox_from_utc on, file by file): each logged call decided by the guard's string rules (`jlib/sessionguard.py`; P from the log, else C20.json) and classed harmless or forbidden. `forbidden_attempt` (a forbidden call refused or of unknown outcome) and `forbidden_executed` (one that ran): integrity; `guard_not_enforced` (a harmless refused call that ran, or a refused call whose denial holds no guard message; in `analyst-probe`, any refused call that ran): operational; WARNINGs `guard_denied_benign` (a harmless call refused), `allowed_call_refused` (an allowed call refused), `scan_unclassifiable` (no decision can be formed, or a harmless refused call of unknown outcome), `probe_elsewhere` (the probe line run outside `analyst-probe`), `tool_log_missing` (a run without a readable log). Keys `A13\|<code>\|<export path>\|<run_id>#<seq>` (`<run_id>` alone for `tool_log_missing`). `guard_config` (operational, from git at main's head): the guard's settings missing or not R-AN-85's object, `guard.py` missing, any other `.claude/` file, a `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md` anywhere; key `<path>\|<blob sha or absent>` (J-D36, J-D40). Third review of A7 (decisions 21, 22), operational: `routine_project` (owner-attested: in a judged version of `analyst/ROUTINE_CONFIG.json`, a routine's `project` not null or a `raw` field named like `project` with a value, and, in a version committed at or after PINS.inbox_from_utc, a routine without `project`; in a runs export, a `routines` entry without `project` or with one not null; key `<export path>\|<commit>`; J-D41, J-D42); `cc_version_below` (self-reported: a guarded session's attempt record or call file whose `self_reported.cc_version` is below 2.1.295 by R-AN-85's rule) and `cc_version_unknown` (such an attempt record whose version is unknown); key `<record path>\|<commit that added it>` (J-D43) | VIOLATION (`guard_denied_benign`, `allowed_call_refused`, `scan_unclassifiable`, `probe_elsewhere`, `tool_log_missing`: WARNING) |
 
 Independence: E_n and K are recomputed in pure Python (the test suite checks them against the lab's frozen
 `eproc.py`, sha256 ee8d456a…, kept in `tests/fixtures/` only); the holiday rows are the register's own (R-AN-9), the
@@ -379,6 +406,29 @@ aged out); a cleared key never clears another (R-JV-4).
 - J-D40 (§16.18 A7; R-AN-2 as replaced, R-AN-67 `guard_config`) "A path under `.claude/` other than those two" is read
   at any depth (a `docs/.claude/...` file too), as the A3 check it replaces did; the forbidden names are matched
   exactly (case-sensitive). Before A7 the A3 `forbidden_file` key was an integrity key; `guard_config` is operational.
+- J-D41 (third review of §16.18 A7, decision 21; R-AN-60, R-AN-67 `routine_project`) In a runs export an entry
+  without `project` counts only when the export was added on main at or after PINS.inbox_from_utc (the committer time
+  of the commit that added the file, as J-D26), the rule R-AN-67's row gives for the routine export in force; an entry
+  with a `project` other than null counts in every export. The row names no time for runs exports. An export added
+  before PINS.inbox_from_utc describes routines from before the inbox and the guard, and PINS.inbox_from_utc is set
+  before the routines are repointed, so every export of a canary or live week is added after it. Without
+  PINS.inbox_from_utc no export and no routine version is judged for `routine_project` (as J-D20).
+- J-D42 (third review of §16.18 A7, decision 21; R-AN-61) Where a missing key counts (a version committed at or after
+  PINS.inbox_from_utc, a runs export added then), what cannot show `project` null is reported too: a version that is
+  not a JSON record with a `routines` list, a runs export whose `routines` is missing or not a list, and a `routines`
+  entry that is not an object. This is the rule `routine_connectors` follows for its two lists (an unreadable runs
+  export stays A10 `runs_export_form`). An empty `routines` list gives nothing. The top-level `project` must be null
+  (`""` counts). A `raw` field is any key, at any depth of `raw` (objects and lists), whose name contains `project`
+  once lowered (Python's `str.lower`). Its value counts unless it is null, `""`, `[]` or `{}`, compared by type, so
+  `false` and `0` count. Details name routines and enums only, never a value.
+- J-D43 (third review of §16.18 A7, decision 22; R-AN-25, R-AN-29, R-AN-85) A `repo_head_sha` names a gold-analyst
+  commit when it is 40 hex digits (either case) naming a commit object in the clone; fetched agent commits count, and
+  A4 reports one that is off main. Whether its tree holds `.claude/hooks/guard.py` is read from the tree entry (`git
+  ls-tree <sha> -- <path>`, a blob), so the guard's code is never read. A record with no such sha gives neither key.
+  The version rule splits V at its first U+0020 only, and its digits are ASCII. The records are the `*.json` files
+  directly in the four folders at main's head; lesson records, revision records, probe records and C20.json are not
+  judged (the row names attempt records and call files; C20 judges the probe record's version). The key names the
+  commit that first added the record on main's first-parent history (as every record key).
 
 ## Open points
 
@@ -450,3 +500,14 @@ aged out); a cleared key never clears another (R-JV-4).
     background, which the runs export does not record (C20 checks step 1). Made in the same session as the analyst's
     side of the fix, from the register text; the session had read the analyst's guard earlier, so this change is not
     blind in the strict sense, though it follows the register's words only.
+15. **A7 third review (2026-10-24; N1, N2), not merged or pushed.** Built test-first
+    (`tests/test_judge_guard_third_review.py`) from register §16.18 A7 decisions 21 and 22 and R-AN-25, R-AN-55,
+    R-AN-60, R-AN-61, R-AN-66, R-AN-67, R-AN-74, R-AN-84 and R-AN-85 as amended there (xauusd-quant 12ffdda), without
+    reading the analyst code: A13 `routine_project`, `cc_version_below` and `cc_version_unknown`, operational; the
+    world's fresh routine export and runs exports carry `project` null, and its probe records `cc_version`. To log in
+    the register before the freeze: J-D41..J-D43, in particular J-D41 (a runs export added before
+    PINS.inbox_from_utc is not judged for a missing key, which the row does not say) and J-D42 (an export that cannot
+    show `project` null is reported). Not verified: which field of the RemoteTrigger get response, if any, names a
+    project (the first export under decision 21 shows it); whether `claude` is on a routine session's PATH, so whether
+    any guarded attempt record will carry a version at all (C20's first record shows it; if not, every guarded attempt
+    record gives `cc_version_unknown` until a dated amendment names another source).

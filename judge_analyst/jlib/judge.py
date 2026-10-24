@@ -106,11 +106,16 @@ BLIND_RUNS = 2                                 # A0 inbox_blind (fourth review, 
 # codes. With every A0 key and every `system_error:` entry they pause the analyst while the verdict carries them and
 # never retire it; every other VIOLATION key is an integrity key.
 OPERATIONAL_A12 = {"probe_failed", "app_scope", "routine_connectors", "inbox_identity", "inbox_config"}
-# §16.18 A7 (R-AN-55, R-AN-67, R-AN-86): the guard not acting, or its files wrong, is the system's fault.
-OPERATIONAL_A13 = {"guard_not_enforced", "guard_config"}
+# §16.18 A7 (R-AN-55, R-AN-67, R-AN-86): the guard not acting, or its files wrong, is the system's fault; (third review
+# of A7, decisions 21 and 22) so are a routine in a claude.ai project and a harness that may not keep the guard closed.
+OPERATIONAL_A13 = {"guard_not_enforced", "guard_config", "routine_project", "cc_version_below", "cc_version_unknown"}
 OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13}
 C20_PATH = "analyst/canary/checks/C20.json"     # R-AN-74 C20: the probe session's root, when a run log has none
 SECURITY_LOG_FILTER = "repo:{} action:hook"     # R-AN-60 (A7, detection 2), with PINS.inbox_repo
+# The third review of A7 (2026-10-24, register §16.18 A7 decisions 21 and 22; R-AN-25, R-AN-60, R-AN-61, R-AN-67,
+# R-AN-85). A13 `cc_version_below` and `cc_version_unknown`: the session records of these folders at main's head.
+CC_RECORD_FOLDERS = ("analyst/attempts/", "analyst/calls/", "analyst/canary/attempts/", "analyst/canary/calls/")
+_SHA40 = re.compile(r"[0-9a-fA-F]{40}")
 
 
 def _int(x) -> bool:
@@ -131,7 +136,8 @@ FIRST_SEEN_SLACK = dt.timedelta(minutes=10)   # R-AN-70: a verdict dated up to 1
 def operational(key: str) -> bool:
     """R-AN-55, R-AN-67 (fourth review of A6, J-4): a `violation_keys` entry that starts with `A0|` or
     `system_error:`, or whose check and code are A12 `probe_failed`, `app_scope`, `routine_connectors`,
-    `inbox_identity` or `inbox_config`; (§16.18 A7) or A13 `guard_not_enforced` or `guard_config`."""
+    `inbox_identity` or `inbox_config`; (§16.18 A7) or A13 `guard_not_enforced` or `guard_config`; (third review of
+    A7) or A13 `routine_project`, `cc_version_below` or `cc_version_unknown`."""
     if key.startswith(("A0|", "system_error:")):
         return True
     parts = key.split("|")
@@ -249,6 +255,7 @@ class Judge:
         self._floor = None
         self._fresh = False
         self._diffs = {}
+        self._guarded = {}
         self.F = Findings()
         self.summary = {}
         self.evidence_new = []
@@ -320,12 +327,14 @@ class Judge:
         self.safe("start", self.check_start)
         self.safe("runs_exports", self.check_runs_exports)
         self.safe("routine_config", self.check_routine_config)
+        self.safe("routine_project", self.check_routine_project_config)
         self.safe("probes", self.check_probes)
         self.safe("boundary", self.check_boundary)
         self.safe("settlement_state", self.check_settlement_and_state)
         self.safe("mirror_source", self.check_mirror_source)
         self.safe("frozen", self.check_frozen)
         self.safe("guard_config", self.check_guard_config)
+        self.safe("cc_versions", self.check_cc_versions)
         self.safe("history", self.check_history)
         self.summary["head"] = self.head
         return Result(self.F, self.head, self.evidence_new, self.summary)
@@ -1317,6 +1326,7 @@ class Judge:
                     runs.append((r, x))
         self.check_inbox_checks(exports)
         self.safe("run_logs", self.check_run_logs, exports)
+        self.safe("runs_routines", self.check_runs_routines, exports)
         model = self.pins.get("model")
         t_run = int(self.params.get("T_run_min") or 0)
         t_setup = int(self.params.get("T_setup_min") or 0)
@@ -1527,6 +1537,17 @@ class Judge:
         lists and is reported too. Key: the version's commit."""
         if self.inbox_from is None:
             return
+        judged = self.routine_config_versions()
+        for sha, _later in judged:
+            bad = self.connector_breaches(self.git.show(sha, ROUTINE_CONFIG))
+            if bad:
+                self.F.v("A12", "routine_connectors", ROUTINE_CONFIG, sha, safe_detail(*bad), owner_attested=True)
+        self.summary["routine_config_versions_checked"] = len(judged)
+
+    def routine_config_versions(self):
+        """The versions of `analyst/ROUTINE_CONFIG.json` that `routine_connectors` judges, oldest first, each with
+        whether it was committed at or after PINS.inbox_from_utc: the version in force then (False) and every later one
+        (True). Committer time (J-D26); the version in force is J-D32's."""
         since = parse_utc(self.inbox_from)
         judged = []
         in_force = None
@@ -1540,14 +1561,46 @@ class Judge:
             if dt.datetime.fromtimestamp(ct, UTC) < since:
                 in_force = sha if sts & {"A", "M", "T"} else None
             elif sts & {"A", "M", "T"}:
-                judged.append(sha)
+                judged.append((sha, True))
         if in_force is not None:
-            judged.insert(0, in_force)
-        for sha in judged:
-            bad = self.connector_breaches(self.git.show(sha, ROUTINE_CONFIG))
+            judged.insert(0, (in_force, False))
+        return judged
+
+    # ================================================================ the routines' project (A13, R-AN-60, R-AN-61)
+    def check_routine_project_config(self):
+        """A13 `routine_project` (third review of §16.18 A7, decision 21; R-AN-61, R-AN-67), VIOLATION, owner-attested,
+        operational, in each version of `analyst/ROUTINE_CONFIG.json` that `routine_connectors` judges: a routine whose
+        `project` is present with a value other than null, or whose `raw` holds, at any depth, a key whose name
+        contains `project` (case ignored) with a value other than null, "", [] or {}; in a version committed at or
+        after PINS.inbox_from_utc, also a routine without the key `project` (judge decision J-D42: and a version or
+        an entry that cannot show it, as `routine_connectors` reports them). The version in force at
+        PINS.inbox_from_utc without the key gives nothing: the export in force before the decision has none. Key: the
+        version's commit."""
+        if self.inbox_from is None:
+            return
+        for sha, later in self.routine_config_versions():
+            bad = project_breaches(_json_or_none(self.git.show(sha, ROUTINE_CONFIG)), later, raw=True)
             if bad:
-                self.F.v("A12", "routine_connectors", ROUTINE_CONFIG, sha, safe_detail(*bad), owner_attested=True)
-        self.summary["routine_config_versions_checked"] = len(judged)
+                self.F.v("A13", "routine_project", ROUTINE_CONFIG, sha, safe_detail(*bad), owner_attested=True)
+
+    def check_runs_routines(self, exports):
+        """A13 `routine_project` (third review of §16.18 A7, decision 21; R-AN-60, R-AN-67), VIOLATION, owner-attested,
+        operational, in each runs export, file by file by its path (J-D33): an entry of `routines` without the key
+        `project`, or with a `project` other than null. Judge decision J-D41: without PINS.inbox_from_utc nothing is
+        judged (as A13's run logs, J-D20), and a missing key counts only in an export added on main at or after
+        PINS.inbox_from_utc (committer time of the commit that added the file), as the row's rule for the routine
+        export in force; a `project` other than null counts in every export. J-D42: in such an export a `routines`
+        that is missing or not a list cannot show `project` null and is reported too. Key: the commit that added the
+        file."""
+        if self.inbox_from is None:
+            return
+        since = parse_utc(self.inbox_from)
+        for path, r in sorted(exports.items()):
+            ct = self.git.commit_time(r.commit) if r.commit not in (None, "-") else None
+            later = ct is None or dt.datetime.fromtimestamp(ct, UTC) >= since
+            bad = project_breaches(r.rec, later, raw=False)
+            if bad:
+                self.F.v("A13", "routine_project", path, r.commit, safe_detail(*bad), owner_attested=True)
 
     @staticmethod
     def connector_breaches(b):
@@ -2436,6 +2489,54 @@ class Judge:
         else:
             self.F.w("A11", "frozen_drift", "analyst/FROZEN_ANALYST.sha256", "-", "manifest missing")
 
+    # ================================================================ the sessions' Claude Code version (A13)
+    def check_cc_versions(self):
+        """A13 `cc_version_below` and `cc_version_unknown` (third review of §16.18 A7, decision 22; R-AN-25, R-AN-29,
+        R-AN-67, R-AN-85 "Claude Code version"), VIOLATION, operational, self-reported. The records are the `*.json`
+        files directly in `analyst/attempts/`, `analyst/calls/`, `analyst/canary/attempts/` and
+        `analyst/canary/calls/` at gold-analyst main's head; one is a guarded session's when its `repo_head_sha` names
+        a gold-analyst commit whose tree holds `.claude/hooks/guard.py` (a sha that names no commit is A4's finding,
+        not this one; judge decision J-D43). `cc_version_below`: its `self_reported.cc_version` is of R-AN-85's form
+        and below 2.1.295. `cc_version_unknown`: an attempt record's is unknown by that rule, a missing or non-object
+        `self_reported` included; a call file comes from the same session as its attempt record, so it is checked for
+        `cc_version_below` only. Key: the record's path and the commit that added it. The version is the session's own
+        report: it can show an old or unknown harness, and cannot prove a new one."""
+        n = 0
+        for folder in CC_RECORD_FOLDERS:
+            attempts = folder.endswith("attempts/")
+            for p, r in sorted(self.records(folder).items()):
+                if not (p.endswith(".json") and isinstance(r.rec, dict) and
+                        self.guarded(r.rec.get("repo_head_sha"))):
+                    continue
+                n += 1
+                sr = r.rec.get("self_reported")
+                v = sr.get("cc_version") if isinstance(sr, dict) else None
+                cls = sessionguard.cc_version_class(v)
+                if cls == "below":
+                    seen = ".".join(str(int(x)) for x in v.split(" ", 1)[0].split("."))
+                    self.F.v("A13", "cc_version_below", p, r.commit,
+                             safe_detail(f"self-reported cc_version {seen}", "below 2.1.295 (R-AN-85)"))
+                elif cls == "unknown" and attempts:
+                    why = ("self_reported missing or not an object" if not isinstance(sr, dict) else
+                           "cc_version missing" if "cc_version" not in sr else
+                           "cc_version null" if v is None else
+                           "cc_version not a string" if not isinstance(v, str) else
+                           "cc_version not of R-AN-85's form")
+                    self.F.v("A13", "cc_version_unknown", p, r.commit,
+                             safe_detail(f"self-reported cc_version unknown: {why}", "minimum 2.1.295 (R-AN-85)"))
+        self.summary["cc_version_records_checked"] = n
+
+    def guarded(self, sha) -> bool:
+        """Whether `sha` (a record's `repo_head_sha`) names a gold-analyst commit whose tree holds
+        `.claude/hooks/guard.py` (J-D43: 40 hex digits in either case, a commit object in the clone). Only the tree
+        entry is read: `guard.py` itself never is (R-AN-66)."""
+        if not isinstance(sha, str) or not _SHA40.fullmatch(sha):
+            return False
+        sha = sha.lower()
+        if sha not in self._guarded:
+            self._guarded[sha] = self.git.commit_exists(sha) and self.git.has_blob(sha, sessionguard.GUARD_PATH)
+        return self._guarded[sha]
+
     # ================================================================ the guard's files (A13 guard_config)
     def check_guard_config(self):
         """A13 `guard_config` (§16.18 A7; R-AN-2 as replaced, R-AN-67, R-AN-85; prereg R1 Isolation (a), (f)),
@@ -2489,6 +2590,60 @@ class Judge:
             if not self.git.commit_exists(self.prev_anchor) or not self.git.is_ancestor(self.prev_anchor, self.head):
                 self.F.v("A7", "anchor", "reports/judge_analyst/VERDICTS.csv", self.prev_anchor,
                          "main does not descend from the judge's previous anchor")
+
+
+def _json_or_none(b):
+    try:
+        return load_json_bytes(b) if b is not None else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _empty(v) -> bool:
+    """null, "", [] or {}: the values a `raw` field named like `project` may hold (R-AN-61; by type, so false and 0
+    are values)."""
+    return v is None or (type(v) is str and v == "") or (type(v) is list and not v) or (type(v) is dict and not v)
+
+
+def _project_fields(x):
+    """The values of every key whose name contains `project` (case ignored), at any depth of x (objects and lists)."""
+    out, stack = [], [x]
+    while stack:
+        y = stack.pop()
+        if isinstance(y, dict):
+            for k, v in y.items():
+                if isinstance(k, str) and "project" in k.lower():
+                    out.append(v)
+                stack.append(v)
+        elif isinstance(y, list):
+            stack.extend(y)
+    return out
+
+
+def project_breaches(rec, later: bool, raw: bool):
+    """What keeps an export (a ROUTINE_CONFIG.json version, raw=True, or a runs export, raw=False) from showing that
+    no routine is in a claude.ai project (A13 `routine_project`, R-AN-60, R-AN-61, R-AN-67): a `project` present and
+    not null; with raw, a field of `raw` named like `project` holding a value; and, when the export is `later` (a
+    missing key counts: J-D41), a routine without `project`, an entry that is not an object, or no `routines` list
+    (J-D42). Routine names and enums only: no value is printed."""
+    routines = rec.get("routines") if isinstance(rec, dict) else None
+    if not isinstance(routines, list):
+        return ["export unreadable or without a routines list"] if later else []
+    bad = []
+    for i, rt in enumerate(routines):
+        if not isinstance(rt, dict):
+            if later:
+                bad.append(f"routine #{i} not an object, lacks project")
+            continue
+        name = rt["name"] if isinstance(rt.get("name"), str) else f"routine #{i}"
+        if "project" in rt:
+            if rt["project"] is not None:
+                bad.append(f"{name} project not null")
+        elif later:
+            bad.append(f"{name} lacks project")
+        if raw and not all(_empty(v) for v in _project_fields(rt.get("raw"))):
+            bad.append(f"{name} raw holds a project field with a value")
+    return bad
 
 
 def _f(x):

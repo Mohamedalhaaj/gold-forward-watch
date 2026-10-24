@@ -161,7 +161,8 @@ def render_report(result, verdict, vkeys, ckeys, wkeys, wdone, first_seen, adj, 
              "(owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs "
              "(A13, R-AN-86) and of the security log, or routine config export (R-AN-61). "
              "Session probe outcomes (A12 "
-             "probe_failed, probe_incomplete) are self-reported by the session (R-AN-84).")
+             "probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code "
+             "version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).")
     L.append("")
     L.append(f"## VIOLATION keys in force ({len(vkeys)})")
     L.append("")
