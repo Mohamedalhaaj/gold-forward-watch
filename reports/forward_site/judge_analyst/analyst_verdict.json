@@ -1,16 +1,18 @@
 {
  "analyst_verdict": "VIOLATION",
- "asof_utc": "2026-10-24T09:29:06Z",
+ "asof_utc": "2026-10-24T13:26:55Z",
  "cleared_keys": [],
- "head_sha": "cd2640c11057fe011e84599f94f931baf1112361",
+ "head_sha": "e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040",
  "schema": "analyst-verdict/1",
  "violation_first_seen": {
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T024852Z.json|68c078cb5d0d52e5d53d2c2d9b9d711530add464": "2026-10-24T08:11:34Z",
+  "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T110641Z.json|e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040": "2026-10-24T13:26:55Z",
   "A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f": "2026-10-24T08:11:34Z",
   "A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f": "2026-10-24T08:11:34Z"
  },
  "violation_keys": [
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T024852Z.json|68c078cb5d0d52e5d53d2c2d9b9d711530add464",
+  "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T110641Z.json|e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040",
   "A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f",
   "A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f"
  ]
