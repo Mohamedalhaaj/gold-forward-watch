@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-10-23T14:15:58Z",
+ "generated_utc": "2026-10-24T08:08:53Z",
  "lab_state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
@@ -109,13 +109,13 @@
   }
  },
  "data": {
-  "ok_days": 52,
+  "ok_days": 53,
   "missing": [],
-  "complete_through_utc": "2026-10-22 00:00",
-  "lag_trading_days": 1,
+  "complete_through_utc": "2026-10-24 00:00",
+  "lag_trading_days": 0,
   "revisions": 0,
-  "store_rows": 853,
-  "store_defined": 596,
-  "store_new": 0
+  "store_rows": 897,
+  "store_defined": 640,
+  "store_new": 44
  }
 }
