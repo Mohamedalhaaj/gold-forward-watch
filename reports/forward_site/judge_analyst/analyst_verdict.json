@@ -1,8 +1,8 @@
 {
  "analyst_verdict": "VIOLATION",
- "asof_utc": "2026-10-24T19:29:15Z",
+ "asof_utc": "2026-10-25T01:33:40Z",
  "cleared_keys": [],
- "head_sha": "e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040",
+ "head_sha": "e0fd14a2499c529067f97b37fea494886d51f2a2",
  "schema": "analyst-verdict/1",
  "violation_first_seen": {
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T024852Z.json|68c078cb5d0d52e5d53d2c2d9b9d711530add464": "2026-10-24T08:11:34Z",
