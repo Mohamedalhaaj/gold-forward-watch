@@ -1,6 +1,6 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-25T01:33:40Z
+- asof_utc: 2026-10-25T15:03:01Z
 - head_sha (gold-analyst main checked): e0fd14a2499c529067f97b37fea494886d51f2a2
 - judge code_sha8: 7ea3c6de
 - **analyst_verdict: VIOLATION**
@@ -32,11 +32,11 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - canary_expected_windows: 0
 - canary_terminals: 0
 - cc_version_records_checked: 0
-- ga_runs_read: 54
+- ga_runs_read: 62
 - head: e0fd14a2499c529067f97b37fea494886d51f2a2
 - inbox_activity_entries: 25
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-10-25T01:33:40Z
+- inbox_last_complete_read_utc: 2026-10-25T15:03:01Z
 - live_expected_windows: 0
 - live_terminals: 0
 - probe_creations_max_day: 8
