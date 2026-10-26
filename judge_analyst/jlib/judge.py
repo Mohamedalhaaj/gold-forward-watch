@@ -32,8 +32,8 @@ import re
 from dataclasses import dataclass, field
 
 from . import derive, sessionguard, settle, stats, td
-from .clock import (Events, Holidays, Window, add_months_12, iso_week, parse_call_id, to_server,
-                    windows_between)
+from .clock import (MACRO_PATH, OPS_PATH, Events, Holidays, Window, add_months_12, iso_week, macro_problems,
+                    parse_call_id, to_server, windows_between)
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
                      sha256_compact)
@@ -283,6 +283,7 @@ class Judge:
         self._fresh = False
         self._diffs = {}
         self._guarded = {}
+        self._macro_seen = set()
         self.F = Findings()
         self.summary = {}
         self.evidence_new = []
@@ -1246,6 +1247,8 @@ class Judge:
             self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema, "expected",
                                                                 self.expected_context_schema(R)))
         else:
+            if schema == SCHEMA_V3:
+                self.check_macro_calendar(R)
             rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events,
                                  schema=schema)
             if rb.error:
@@ -2516,6 +2519,19 @@ class Judge:
                                  safe_detail("source_sha unknown", r.get("source_sha", "")[:12]))
             except Exception:  # noqa: BLE001
                 self.F.w("A11", "mirror_export_sha", "mirror/exports.csv", "-", "unreadable")
+
+    # ================================================================ the live macro calendar (A4, §16.18 A12-D19)
+    def check_macro_calendar(self, R):
+        """A4 `macro_calendar` (§16.18 A12-D17..D19; R-AN-10, R-AN-67 A4), VIOLATION, once per repo_head_sha of an
+        `analyst-context/3` call: the file `analyst/calendars/macro_2026_2027.csv` at R against the build's rows (the
+        judge's own copy, sha256-pinned, J-D52) and the `sha256` values logged for it in `analyst/ops_changes.csv` at
+        R. Key `A4|macro_calendar|<path>|<R>`; detail: clock.macro_problems' codes."""
+        if R in self._macro_seen:
+            return
+        self._macro_seen.add(R)
+        probs = macro_problems(self.git.show(R, MACRO_PATH), self.git.show(R, OPS_PATH))
+        if probs:
+            self.F.v("A4", "macro_calendar", MACRO_PATH, R, safe_detail(*probs[:8]))
 
     # ================================================================ frozen inputs (A11)
     def check_frozen(self):

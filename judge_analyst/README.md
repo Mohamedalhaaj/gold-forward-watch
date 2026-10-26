@@ -7,7 +7,8 @@ fourth review, its fifth review and its sixth review; xauusd-quant 62a0d80, four
 166c6b0, sixth review decision 35; and the dated amendment §16.18 A7, the session guard, xauusd-quant f16708e, with
 its first, second and third reviews, decisions 17 to 22; third review xauusd-quant 12ffdda; and the dated amendment
 §16.18 A9, the model day's market data from Twelve Data, xauusd-quant b3816ca; and the dated amendment §16.18 A12,
-`analyst-context/3` and `analyst-plan/2`, xauusd-quant a7c9989). A6, A7, A9 and A12 bind once the client approves
+`analyst-context/3` and `analyst-plan/2`, xauusd-quant a7c9989, with its addendum A12-D17..D21, the live event
+calendar, xauusd-quant 55c0a4f). A6, A7, A9 and A12 bind once the client approves
 their text; until then they are the build's target.
 It was built **blind**: from the prereg, the register and the record locations the register names, without reading
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
@@ -158,6 +159,36 @@ gold-analyst). The judge never calls Twelve Data:
 Tests: `tests/test_judge_a12.py`; the world's `a12_from` option pushes an owner A12 build commit on that day, so its
 later contexts are `analyst-context/3` (and its stay_out plans carry `stay_out_reason`), and `store_first` starts the
 store early enough for 25 weekdays.
+
+**The live event calendar (§16.18 A12-D17..D21; R-AN-10, R-AN-20, R-AN-23, R-AN-67 A4).** Decisions, as the judge
+implements them:
+- D17: the build's `analyst/calendars/macro_2026_2027.csv` (136 rows of PPI, JOLTS, GDP, PCE, RETAIL, ISM_MFG, ISM_SVC,
+  CLAIMS and ECB, 2026-10-29..2027-12-30) is kept as the judge's own byte copy `calendars/macro_2026_2027_build.csv`,
+  pinned to the register's sha256 68a4c46c... (`clock.MACRO_BUILD_SHA256`). NFP, CPI and FOMC stay in the frozen,
+  sha256-pinned BLS and FOMC copies.
+- D18: a `/3` context's `events` is rebuilt exactly: `today` and `next` carry twelve flags (`nfp`, `cpi`, `fomc`,
+  `ppi`, `jolts`, `gdp`, `pce`, `retail`, `ism_mfg`, `ism_svc`, `claims`, `ecb`; 1, 0, or null after the kind's last
+  event in the file read), and `today_times_utc`/`next_times_utc` are lists of `{"kind", "utc"}`, one per distinct
+  (kind, time) of the model date, sorted by `utc` then `kind`. A `/2` context keeps three flags and time strings. The
+  judge does not check `event_risk` against `events` (A12-D18: the lock checks the value only; `event_risk_unlisted`
+  is the canary report's, which the judge does not compute).
+- D19: the nine kinds come from the file at the call's `repo_head_sha` (read through the clone, never from main's
+  head). A file there that cannot be read as rows (missing, not UTF-8, another header, a row of another width, an
+  event outside the nine, a `ts_utc` not of D17's form) leaves the context unreproducible (`context_unreproducible`,
+  detail `macro_calendar`). Once per such `repo_head_sha` of a `/3` call the judge checks D19's rules and reports a
+  break as `A4|macro_calendar|analyst/calendars/macro_2026_2027.csv|<repo_head_sha>` (VIOLATION): `missing`,
+  `unreadable`, `header`; `build_rows <n>` (build lines absent byte for byte); the first row breaking each format rule
+  (`fields`, `date`, `weekday`, `event`, `time_local`, `tz`, `ts_utc` re-derived with zoneinfo, `source` empty,
+  `order` by (ts_utc, event), `duplicate` (date, event)); `sha256` when the file's sha256 is neither the build's nor a
+  `sha256` logged for that `file` in `analyst/ops_changes.csv` at the same commit. The macro calendar is outside
+  FROZEN_ANALYST.sha256 (A11 `frozen_drift` reads only the manifest's list) and outside A7's `append_break` (J-D52).
+- D20: the 2015-2024 calendar is deferred with the exam; nothing in the judge reads it.
+- D21: a `/3` context's `sources` is `td.SOURCES_V3`, whose note is R-AN-23's new text ("bars_d1 cover the 25
+  weekdays before the model day and are built from hourly bars made as bars_h1's are, ..."); `/2` keeps the old
+  note. A12_from's wording changes no judge code.
+Tests: `tests/test_judge_a12_calendar.py` (the register's example day 2026-10-29, the nulls after each kind's last
+event, the refresh rule's codes, and a world whose owner refreshes, logs, skips a log and edits a build row on main
+between windows); the world's A12 build commit adds the build file, and its `day` hook makes owner commits.
 
 Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
 token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
@@ -547,6 +578,13 @@ aged out); a cleared key never clears another (R-JV-4).
 - J-D51 (§16.18 A12; R-AN-87, R-AN-19) The `AUDJPY` provenance follows J-D46 as a pair's; a `risk` object other than
   null when the judge's rebuild is null (or the reverse) is `context_differs` (`risk`). The t0 hour is shared by a
   model day's two windows, so a bad AUDJPY t0 file gives a finding on both calls (J-D45 (d)).
+- J-D52 (§16.18 A12-D17, D19; R-AN-10, R-AN-67 A4) Points D19 leaves open, taken as follows: the build's rows are the
+  judge's own copy pinned to the register's sha256, not the file at the pinned build commit (a build commit carrying
+  another file shows as `macro_calendar` on every `/3` call); "a build row" is a whole line, compared byte for byte;
+  `source` must be non-empty only (its issuer is not judged); a kind with no row is null on every day; the check runs
+  at the repo_head_sha of `/3` calls only, so a break mended before the next call is not seen. The file is not an
+  A7 `append_break` path: D17 keeps it sorted, so a refresh can insert rows before the last one, and its
+  append-only rule is A4's `build_rows` and `sha256` instead.
 
 ## Open points
 
@@ -649,4 +687,6 @@ aged out); a cleared key never clears another (R-JV-4).
     before the freeze: J-D48..J-D51. Before any push: the client's approval of A12's text, and `A12_BUILD_COMMIT` set
     to the A12 build commit once it is on gold-analyst main (with None the judge reports every `/3` call). Not
     verified: whether the session code keeps `risk` in a `no_call:data` context, and how it writes a `levels` field
-    whose input is missing (R-AN-88 says null); the first `/3` records will show both.
+    whose input is missing (R-AN-88 says null); the first `/3` records will show both. The addendum A12-D17..D21
+    (xauusd-quant 55c0a4f; the live calendar, `macro_calendar`, the `/3` sources note) is built on the same branch,
+    test-first and blind; J-D52 is to log in the register too.

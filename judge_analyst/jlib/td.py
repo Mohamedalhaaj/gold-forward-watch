@@ -28,6 +28,14 @@ SOURCES = {"history": "dukascopy_store", "today": "twelvedata_1h",
            "note": "bars_h1 entries with src td, p_ref when p_ref_src is td, and fx come from Twelve Data hourly bars "
                    "in UTC; bars_h1 entries with src store are Dukascopy mid; bars_d1 are built from bars_h1; Twelve "
                    "Data and Dukascopy levels can differ slightly; settlement uses Dukascopy."}
+# §16.18 A12-D21 (R-AN-23): the `analyst-context/3` note; `/2` keeps SOURCES's
+SOURCES_V3 = {"history": "dukascopy_store", "today": "twelvedata_1h",
+              "note": "bars_h1 entries with src td, p_ref when p_ref_src is td, and fx come from Twelve Data hourly "
+                      "bars in UTC; bars_h1 entries with src store are Dukascopy mid; bars_d1 cover the 25 weekdays "
+                      "before the model day and are built from hourly bars made as bars_h1's are, but bars_h1 lists "
+                      "only the last 10 of those days, so the older bars_d1 days come from Dukascopy store hours not "
+                      "shown in bars_h1; Twelve Data and Dukascopy levels can differ slightly; settlement uses "
+                      "Dukascopy."}
 CROSS_TOL = 1e-3          # R-AN-68, decision A9-D10: |v_td / v_dk - 1| <= 1e-3
 UNCHECKED_AFTER = 3       # R-AN-67 td_unchecked: the model day more than 3 weekdays old
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")

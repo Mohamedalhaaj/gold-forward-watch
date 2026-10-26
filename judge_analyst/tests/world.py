@@ -344,6 +344,8 @@ class World:
             self.settle_run(T(f"{day.isoformat()}T02:15:00Z"))
             if self.a12_from is not None and day == self.a12_from:
                 self.make_a12_commit(T(f"{day.isoformat()}T03:00:00Z"))
+            if "day" in self.hooks:
+                self.hooks["day"](self, day)          # owner commits before the day's windows (e.g. a refresh)
             if day.weekday() < 5:
                 for w in ("W1", "W2"):
                     win = Window(day, w)
@@ -366,11 +368,19 @@ class World:
 
     def make_a12_commit(self, when):
         """The A12 build commit (§16.18 A12), pushed by the owner to main and mirrored to the inbox; the judge's
-        pin (R-AN-23) names it."""
-        sha = self.repo.commit("analyst A12 build", when)
+        pin (R-AN-23) names it. It adds the live macro calendar as built (A12-D17: the judge's own byte copy)."""
+        with open(os.path.join(JUDGE_ROOT, "calendars", "macro_2026_2027_build.csv"), "rb") as f:
+            macro = f.read()
+        self.a12_sha = self.owner_commit({"analyst/calendars/macro_2026_2027.csv": macro}, when, "analyst A12 build")
+
+    def owner_commit(self, files, when, msg):
+        """An owner commit on main (files: {path: bytes}), pushed and mirrored to the inbox like the A12 build."""
+        for k, v in files.items():
+            self.repo.write(k, v)
+        sha = self.repo.commit(msg, when)
         self.activity("refs/heads/main", sha, when, OWNER, "push")
         self.inbox_activity("refs/heads/main", sha, when + dt.timedelta(minutes=1), OWNER, "push")
-        self.a12_sha = sha
+        return sha
 
     def context_schema_for(self, R):
         if self.a12_sha and (R == self.a12_sha or self.gv.is_ancestor(self.a12_sha, R)):

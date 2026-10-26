@@ -17,7 +17,7 @@ import json
 import math
 
 from . import derive, levels, td, ticks
-from .clock import Window, model_to_utc, to_server, weekday_before
+from .clock import MACRO_PATH, Window, model_to_utc, to_server, weekday_before
 from .common import (UTC, fmt_server, fmt_utc, fmt_utc_ms, load_json_bytes, parse_utc, price_eq, rel_eq,
                      sha256_bytes, utc_ms)
 from .m1 import DaysTable, Store
@@ -225,6 +225,16 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
     except (ValueError, UnicodeDecodeError):
         rb.error = "days_csv"
         return rb
+    ev = events
+    if v3:
+        # §16.18 A12-D18/D19 (R-AN-10, R-AN-20): the twelve kinds, the nine new ones from the macro calendar read at
+        # repo_head_sha; a file that cannot be read as rows leaves the context unreproducible (its rules: A4
+        # `macro_calendar`, judged by the caller)
+        try:
+            ev = events.with_macro(git.show(R, MACRO_PATH))
+        except ValueError:
+            rb.error = "macro_calendar"
+            return rb
     complete_s = days.complete_utc(asof_s)
     complete = parse_utc(complete_s)
     hist_day = weekday_before(d, 10)
@@ -248,7 +258,7 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
                     "provisional": params.get("provisional")},
          "store": {"complete_utc": complete_s, "start_hist_utc": fmt_utc(start_hist),
                    "days_csv_sha256": sha256_bytes(days_b), "slots_sha256": sha256_bytes(slots_b)},
-         "us2y": "unknown", "sources": td.SOURCES, "events": events.context_block(d)}
+         "us2y": "unknown", "sources": td.SOURCES_V3 if v3 else td.SOURCES, "events": ev.context_block(d)}
     rb.expected = e
 
     # ---- the requests R-AN-87 makes, in its order (XAUUSD only with listed hours); none when store_stale
