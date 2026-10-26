@@ -19,6 +19,7 @@ FRESH_URL = f"{BASE}?symbol=XAU/USD&interval=1min&outputsize=1&timezone=UTC&dp=5
 PROV_KEYS = {"src", "req", "url", "http", "td_code", "status", "reason", "bytes", "sha256", "values_n", "bars",
              "fetched_utc", "tries"}
 BAR_KEYS = {"t_utc", "o", "h", "l", "c"}
+FRESH_BAR_KEYS = {"t_utc"}          # `fresh` keeps its bar's time only, no price (review B1, decision A9-D15)
 MAX_BODY = 262_144
 SOURCES = {"history": "dukascopy_store", "today": "twelvedata_1h",
            "note": "bars_h1 entries with src td, p_ref when p_ref_src is td, and fx come from Twelve Data hourly bars "
@@ -67,13 +68,14 @@ def expected_reason(http, td_code, tries):
 def bar_problems(bars, hours, fresh: bool, values_n):
     """Problems of an `ok` provenance's `bars` (R-AN-87): keys and R-C4 times, the hours the request may hold
     (`hours`, a set of t_utc strings; None for `fresh`), strict time order, o, h, l, c > 0, l <= min(o, c),
-    h >= max(o, c); `fresh` holds exactly its newest element when the response had one."""
+    h >= max(o, c); `fresh` holds exactly its newest element's time (`{"t_utc"}`, no price, decision A9-D15) when the
+    response had one."""
     out = []
     if not isinstance(bars, list):
         return ["bars"]
     prev = None
     for b in bars:
-        if not isinstance(b, dict) or set(b) != BAR_KEYS or not is_utc(b["t_utc"]):
+        if not isinstance(b, dict) or set(b) != (FRESH_BAR_KEYS if fresh else BAR_KEYS) or not is_utc(b["t_utc"]):
             return out + ["bars.keys"]
         t = parse_utc(b["t_utc"])
         if t.second != 0 or (not fresh and t.minute != 0):
@@ -83,6 +85,8 @@ def bar_problems(bars, hours, fresh: bool, values_n):
         if prev is not None and b["t_utc"] <= prev:
             out.append("bars.order")
         prev = b["t_utc"]
+        if fresh:
+            continue
         o, h, low, c = b["o"], b["h"], b["l"], b["c"]
         if not all(_num(v) and v > 0 for v in (o, h, low, c)) or not (low <= min(o, c) and h >= max(o, c)):
             out.append("bars.values")

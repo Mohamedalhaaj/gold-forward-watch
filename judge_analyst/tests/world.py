@@ -821,7 +821,7 @@ class World:
             fetched = fmt_utc(asof + dt.timedelta(seconds=8 * k + 1))
             if req == "fresh":
                 bt = (asof - dt.timedelta(minutes=2)).replace(second=0)
-                b = {"t_utc": fmt_utc(bt), "o": 4001.5, "h": 4001.9, "l": 4001.1, "c": 4001.7}
+                b = {"t_utc": fmt_utc(bt)}                  # its time only, no price (decision A9-D15)
                 files.append(self._td_ok(req, td.FRESH_URL, [b], 1, fetched))
                 continue
             if req == "XAUUSD":

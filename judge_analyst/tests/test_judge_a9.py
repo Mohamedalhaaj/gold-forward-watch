@@ -77,7 +77,7 @@ def problems(f, req="XAUUSD", url=URL, hours=HOURS):
 
 def test_a_conforming_provenance_has_no_problem():
     assert problems(_ok("XAUUSD", URL, [_bar("2026-11-30T05:00:00Z"), _bar("2026-11-30T06:00:00Z")], n=3)) == []
-    fresh = _ok("fresh", td.FRESH_URL, [_bar("2026-11-30T07:20:00Z")], n=1)
+    fresh = _ok("fresh", td.FRESH_URL, [{"t_utc": "2026-11-30T07:20:00Z"}], n=1)
     assert td.provenance_problems(fresh, "fresh", td.FRESH_URL, None, ASOF) == []
     err = {"src": "td", "req": "XAUUSD", "url": URL, "http": 200, "td_code": 429, "status": "error",
            "reason": "credits", "bytes": 120, "sha256": "b" * 64, "values_n": 0, "bars": [],
@@ -127,12 +127,23 @@ def test_an_error_keeps_no_bars_and_budget_needs_no_try():
 
 
 def test_fresh_keeps_its_newest_element_only():
-    f = _ok("fresh", td.FRESH_URL, [_bar("2026-11-30T07:19:00Z"), _bar("2026-11-30T07:20:00Z")], n=2)
+    f = _ok("fresh", td.FRESH_URL, [{"t_utc": "2026-11-30T07:19:00Z"}, {"t_utc": "2026-11-30T07:20:00Z"}], n=2)
     assert "bars.fresh" in td.provenance_problems(f, "fresh", td.FRESH_URL, None, ASOF)
-    g = _ok("fresh", td.FRESH_URL, [_bar("2026-11-30T07:20:30Z")], n=1)
+    g = _ok("fresh", td.FRESH_URL, [{"t_utc": "2026-11-30T07:20:30Z"}], n=1)
     assert "bars.keys" in td.provenance_problems(g, "fresh", td.FRESH_URL, None, ASOF)
     e = _ok("fresh", td.FRESH_URL, [], n=1)
     assert "bars.fresh" in td.provenance_problems(e, "fresh", td.FRESH_URL, None, ASOF)
+
+
+def test_fresh_keeps_no_price():
+    """Review B1, decision A9-D15: `fresh` keeps its bar's time only; a kept price is an A4 problem, and the rebuild
+    then has no `fresh` block."""
+    f = _ok("fresh", td.FRESH_URL, [_bar("2026-11-30T07:20:00Z")], n=1)
+    assert "bars.keys" in td.provenance_problems(f, "fresh", td.FRESH_URL, None, ASOF)
+    assert td.ok_bars(f) is None
+    assert td.ok_bars(_ok("fresh", td.FRESH_URL, [{"t_utc": "2026-11-30T07:20:00Z"}], n=1)) == {
+        "2026-11-30T07:20:00Z": {"t_utc": "2026-11-30T07:20:00Z"}}
+    assert td.ok_bars(_ok("XAUUSD", URL, [{"t_utc": "2026-11-30T05:00:00Z"}])) is None   # hourly bars keep prices
 
 
 def test_canary_probe_outcome_from_the_context():
