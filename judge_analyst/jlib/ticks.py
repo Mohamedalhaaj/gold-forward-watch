@@ -12,7 +12,8 @@ import struct
 from .common import sha256_bytes
 
 BASE_URL = "https://datafeed.dukascopy.com/datafeed"
-POINTS = {"XAUUSD": 1000, "USDJPY": 1000, "EURUSD": 100000, "GBPUSD": 100000, "USDCAD": 100000, "USDCHF": 100000}
+POINTS = {"XAUUSD": 1000, "USDJPY": 1000, "EURUSD": 100000, "GBPUSD": 100000, "USDCAD": 100000, "USDCHF": 100000,
+          "AUDJPY": 1000}          # §16.18 A12 (R-AN-16): AUDJPY 1000, for the cross-check of `risk` (R-AN-68)
 FX_PAIRS = ("EURUSD", "USDJPY", "GBPUSD", "USDCAD", "USDCHF")
 FX_EXPONENTS = (-0.576 / 0.958, 0.136 / 0.958, -0.119 / 0.958, 0.091 / 0.958, 0.036 / 0.958)
 _TICK = struct.Struct(">IIIff")  # ms, ask, bid, ask_volume, bid_volume

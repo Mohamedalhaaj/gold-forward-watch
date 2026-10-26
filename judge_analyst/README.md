@@ -6,8 +6,9 @@ they cite, with the dated amendment §16.18 A6, the agent inbox, as revised afte
 fourth review, its fifth review and its sixth review; xauusd-quant 62a0d80, fourth review 5d7fcdc, fifth review
 166c6b0, sixth review decision 35; and the dated amendment §16.18 A7, the session guard, xauusd-quant f16708e, with
 its first, second and third reviews, decisions 17 to 22; third review xauusd-quant 12ffdda; and the dated amendment
-§16.18 A9, the model day's market data from Twelve Data, xauusd-quant b3816ca). A6, A7 and A9 bind once the client
-approves their text; until then they are the build's target.
+§16.18 A9, the model day's market data from Twelve Data, xauusd-quant b3816ca; and the dated amendment §16.18 A12,
+`analyst-context/3` and `analyst-plan/2`, xauusd-quant a7c9989). A6, A7, A9 and A12 bind once the client approves
+their text; until then they are the build's target.
 It was built **blind**: from the prereg, the register and the record locations the register names, without reading
 the analyst code under `analyst/**`. Where the analyst code and the register differ, the judge reports a finding to
 adjudicate (`spec_gap`, `judge_error` or `system_error`, as J5).
@@ -100,7 +101,8 @@ judge never sees; history still comes from the store mirror. `jlib/td.py` re-imp
 register text (never imported from gold-analyst). The judge never calls Twelve Data (it holds no key; a record must
 stand on its own):
 - A4 accepts only `analyst-context/2` (`context_schema`, a VIOLATION, for any other schema, since calls exist only
-  from the first canary day on). It rebuilds the context from the mirror at `repo_head_sha`, the recorded provenance
+  from the first canary day on; since §16.18 A12 also `analyst-context/3`, paired with repo_head_sha, below).
+  It rebuilds the context from the mirror at `repo_head_sha`, the recorded provenance
   objects of `files`, asof_utc and PARAMS: every request at its position must be R-AN-87's (XAUUSD only with listed
   hours, the five pairs, `fresh`), with the exact URL (no other parameter, no `apikey`), `status` and `reason`
   following `http`, `td_code` and `tries` by R-AN-87's table (`budget` iff no try, and nothing tried after a
@@ -128,6 +130,34 @@ The judge's `analyst-context/1` rebuild (re-downloaded hour files, `A11 hour_sha
 `A4 inadmissible_hour`) is in gold-forward-watch's history before A9; an inadmissible hour is now a bar at an hour
 R-AN-87 does not name (`context_differs`). Tests: `tests/test_judge_a9.py`; the world's contexts are
 `analyst-context/2` and its probe records carry `net.twelvedata` 200 and `net.dukascopy` 0.
+
+**Context 3 and plan 2 (§16.18 A12; R-AN-14, R-AN-16, R-AN-17, R-AN-19, R-AN-23, R-AN-26, R-AN-28, R-AN-67 A4 and
+A5, R-AN-68, R-AN-87, R-AN-88; decisions A12-D6..D9).** A call at or after the A12 build commit carries
+`analyst-context/3`: one more Twelve Data request, `AUDJPY` (symbol `AUD/JPY`, the pairs' URL form), after USD/CHF and
+before `fresh`; the risk proxy `risk` after `fx`; the computed `levels` after `d_ref`; and `bars_d1` over 25 history
+weekdays from start_lv. `jlib/levels.py` re-implements R-AN-88 from the register text (never imported from
+gold-analyst). The judge never calls Twelve Data:
+- A4 pairs each call's schema with its `repo_head_sha` through the pin `jlib/config.py` `A12_BUILD_COMMIT`: `/3` iff
+  the pinned commit is repo_head_sha or one of its ancestors, `/2` otherwise; any other pairing is `context_schema`
+  (detail: the schema and the one expected). The pin is None until the A12 build commit is on gold-analyst main, so
+  until then every call must be `/2`. A `/3` context is rebuilt like a `/2` one plus: the `AUDJPY` request at its
+  position (R-AN-87's URL, status/reason, bars at t0 and h_new only; none after an XAUUSD stop or a missing required
+  hour); `risk` from its recorded bars (p0 the o at t0, p1 the c at h_new: exact; pct relative 1e-9; null when the
+  request was not made, is not `ok` or lacks a bar, and then the window stands); `bars_d1` (25 weekdays, from the store
+  at the mirror at repo_head_sha, loaded from start_lv's UTC date) and `bars_h1` (still from start_hist) exactly;
+  `levels` recomputed from the recorded `bars_h1`, `bars_d1`, `levels.asia.hist`, `p_ref` and `d_ref`, prices exact and
+  each rounded field within 0.5·10^−k + 1e-9 of the judge's unrounded value (k = 2 for dist_* and the ratios, 3 for
+  ret_*), a null only against a null, and `levels.asia.hist` against the judge's own rebuild from the mirror. `levels`
+  is null whenever the status is not `ok`.
+- A5 judges a `/3` call's plan as `analyst-plan/2`: a stay_out has `stay_out_reason`, exactly one of `event_risk`,
+  `no_setup`, `conflicting_signals`, `mid_range`; a trade has none. A `/2` call keeps the old key set. The judge does
+  not check `event_risk` against `events` (the lock does not either; the canary report counts it, R-AN-73).
+- A11 cross-checks AUDJPY's p0 and p1 against the first tick mid of the Dukascopy `AUDJPY` t0 hour and the last tick
+  mid of its h_new hour (R-AN-16: 1000 points per unit), with the 1e-3 rule and the findings `td_mismatch` and
+  `td_unchecked` unchanged.
+Tests: `tests/test_judge_a12.py`; the world's `a12_from` option pushes an owner A12 build commit on that day, so its
+later contexts are `analyst-context/3` (and its stay_out plans carry `stay_out_reason`), and `store_first` starts the
+store early enough for 25 weekdays.
 
 Script only. The judge job holds no secret and runs no model; only the publish job's deploy step gets the Cloudflare
 token, as in judge v1. It executes nothing from an agent-pushed commit (pushed commits are fetched as data and read
@@ -208,8 +238,8 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 | A1 | server lock_time > entry − 15 on a call not recorded as `no_call:late` (lock recomputed as A2's push time) | VIOLATION |
 | A2 | an attempt push outside [entry − 45, deadline] marked non-void; more than 2 accepted attempts; a call without an earlier accepted attempt for its attempt_n; a counted call whose attempt is void. A6: `time_source`, a witness of an agent push whose `push.repo` is not PINS.inbox_repo or whose `window.time_source` is not `activity`. A push's time is the earliest (timestamp, id) inbox entry at or after PINS.inbox_from_utc on a `claude/analyst-*` ref with the pushed sha (live API, else the `inbox_activity` evidence rows; other refs never count), else the witness run's created_at | VIOLATION |
 | A3 | `agent_scope`, `rewrite`, `invalid_content`, `attempt_cap` witnesses; an accepted push whose diff breaks R-AN-33; a record on main without an accepted witness; an unwitnessed `claude/analyst-*` push after 24 h whose diff breaks R-AN-33 (conforming: WARNING); a push to main by an actor other than the workflow bot or the owner (`main_push_actor`, gold-analyst's log); a `CLAUDE.md`, `AGENTS.md` or `.claude/` anywhere (R1(a)); the other witness codes of R-AN-33. A6: the pushes are the inbox's entries at or after PINS.inbox_from_utc; a `claude/probe-*` push gives nothing; any other `claude/` ref is WARNING `other_claude_ref`. Since A7 a `CLAUDE.md`, `AGENTS.md` or `.claude/` file is A13 `guard_config`, no longer A3 `forbidden_file` | VIOLATION / WARNING as R-AN-33 |
-| A4 | the context rebuilt from the mirror at `repo_head_sha`, the judge's re-downloads, the recorded asof_utc and PARAMS differs beyond R-AN-68; asof_utc > lock_utc + 60 s; an admitted hour with h + 1 h > asof − L; A6 `repo_head_foreign`: repo_head_sha not gold-analyst main's head or an ancestor of it (tested again after one fresh fetch of main). A9: `context_schema` (a context that is not `analyst-context/2`); the requests, URLs, status/reason, bars and stops of R-AN-87, and the rebuild from the recorded Twelve Data bars (`context_differs`) | VIOLATION |
-| A5 | S, T, D_ref, side or a plan field not derivable from the plan and the context (R-AN-21, R-AN-26, R-AN-27) | VIOLATION |
+| A4 | the context rebuilt from the mirror at `repo_head_sha`, the judge's re-downloads, the recorded asof_utc and PARAMS differs beyond R-AN-68; asof_utc > lock_utc + 60 s; an admitted hour with h + 1 h > asof − L; A6 `repo_head_foreign`: repo_head_sha not gold-analyst main's head or an ancestor of it (tested again after one fresh fetch of main). A9: `context_schema` (a context that is not `analyst-context/2`); the requests, URLs, status/reason, bars and stops of R-AN-87, and the rebuild from the recorded Twelve Data bars (`context_differs`). A12: `context_schema` also for a schema that does not match the call's repo_head_sha (`/3` iff it has the pinned A12 build commit as an ancestor, or is it); for `/3`, the `AUDJPY` request in R-AN-87's order, `risk`, `levels` and the 25-weekday `bars_d1` rebuilt within R-AN-68 | VIOLATION |
+| A5 | S, T, D_ref, side or a plan field not derivable from the plan and the context (R-AN-21, R-AN-26, R-AN-27). A12: for an `analyst-context/3` call, a plan that breaks `analyst-plan/2`'s `stay_out_reason` rule (`plan_invalid`, detail `keys` or `stay_out_reason`) | VIOLATION |
 | A6 | a broken prev_chain link; a witness file whose payload differs from its comment (`payload_differs`, R-AN-67's definition); a file without its comment or a bot comment without its file (after 24 h). A6: `comment_edited` (a bot comment with `updated_at` ≠ `created_at`); `comment_deleted` (now a VIOLATION: an evidence comment the API no longer returns, with or without its witness file); `witness_run_trigger` (a witness run with head branch ≠ main, or other than analyst-merge on schedule/workflow_dispatch or analyst-settle on push/schedule/workflow_dispatch) | VIOLATION |
 | A7 | a create-only/write-once file modified or deleted in main's history; an append-only file changed other than by whole-line appends; a force push or deletion of main; main not descending from the judge's previous anchor | VIOLATION |
 | A8 | an expected window (MODE.json periods) with zero or two terminal witnesses / no terminal record; a terminal outside the mode's period. A6 `closer_raced`: a closer terminal for window w while a counting inbox entry on a `claude/analyst-*` ref, timed at or before w's deadline, pushed a commit whose diff adds exactly w's call path (key `A8|closer_raced|<terminal path>|<after>`) | VIOLATION |
@@ -499,6 +529,25 @@ aged out); a cleared key never clears another (R-JV-4).
   unchanged (the guard still refuses `git` with `bash_form` and `PushNotification` with `tool`), so a listed `git`
   form or `PushNotification` refused gives `guard_denied_benign` and run gives `guard_not_enforced`.
 
+- J-D48 (§16.18 A12; R-AN-23, A4) The pin is `jlib/config.py` `A12_BUILD_COMMIT`, a full sha; None (the build's
+  state until the A12 build commit is on gold-analyst main) makes every call `/2`, and a pinned commit absent from the
+  clone is no one's ancestor, so a wrong pin shows as `context_schema` on every `/3` call. The order of A4's tests: a
+  schema that is neither `/2` nor `/3` is `context_schema`; then `repo_head_foreign`; then the pairing
+  (`context_schema`, detail: the schema and the one expected); only a paired context is rebuilt.
+- J-D49 (§16.18 A12; R-AN-26, R-AN-28, A5) The judge keeps its own plan codes: a missing `stay_out_reason` on a
+  stay_out, or one on a trade, is `keys` (the lock's `missing_keys` and `extra_keys`); another value or type is
+  `stay_out_reason`. The plan rule follows the recorded context's schema (a mispaired call is A4's finding).
+- J-D50 (§16.18 A12; R-AN-88, R-AN-68) Points R-AN-88 leaves open, taken as follows: a bar's model day and hour are
+  taken from its `t_utc` (its `t_server` is compared exactly in `bars_h1`); a rounded field need not sit on its
+  rounding grid, only within the tolerance; key order is not judged (the context hash is over the compact form,
+  whose keys are sorted, R-AN-3); a recorded input that cannot be computed on gives `levels.inputs`; when the
+  recorded `asia.hist` is not a list, width_ratio is recomputed from the judge's own hist. In a `no_call:data`
+  context only `levels` (null) is judged beyond the status and the requests; `risk`, like `fx`, is not compared
+  there (J-D46).
+- J-D51 (§16.18 A12; R-AN-87, R-AN-19) The `AUDJPY` provenance follows J-D46 as a pair's; a `risk` object other than
+  null when the judge's rebuild is null (or the reverse) is `context_differs` (`risk`). The t0 hour is shared by a
+  model day's two windows, so a bad AUDJPY t0 file gives a finding on both calls (J-D45 (d)).
+
 ## Open points
 
 1. **Location: resolved 2026-10-23.** Moved to gold-forward-watch as R-AN-1 says (review blocker B3). The store is
@@ -593,3 +642,11 @@ aged out); a cleared key never clears another (R-JV-4).
     §16.18 A11 (xauusd-quant a5eff94), without reading the analyst code: a `git status` or `git log` part of the
     listed forms is harmless by (a)(iv), and `PushNotification` joins class (d) (J-D47). The findings table is
     unchanged; the A7 unit test that classed `git status` forbidden now classes it harmless.
+18. **A12 (2026-10-26), not merged or pushed.** Built test-first (`tests/test_judge_a12.py`) on the local branch
+    `a12-judge` (worktree `gold-forward-watch-a12`, from origin/main b6614d7) from register §16.18 A12 and the items
+    it marks (R-AN-14, R-AN-16, R-AN-17, R-AN-19, R-AN-23, R-AN-26, R-AN-28, R-AN-67 A4 and A5, R-AN-68, R-AN-87,
+    R-AN-88; xauusd-quant a7c9989) and prereg Change A12, without reading the analyst code. To log in the register
+    before the freeze: J-D48..J-D51. Before any push: the client's approval of A12's text, and `A12_BUILD_COMMIT` set
+    to the A12 build commit once it is on gold-analyst main (with None the judge reports every `/3` call). Not
+    verified: whether the session code keeps `risk` in a `no_call:data` context, and how it writes a `levels` field
+    whose input is missing (R-AN-88 says null); the first `/3` records will show both.

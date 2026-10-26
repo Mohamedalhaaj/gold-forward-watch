@@ -1,7 +1,7 @@
 """The judge's own reading of R-AN-87 (§16.18 A9): the session's Twelve Data requests, re-implemented from the
 register text (never imported from gold-analyst). The judge never calls Twelve Data (R-AN-66: it holds no key, and a
 record must stand on its own); these functions check the recorded provenance objects of an `analyst-context/2`
-(A4) and name the values the Dukascopy cross-check compares (A11, R-AN-68).
+or (§16.18 A12) `analyst-context/3` (A4) and name the values the Dukascopy cross-check compares (A11, R-AN-68).
 """
 from __future__ import annotations
 
@@ -13,8 +13,11 @@ from .common import is_utc, parse_utc
 
 BASE = "https://api.twelvedata.com/time_series"
 SYMBOLS = {"XAUUSD": "XAU/USD", "EURUSD": "EUR/USD", "USDJPY": "USD/JPY", "GBPUSD": "GBP/USD", "USDCAD": "USD/CAD",
-           "USDCHF": "USD/CHF"}
+           "USDCHF": "USD/CHF", "AUDJPY": "AUD/JPY"}
 REQ_ORDER = ("XAUUSD", "EURUSD", "USDJPY", "GBPUSD", "USDCAD", "USDCHF", "fresh")
+# §16.18 A12 (R-AN-87, decision A12-D7): `analyst-context/3` adds `AUDJPY` after USD/CHF and before `fresh`
+RISK_PAIR = "AUDJPY"
+REQ_ORDER_V3 = ("XAUUSD", "EURUSD", "USDJPY", "GBPUSD", "USDCAD", "USDCHF", RISK_PAIR, "fresh")
 FRESH_URL = f"{BASE}?symbol=XAU/USD&interval=1min&outputsize=1&timezone=UTC&dp=5"
 PROV_KEYS = {"src", "req", "url", "http", "td_code", "status", "reason", "bytes", "sha256", "values_n", "bars",
              "fetched_utc", "tries"}

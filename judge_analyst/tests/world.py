@@ -43,7 +43,7 @@ import subprocess
 from jlib import derive, settle, stats, td, ticks
 from jlib.clock import Holidays, Window, model_to_utc, register_holiday_rows, windows_between
 from jlib.common import UTC, ZERO64, compact_form, fmt_utc, record_form, sha256_bytes, sha256_compact
-from jlib.context import CONTEXT_KEYS, rebuild_context
+from jlib.context import SCHEMA_V2, SCHEMA_V3, context_keys, rebuild_context
 from jlib.clock import Events
 from jlib.judge import Judge
 from jlib.m1 import DAYS_HEADER, DaysTable, Store
@@ -261,8 +261,15 @@ class World:
     """Build with World(tmp).build(); then run_judge() → (findings, verdict)."""
 
     def __init__(self, root, canary_days=("2026-11-19", "2026-11-20"), live_from="2026-11-23",
-                 live_to="2026-12-04", now="2026-12-07T12:00:00Z", plans=None, hooks=None, seed=7):
+                 live_to="2026-12-04", now="2026-12-07T12:00:00Z", plans=None, hooks=None, seed=7,
+                 store_first=None, a12_from=None):
+        """store_first: the first store day (default 2026-11-01); a12_from (§16.18 A12): the model day on whose
+        early morning the owner pushes the A12 build commit, so that contexts at a repo_head_sha descending from it
+        are `analyst-context/3` (default: none, every context `analyst-context/2`)."""
         self.root = root
+        self.store_first_opt = dt.date.fromisoformat(store_first) if store_first else dt.date(2026, 11, 1)
+        self.a12_from = dt.date.fromisoformat(a12_from) if a12_from else None
+        self.a12_sha = None
         self.canary_days = [dt.date.fromisoformat(x) for x in canary_days]
         self.live_from = dt.date.fromisoformat(live_from)
         self.live_to = dt.date.fromisoformat(live_to)
@@ -321,7 +328,7 @@ class World:
         self.repo = Git(os.path.join(self.root, "gold-analyst"))
         self.src = Git(os.path.join(self.root, "gold-forward-watch"))
         first = min(self.canary_days + [self.live_from]) if self.canary_days else self.live_from
-        self.store_first = dt.date(2026, 11, 1)
+        self.store_first = self.store_first_opt
         self.store_last = self.live_to + dt.timedelta(days=1)
         from jlib.gitrepo import GitRepo
         self.gv = GitRepo(self.repo.path)
@@ -335,6 +342,8 @@ class World:
         while day <= last:
             self.mirror_through(day - dt.timedelta(days=1), T(f"{day.isoformat()}T02:10:00Z"))
             self.settle_run(T(f"{day.isoformat()}T02:15:00Z"))
+            if self.a12_from is not None and day == self.a12_from:
+                self.make_a12_commit(T(f"{day.isoformat()}T03:00:00Z"))
             if day.weekday() < 5:
                 for w in ("W1", "W2"):
                     win = Window(day, w)
@@ -354,6 +363,19 @@ class World:
         if self.live_from <= d <= self.live_to:
             return "live"
         return None
+
+    def make_a12_commit(self, when):
+        """The A12 build commit (§16.18 A12), pushed by the owner to main and mirrored to the inbox; the judge's
+        pin (R-AN-23) names it."""
+        sha = self.repo.commit("analyst A12 build", when)
+        self.activity("refs/heads/main", sha, when, OWNER, "push")
+        self.inbox_activity("refs/heads/main", sha, when + dt.timedelta(minutes=1), OWNER, "push")
+        self.a12_sha = sha
+
+    def context_schema_for(self, R):
+        if self.a12_sha and (R == self.a12_sha or self.gv.is_ancestor(self.a12_sha, R)):
+            return SCHEMA_V3
+        return SCHEMA_V2
 
     # ------------------------------------------------------------------ the source store (gold-forward-watch)
     def make_source_store(self):
@@ -745,6 +767,8 @@ class World:
             else:
                 plan = copy.deepcopy(scen[1])
                 status = "called" if plan["action"] in ("buy", "sell") else "stay_out"
+                if status == "stay_out" and ctx.get("schema") == SCHEMA_V3:
+                    plan.setdefault("stay_out_reason", "no_setup")     # analyst-plan/2 (R-AN-26, A12)
         call = self.make_call(mode, win, ctx, plan, status, n, session + f"-{n}", asof)
         if "call" in self.hooks:
             self.hooks["call"](self, win, call)
@@ -810,8 +834,9 @@ class World:
         """An `analyst-context/2` (§16.18 A9): the session's Twelve Data provenance objects in R-AN-87's order and
         form, their bars made from the world's Dukascopy hour files (o, c = first and last tick mid, h, l = the
         extremes, at dp=5), which the judge downloads for the cross-check; `fresh` two minutes behind asof."""
+        schema = self.context_schema_for(R)
         rec0 = {"asof_utc": fmt_utc(asof), "repo_head_sha": R, "files": []}
-        rb0 = rebuild_context(rec0, win.call_id, mode, self.gv, None, self.holidays, self.events)
+        rb0 = rebuild_context(rec0, win.call_id, mode, self.gv, None, self.holidays, self.events, schema=schema)
         e0 = rb0.expected
         listed = e0["_listed"]
         files = []
@@ -839,13 +864,13 @@ class World:
         if "files" in self.hooks:
             self.hooks["files"](self, win, files)
         rec = {"asof_utc": fmt_utc(asof), "repo_head_sha": R, "files": files}
-        rb = rebuild_context(rec, win.call_id, mode, self.gv, None, self.holidays, self.events)
+        rb = rebuild_context(rec, win.call_id, mode, self.gv, None, self.holidays, self.events, schema=schema)
         e = rb.expected
-        ctx = {k: e[k] for k in CONTEXT_KEYS if k in e and k != "files"}
-        ctx["files"] = files
+        ctx = {k: (files if k == "files" else e[k]) for k in context_keys(schema) if k in e or k == "files"}
         if e["status"] == "no_call:data":
             ctx["detail"] = e["detail"][0]
-            for k in ("bars_h1", "bars_d1", "p_ref", "fx", "fresh", "d_ref", "memory"):
+            for k in ("bars_h1", "bars_d1", "p_ref", "fx", "fresh", "d_ref", "memory") + \
+                    (("risk", "levels") if schema == SCHEMA_V3 else ()):
                 ctx.setdefault(k, None)
             ctx["d_ref"] = None
         return _strip(ctx)
@@ -881,7 +906,7 @@ class World:
         rng = random.Random(int(sha256_bytes(key.encode())[:12], 16))
         n = 8 + rng.randrange(8)
         base = {"XAUUSD": 4_000_000, "EURUSD": 108_000, "USDJPY": 150_000, "GBPUSD": 127_000, "USDCAD": 137_000,
-                "USDCHF": 88_000}[sym]
+                "USDCHF": 88_000, "AUDJPY": 97_000}[sym]
         p = base + rng.randrange(-20000, 20000) // (1 if sym == "XAUUSD" else 100)
         ms = sorted(rng.randrange(0, 3_600_000) for _ in range(n))
         raw = b""
@@ -1127,7 +1152,8 @@ class World:
         return data
 
     def judge(self, out_dir=None, api=None, hours=None, store=True, now=None, prev_anchor=None, evidence=None,
-              fetch=None, fresh_main=None, prev_judge_utc=None, adjudications=None, findings=None):
+              fetch=None, fresh_main=None, prev_judge_utc=None, adjudications=None, findings=None,
+              a12_commit="world"):
         """adjudications: the judge's own ADJUDICATIONS.csv rows (R-AN-70); default: that file in out_dir, if any.
         findings: its FINDINGS.csv rows before the run (sixth review of A6, R6-2); default: that file in out_dir."""
         from jlib import report
@@ -1145,7 +1171,7 @@ class World:
                                    ("judge_findings", findings or None)) if v is not None}
         j = Judge(git, now or self.now, api=api if api is not None else FakeGitHub(self.api_data(), repo=GA),
                   hours=hs, store_git=sg, evidence_rows=evidence or [], prev_anchor=prev_anchor, fetch_commit=fetch,
-                  **extra)
+                  a12_commit=self.a12_sha if a12_commit == "world" else a12_commit, **extra)
         try:
             return j.run()
         finally:

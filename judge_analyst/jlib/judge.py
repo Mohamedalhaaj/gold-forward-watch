@@ -37,7 +37,9 @@ from .clock import (Events, Holidays, Window, add_months_12, iso_week, parse_cal
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
                      sha256_compact)
-from .context import SCHEMA as CONTEXT_SCHEMA, compare_context, cross_detail, rebuild_context, td_cross_check
+from . import config
+from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMAS as CONTEXT_SCHEMAS, compare_context, cross_detail,
+                      rebuild_context, td_cross_check)
 from .m1 import DaysTable, Store
 
 EPROC_SHA256 = "ee8d456ae3b5ddd1112bad92d12fffa95d2b12e0559335233c6a9b3a68067973"
@@ -252,14 +254,16 @@ class Result:
 class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
-                 prev_judge_utc=None, judge_adjudications=None, judge_findings=None):
+                 prev_judge_utc=None, judge_adjudications=None, judge_findings=None, a12_commit="config"):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
         judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
         ADJUDICATIONS.csv (R-AN-70; the A11 check of a `lifted:` resume of a latched key, fourth review of A6);
         judge_findings are the rows of its FINDINGS.csv before this run (the A11 check of a retirement by time,
-        sixth review of A6, R6-2)."""
+        sixth review of A6, R6-2). a12_commit (§16.18 A12, R-AN-23): the pinned A12 build commit; by default
+        config.A12_BUILD_COMMIT."""
         self.git = git
+        self.a12_commit = config.A12_BUILD_COMMIT if a12_commit == "config" else a12_commit
         self.now_s = now_utc
         self.now = parse_utc(now_utc)
         self.api = api
@@ -611,6 +615,14 @@ class Judge:
                 except Exception:  # noqa: BLE001
                     self._fresh = None
         return self._fresh
+
+    def expected_context_schema(self, sha) -> str:
+        """R-AN-23 (§16.18 A12): `analyst-context/3` for a repo_head_sha that is the pinned A12 build commit or has it
+        as an ancestor, `analyst-context/2` for an earlier one (and for every one while nothing is pinned)."""
+        a = self.a12_commit
+        if a and self.git.commit_exists(a) and (sha == a or self.git.is_ancestor(a, sha)):
+            return SCHEMA_V3
+        return SCHEMA_V2
 
     def on_main(self, sha) -> bool:
         """sha is gold-analyst main's head or an ancestor of it: the clone's main, else main after one fresh fetch
@@ -1222,13 +1234,20 @@ class Judge:
             except ValueError:
                 pass
         R = ctx.get("repo_head_sha")
-        if ctx.get("schema") != CONTEXT_SCHEMA:
-            # §16.18 A9 (R-AN-23): the judge accepts only analyst-context/2 from the first canary day on
-            self.F.v("A4", "context_schema", p, c, safe_detail("schema", ctx.get("schema")))
+        schema = ctx.get("schema")
+        if schema not in CONTEXT_SCHEMAS:
+            # §16.18 A9 (R-AN-23): the judge accepts only analyst-context/2 from the first canary day on;
+            # (§16.18 A12) and analyst-context/3
+            self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema))
         elif not self.on_main(R):
             self.F.v("A4", "repo_head_foreign", p, c, "repo_head_sha is not gold-analyst main's head or an ancestor")
+        elif schema != self.expected_context_schema(R):
+            # §16.18 A12 (R-AN-23): /3 iff repo_head_sha has the pinned A12 build commit as an ancestor (or is it)
+            self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema, "expected",
+                                                                self.expected_context_schema(R)))
         else:
-            rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events)
+            rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events,
+                                 schema=schema)
             if rb.error:
                 self.F.v("A4", "context_unreproducible", p, c, safe_detail("rebuild", rb.error))
             else:
@@ -1236,7 +1255,7 @@ class Judge:
                 if mm:
                     self.F.v("A4", "context_differs", p, c, safe_detail(*mm[:12]))
                 self.summary["contexts_rebuilt"] = self.summary.get("contexts_rebuilt", 0) + 1
-        if ctx.get("schema") == CONTEXT_SCHEMA:
+        if schema in CONTEXT_SCHEMAS:
             self.cross_check(p, c, win, ctx)
         # ---- A5: derivable from the plan and the context
         ctx_status = ctx.get("status")
@@ -1245,7 +1264,7 @@ class Judge:
             if status != ctx_status or plan is not None:
                 self.F.v("A5", "status_vs_context", p, c, "a no_call context must give that status and no plan")
         elif status in ("called", "stay_out"):
-            errs = derive.plan_errors(plan)
+            errs = derive.plan_errors(plan, v3=(schema == SCHEMA_V3))   # A12: analyst-plan/2 for a /3 call
             if errs:
                 self.F.v("A5", "plan_invalid", p, c, safe_detail(*errs))
                 derivable = False
@@ -1272,7 +1291,8 @@ class Judge:
             if not ok:
                 self.F.v("A5", "d_ref_underivable", p, c, "D_ref does not follow from the context")
                 derivable = False
-        if status == "called" and derivable and isinstance(plan, dict) and not derive.plan_errors(plan):
+        if status == "called" and derivable and isinstance(plan, dict) and \
+                not derive.plan_errors(plan, v3=(schema == SCHEMA_V3)):
             side = derive.side_of(plan["action"])
             sd, td = derive.st_dimes(dref["D_ref_cents"], plan["stop_mult"], plan["target_mult"])
             checks = [call.get("side") == side, num_exact(call.get("stop_mult"), float(plan["stop_mult"])),
@@ -1695,7 +1715,7 @@ class Judge:
         outcomes = rec.get("outcomes") if isinstance(rec.get("outcomes"), dict) else {}
         failed = sorted(str(k) for k, v in passes.items() if v is False)
         failed += [k for k in probe_fails(outcomes, canary) if k not in failed]
-        if canary and isinstance(context, dict) and context.get("schema") == CONTEXT_SCHEMA:
+        if canary and isinstance(context, dict) and context.get("schema") in CONTEXT_SCHEMAS:
             # R-AN-84 (A9): a canary's net.twelvedata is read from its context's first R-AN-87 request
             if outcomes.get("net.twelvedata") != td.probe_outcome(context.get("files")):
                 failed.append("net.twelvedata differs from the context's first request")

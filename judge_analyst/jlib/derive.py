@@ -15,6 +15,9 @@ TARGET_MULTS = (1.0, 1.5, 2.0, 3.0)
 CONFIDENCE = ("low", "medium", "high")
 TRADE_KEYS = {"action", "stop_mult", "target_mult", "confidence", "reason_ar", "key_risks_ar"}
 STAY_KEYS = {"action", "confidence", "reason_ar", "key_risks_ar"}
+# §16.18 A12 (R-AN-26, decision A12-D2): analyst-plan/2, for a call whose context is analyst-context/3
+STAY_REASONS = ("event_risk", "no_setup", "conflicting_signals", "mid_range")
+STAY_KEYS_V2 = STAY_KEYS | {"stay_out_reason"}
 
 
 def _is_num(x) -> bool:
@@ -29,17 +32,24 @@ def _bad_control(s: str) -> bool:
     return False
 
 
-def plan_errors(plan) -> list:
-    """Enum reasons why `plan` is not a valid R-AN-26 plan (empty list = valid). Never returns plan text."""
+def plan_errors(plan, v3: bool = False) -> list:
+    """Enum reasons why `plan` is not a valid R-AN-26 plan (empty list = valid). Never returns plan text.
+    v3 (§16.18 A12): the plan of an `analyst-context/3` call, `analyst-plan/2`: a stay_out also has
+    `stay_out_reason`, exactly one of STAY_REASONS (another value or type: `stay_out_reason`); a trade has none (the
+    key sets differ: `keys`). An `analyst-context/2` call keeps the old key set."""
     if not isinstance(plan, dict):
         return ["not_object"]
     errs = []
     action = plan.get("action")
     if action not in ("buy", "sell", "stay_out"):
         return ["action"]
-    want = TRADE_KEYS if action in ("buy", "sell") else STAY_KEYS
+    want = TRADE_KEYS if action in ("buy", "sell") else (STAY_KEYS_V2 if v3 else STAY_KEYS)
     if set(plan.keys()) != want:
         errs.append("keys")
+    if v3 and action == "stay_out" and "stay_out_reason" in plan:
+        sr = plan["stay_out_reason"]
+        if not (isinstance(sr, str) and sr in STAY_REASONS):
+            errs.append("stay_out_reason")
     if action in ("buy", "sell"):
         sm, tm = plan.get("stop_mult"), plan.get("target_mult")
         if not (_is_num(sm) and float(sm) in STOP_MULTS):
