@@ -1,11 +1,11 @@
 {
- "updated_utc": "2026-10-26T01:41Z",
+ "updated_utc": "2026-10-26T16:47Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-10-26 04:31",
- "last_price": 4001.6,
+ "last_price_time_server": "2026-10-26 19:37",
+ "last_price": 4033.3,
  "days_done": 5,
  "in_sample": {
   "causal_M15": {
@@ -1111,7 +1111,36 @@
    }
   }
  },
- "open_trades": [],
+ "open_trades": [
+  {
+   "tf": "M30",
+   "day": "2026-10-26",
+   "fill_time": "2026-10-26 17:30",
+   "fill": 4035.51,
+   "stop": 4043.09,
+   "target": 4028.63,
+   "exit_time": "2026-10-26 19:37",
+   "exit": 4033.3,
+   "reason": "open",
+   "net": 1.96,
+   "final": false,
+   "mode": "causal"
+  },
+  {
+   "tf": "M30",
+   "day": "2026-10-26",
+   "fill_time": "2026-10-26 17:30",
+   "fill": 4035.51,
+   "stop": 4043.09,
+   "target": 4028.63,
+   "exit_time": "2026-10-26 19:37",
+   "exit": 4033.3,
+   "reason": "open",
+   "net": 1.96,
+   "final": false,
+   "mode": "strict"
+  }
+ ],
  "wick": {
   "days": 6,
   "triggers": 1,
