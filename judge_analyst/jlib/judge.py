@@ -31,12 +31,13 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from . import derive, sessionguard, settle, stats
-from .clock import Events, Holidays, Window, add_months_12, iso_week, parse_call_id, windows_between
+from . import derive, sessionguard, settle, stats, td
+from .clock import (Events, Holidays, Window, add_months_12, iso_week, parse_call_id, to_server,
+                    windows_between)
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
                      sha256_compact)
-from .context import compare_context, rebuild_context
+from .context import SCHEMA as CONTEXT_SCHEMA, compare_context, cross_detail, rebuild_context, td_cross_check
 from .m1 import DaysTable, Store
 
 EPROC_SHA256 = "ee8d456ae3b5ddd1112bad92d12fffa95d2b12e0559335233c6a9b3a68067973"
@@ -179,6 +180,28 @@ PROBE_FAILS = {
     "ga_push": lambda o: o in ("accepted", "refused_rule"), "ga_push_proxy": lambda o: o in ("accepted", "refused_rule"),
     "admin_probe": lambda o: o == "ok",
 }
+# §16.18 A9 (R-AN-84 as amended): `net.twelvedata`, the data control, passes only on 200; in a canary `context`
+# its outcomes 0, −2, 429 and 500-599 (an outage, no request, the minute's credits) are null. `net.dukascopy` is
+# expected refused in both kinds: 200 fails. Judge decision J-D44: a record without a `net.twelvedata` outcome was
+# written by the pre-A9 code, whose `net.dukascopy` passed on 200, so the A9 rule of `net.dukascopy` applies only
+# to a record that has a `net.twelvedata` outcome.
+DUKASCOPY_TAG = ("refs/tags/analyst-dukascopy-v0.6", "79b9247901f15ee40d14d0f33cc8001f89bf31ce")   # A12 ga_tag (A9)
+
+
+def _td_canary_null(o) -> bool:
+    return _int(o) and (o in (0, -2, 429) or 500 <= o <= 599)
+
+
+def probe_fails(outcomes: dict, canary: bool) -> list:
+    """The probes whose outcome its "Pass iff" column fails (R-AN-84; PROBE_FAILS and the A9 rules)."""
+    failed = [k for k, f in PROBE_FAILS.items() if k in outcomes and f(outcomes[k])]
+    if "net.twelvedata" in outcomes:
+        o = outcomes["net.twelvedata"]
+        if o != 200 and not (canary and (_td_canary_null(o) or not _int(o))):
+            failed.append("net.twelvedata")
+        if outcomes.get("net.dukascopy") == 200:
+            failed.append("net.dukascopy")
+    return sorted(failed)
 
 
 def allow_patterns(prefix: str):
@@ -1154,6 +1177,22 @@ class Judge:
             self.F.v("A8", "closer_raced", tr.path, e["after"],
                      safe_detail("call pushed", e["ts"], "deadline", deadline))
 
+    # ---------------------------------------------------------------- A11: the Twelve Data cross-check (A9)
+    def cross_check(self, p, c, win, ctx):
+        """A11 `td_mismatch` / `td_unchecked` (§16.18 A9; R-AN-66, R-AN-68): the recorded Twelve Data values against
+        the judge's own Dukascopy downloads (td_cross_check). Both list every value concerned (J-D45)."""
+        r = td_cross_check(win.call_id, ctx.get("files"), self.hours,
+                           lambda h: self.holidays.is_nyse_full(to_server(h).date()), self.now.date())
+        for k, n in (("td_compared", len(r.compared)), ("td_outside", len(r.outside)), ("td_pending", r.pending),
+                     ("td_unchecked", len(r.unchecked))):
+            self.summary[k] = self.summary.get(k, 0) + n
+        if r.outside:
+            inside = [x for x in r.compared if x not in r.outside]
+            self.F.w("A11", "td_mismatch", p, c,
+                     f"outside 1e-3: {cross_detail(r.outside)}; within: {cross_detail(inside) or 'none'}")
+        if r.unchecked:
+            self.F.w("A11", "td_unchecked", p, c, f"no present Dukascopy file: {cross_detail(r.unchecked)}")
+
     # ---------------------------------------------------------------- A4 / A5 on one call file
     def check_call(self, mode, win, call_r, call, lock) -> bool:
         """A4 (context reproduction) and A5 (derivability). Returns whether S/T/D_ref follow (R-AN-36 step 4)."""
@@ -1183,23 +1222,22 @@ class Judge:
             except ValueError:
                 pass
         R = ctx.get("repo_head_sha")
-        if not self.on_main(R):
+        if ctx.get("schema") != CONTEXT_SCHEMA:
+            # §16.18 A9 (R-AN-23): the judge accepts only analyst-context/2 from the first canary day on
+            self.F.v("A4", "context_schema", p, c, safe_detail("schema", ctx.get("schema")))
+        elif not self.on_main(R):
             self.F.v("A4", "repo_head_foreign", p, c, "repo_head_sha is not gold-analyst main's head or an ancestor")
         else:
             rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events)
             if rb.error:
                 self.F.v("A4", "context_unreproducible", p, c, safe_detail("rebuild", rb.error))
             else:
-                for sym, hour, _a, _b in rb.sha_mismatch:
-                    self.F.w("A11", "hour_sha", f"{sym}/{hour}", c, safe_detail("call", win.call_id))
-                if rb.unavailable:
-                    self.F.w("A0", "hours_unavailable", p, c, f"{len(rb.unavailable)} hour files not re-downloaded")
-                for sym, hour in rb.inadmissible:
-                    self.F.v("A4", "inadmissible_hour", p, c, safe_detail(sym, hour))
                 mm = compare_context(rb, ctx)
                 if mm:
                     self.F.v("A4", "context_differs", p, c, safe_detail(*mm[:12]))
                 self.summary["contexts_rebuilt"] = self.summary.get("contexts_rebuilt", 0) + 1
+        if ctx.get("schema") == CONTEXT_SCHEMA:
+            self.cross_check(p, c, win, ctx)
         # ---- A5: derivable from the plan and the context
         ctx_status = ctx.get("status")
         plan = call.get("plan")
@@ -1640,7 +1678,7 @@ class Judge:
             if not isinstance(cp, dict):
                 self.F.w("A12", "probe_incomplete", p, r.commit, "no canary_probe record")
                 continue
-            self.judge_probe(p, r.commit, cp, canary=True)
+            self.judge_probe(p, r.commit, cp, canary=True, context=r.rec.get("context"))
             n += 1
         for p, r in sorted(self.records(PREFIX["canary"] + "checks/").items()):
             if not re.fullmatch(r"PROBE_[^/]+\.json", p.rsplit("/", 1)[-1]):
@@ -1652,11 +1690,15 @@ class Judge:
             n += 1
         self.summary["probe_records"] = n
 
-    def judge_probe(self, path, commit, rec, canary):
+    def judge_probe(self, path, commit, rec, canary, context=None):
         passes = rec.get("pass") if isinstance(rec.get("pass"), dict) else {}
         outcomes = rec.get("outcomes") if isinstance(rec.get("outcomes"), dict) else {}
         failed = sorted(str(k) for k, v in passes.items() if v is False)
-        failed += sorted(k for k, f in PROBE_FAILS.items() if k in outcomes and f(outcomes[k]) and k not in failed)
+        failed += [k for k in probe_fails(outcomes, canary) if k not in failed]
+        if canary and isinstance(context, dict) and context.get("schema") == CONTEXT_SCHEMA:
+            # R-AN-84 (A9): a canary's net.twelvedata is read from its context's first R-AN-87 request
+            if outcomes.get("net.twelvedata") != td.probe_outcome(context.get("files")):
+                failed.append("net.twelvedata differs from the context's first request")
         if failed or rec.get("verdict") == "fail":
             self.F.v("A12", "probe_failed", path, commit, safe_detail(*(failed or ["verdict fail"])))
         elif canary and rec.get("verdict") != "pass":
@@ -1706,7 +1748,11 @@ class Judge:
             first = self.note_ref(ref, sha)
             if ref.startswith("refs/tags/"):
                 name = ref[len("refs/tags/"):]
-                if name not in allowed or not self.on_main(peeled.get(ref, sha)):
+                if ref == DUKASCOPY_TAG[0]:
+                    ok = peeled.get(ref, sha) == DUKASCOPY_TAG[1]   # §16.18 A9: that name at that commit only
+                else:
+                    ok = name in allowed and self.on_main(peeled.get(ref, sha))
+                if not ok:
                     self.F.v("A12", "ga_tag", ref, sha, "a tag that is no freeze tag on main")
                 elif first != sha:
                     self.F.v("A12", "ga_tag_moved", ref, sha, safe_detail("first seen at", first))

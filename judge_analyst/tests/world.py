@@ -40,7 +40,7 @@ import shutil
 import struct
 import subprocess
 
-from jlib import derive, settle, stats, ticks
+from jlib import derive, settle, stats, td, ticks
 from jlib.clock import Holidays, Window, model_to_utc, register_holiday_rows, windows_between
 from jlib.common import UTC, ZERO64, compact_form, fmt_utc, record_form, sha256_bytes, sha256_compact
 from jlib.context import CONTEXT_KEYS, rebuild_context
@@ -70,7 +70,7 @@ def rules(repo, *types):
 def probe_record(tag, kind, head, when):
     """A passing `analyst-probe/1` record (R-AN-84): every probe at an outcome its "Pass iff" column passes. (Third
     review of A7, decision 22:) it also holds the session's `cc_version`, which is not a probe."""
-    outcomes = {"net.dukascopy": 200, "net.google": 0, "net.raw_public": 0, "net.api_root": 200,
+    outcomes = {"net.twelvedata": 200, "net.dukascopy": 0, "net.google": 0, "net.raw_public": 0, "net.api_root": 200,
                 "rest.inbox": "ok", "rest.ga": "scope", "rest.gfw": "scope", "rest.hooks": 0,
                 "git.ls_remote_inbox": "accepted", "git.ls_remote_gfw": "refused", "git.ls_remote_gfw_proxy": "refused",
                 "git.ls_remote_public": "refused", "git.ls_remote_public_proxy": "refused",
@@ -287,6 +287,8 @@ class World:
         self.comment_id = 90000
         self.prev_chain = {"live": ZERO64, "canary": ZERO64}
         self.raced = {}
+        self.contexts = {}
+        self.calls = {}
         self.terminals = {}
         self.attempts = {}
         self.settled_done = set()
@@ -746,6 +748,8 @@ class World:
         call = self.make_call(mode, win, ctx, plan, status, n, session + f"-{n}", asof)
         if "call" in self.hooks:
             self.hooks["call"](self, win, call)
+        self.contexts[win.call_id] = call["context"]
+        self.calls[(mode, win.call_id)] = call
         data = record_form(call)
         path = f"{pre}calls/{win.call_id}.json"
         lock_time = asof + dt.timedelta(minutes=2)
@@ -803,38 +807,74 @@ class World:
         self.repo.commit(f"analyst-settle closer {win.call_id}", when + dt.timedelta(seconds=5))
 
     def build_context(self, mode, win, asof, R, hour_absent=False):
-        hs = HourSource(FakeHourFetcher(self.hour_files), None, fmt_utc(asof))
+        """An `analyst-context/2` (§16.18 A9): the session's Twelve Data provenance objects in R-AN-87's order and
+        form, their bars made from the world's Dukascopy hour files (o, c = first and last tick mid, h, l = the
+        extremes, at dp=5), which the judge downloads for the cross-check; `fresh` two minutes behind asof."""
         rec0 = {"asof_utc": fmt_utc(asof), "repo_head_sha": R, "files": []}
-        rb0 = rebuild_context(rec0, win.call_id, mode, self.gv, hs, self.holidays, self.events)
-        seq = rb0.expected["_file_seq"]
+        rb0 = rebuild_context(rec0, win.call_id, mode, self.gv, None, self.holidays, self.events)
+        e0 = rb0.expected
+        listed = e0["_listed"]
         files = []
-        for i, (sym, hour_s) in enumerate(seq):
-            hour = T(hour_s)
-            url = ticks.hour_url(sym, hour)
-            if hour_absent and sym == "XAUUSD" and i == 1:
-                self.hour_files[url] = (404, b"")
-                files.append({"sym": sym, "hour_utc": hour_s, "url": url, "http": 404, "bytes": 0, "sha256": "",
-                              "ticks": 0, "status": "empty", "fetched_utc": fmt_utc(asof + dt.timedelta(seconds=i)),
-                              "tries": 1})
+        k = 0
+        for req in e0["_plan"]:
+            k += 1
+            fetched = fmt_utc(asof + dt.timedelta(seconds=8 * k + 1))
+            if req == "fresh":
+                bt = (asof - dt.timedelta(minutes=2)).replace(second=0)
+                b = {"t_utc": fmt_utc(bt), "o": 4001.5, "h": 4001.9, "l": 4001.1, "c": 4001.7}
+                files.append(self._td_ok(req, td.FRESH_URL, [b], 1, fetched))
                 continue
-            body, n = self.tick_file(sym, hour)
-            self.hour_files[url] = (200, body)
-            files.append({"sym": sym, "hour_utc": hour_s, "url": url, "http": 200, "bytes": len(body),
-                          "sha256": sha256_bytes(body), "ticks": n, "status": "present",
-                          "fetched_utc": fmt_utc(asof + dt.timedelta(seconds=i)), "tries": 1})
+            if req == "XAUUSD":
+                hours = [T(h) for h in listed]
+                url = td.hourly_url(req, hours[0], hours[-1] + dt.timedelta(hours=1))
+                skip = {listed[1]} if hour_absent and len(listed) > 1 else set()
+                bars = [self.td_bar(req, h) for h in hours if fmt_utc(h) not in skip]
+            else:
+                t0, hn = T(e0["_t0"]), T(e0["_h_new"])
+                url = td.hourly_url(req, t0, hn + dt.timedelta(hours=1))
+                bars = [self.td_bar(req, t0), self.td_bar(req, hn)]
+            files.append(self._td_ok(req, url, bars, len(bars) + 1, fetched))
+            if hour_absent and req == "XAUUSD":
+                break                                # R-AN-87: a required hour without a bar stops the context
         if "files" in self.hooks:
             self.hooks["files"](self, win, files)
         rec = {"asof_utc": fmt_utc(asof), "repo_head_sha": R, "files": files}
-        rb = rebuild_context(rec, win.call_id, mode, self.gv, hs, self.holidays, self.events)
+        rb = rebuild_context(rec, win.call_id, mode, self.gv, None, self.holidays, self.events)
         e = rb.expected
         ctx = {k: e[k] for k in CONTEXT_KEYS if k in e and k != "files"}
         ctx["files"] = files
         if e["status"] == "no_call:data":
             ctx["detail"] = e["detail"][0]
-            for k in ("bars_h1", "bars_d1", "p_ref", "fx", "d_ref", "memory"):
+            for k in ("bars_h1", "bars_d1", "p_ref", "fx", "fresh", "d_ref", "memory"):
                 ctx.setdefault(k, None)
             ctx["d_ref"] = None
         return _strip(ctx)
+
+    @staticmethod
+    def _td_ok(req, url, bars, values_n, fetched):
+        return {"src": "td", "req": req, "url": url, "http": 200, "td_code": 200, "status": "ok", "reason": None,
+                "bytes": 400 + 90 * values_n, "sha256": sha256_bytes(f"{req}|{url}".encode()), "values_n": values_n,
+                "bars": bars, "fetched_utc": fetched, "tries": 1}
+
+    def td_bar(self, sym, hour):
+        """A Twelve Data hourly bar at `hour`, from the world's Dukascopy file of that hour (registered for the
+        judge's cross-check download)."""
+        url = ticks.hour_url(sym, hour)
+        body, _n = self.tick_file(sym, hour)
+        self.hour_files[url] = (200, body)
+        st, sm = ticks.classify(200, body)
+        o = round(ticks.tick_mid(sm["first_ask"], sm["first_bid"], sym), 5)
+        c = round(ticks.tick_mid(sm["last_ask"], sm["last_bid"], sym), 5)
+        h = round(ticks.sum_mid(sm["max_sum"], sym), 5)
+        low = round(ticks.sum_mid(sm["min_sum"], sym), 5)
+        return {"t_utc": fmt_utc(hour), "o": o, "h": h, "l": low, "c": c}
+
+    def context_of(self, call_id):
+        return self.contexts[call_id]
+
+    def call_status(self, mode, call_id):
+        c = self.calls[(mode, call_id)]
+        return c["status"], c["context"]["detail"]
 
     def tick_file(self, sym, hour):
         key = f"{sym}|{fmt_utc(hour)}"

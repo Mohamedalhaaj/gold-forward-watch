@@ -359,21 +359,28 @@ class HourSource:
                         row[k] = int(row[k]) if row[k] != "" else None
                     self.cache[(row["sym"], row["hour_utc"])] = row
 
-    def get(self, sym: str, hour):
-        """The judge's record for (sym, hour): dict with status/sha256/... or None when it could not be fetched."""
+    def get(self, sym: str, hour, refresh: bool = False):
+        """The judge's record for (sym, hour): dict with status/sha256/... or None when it could not be fetched.
+        With `refresh` (§16.18 A9: the cross-check tries a file again at each run until the model day is more than
+        3 weekdays old) a cached file that is not `present` is fetched again; a new status is appended to the
+        cache (a later row wins when it is read), and a failed fetch keeps the cached row."""
         key = (sym, fmt_utc(hour))
-        if key in self.cache:
-            return self.cache[key]
+        cached = self.cache.get(key)
+        if cached is not None and not (refresh and cached["status"] != "present"):
+            return cached
         if self.fetched >= self.max_fetch:
             self.unavailable += 1
-            return None
+            return cached
         url = ticks.hour_url(sym, hour)
         self.fetched += 1
         http, body = self.fetcher.get(url)
         status, summ = ticks.classify(http, body)
         if status == "error":
             self.unavailable += 1
-            return None
+            return cached
+        if cached is not None and cached["status"] == status and \
+                cached["sha256"] == (sha256_bytes(body) if body else ""):
+            return cached
         row = {"judge_utc": self.now_utc, "sym": sym, "hour_utc": key[1], "url": url, "http": http,
                "bytes": len(body or b""), "sha256": sha256_bytes(body) if body else "", "ticks": None,
                "status": status}

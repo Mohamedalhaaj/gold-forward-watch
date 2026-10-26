@@ -245,19 +245,13 @@ def test_A4_and_A5_p_ref_changed(tmp_path):
 
 
 def test_A4_inadmissible_hour(tmp_path):
+    """§16.18 A9: a Twelve Data bar at an hour past h_new (h + 1 h > asof − L) is not at an hour R-AN-87 names."""
     def hook(world, win, files):
         if win.call_id == "2026-12-01_W1":
-            f = dict(files[0])
-            h = T(files[len([x for x in files if x["sym"] == "XAUUSD"]) - 1]["hour_utc"]) + dt.timedelta(hours=1)
-            f["hour_utc"] = fmt_utc(h)
-            from jlib import ticks
-            f["url"] = ticks.hour_url("XAUUSD", h)
-            body, n = world.tick_file("XAUUSD", h)
-            world.hour_files[f["url"]] = (200, body)
-            f.update(bytes=len(body), sha256=sha256_bytes(body), ticks=n)
-            files.insert(len([x for x in files if x["sym"] == "XAUUSD"]), f)
+            last = files[0]["bars"][-1]
+            files[0]["bars"].append(dict(last, t_utc=fmt_utc(T(last["t_utc"]) + dt.timedelta(hours=1))))
     res = small_world(tmp_path, {"files": hook}).judge()
-    assert has(res, "A4", "inadmissible_hour", VIOLATION)
+    assert has(res, "A4", "context_differs", VIOLATION)
 
 
 def test_A4_asof_after_lock(tmp_path):
@@ -298,24 +292,29 @@ def test_A4_A5_d_ref_changed_in_context_and_call(tmp_path):
     assert has(res, "A5", "d_ref_underivable", VIOLATION)
 
 
-def test_A11_hour_redownload_differs_is_a_warning_not_A4(base, tmp_path):
+def test_A11_dukascopy_file_differs_is_a_warning_not_A4(base, tmp_path):
+    """§16.18 A9: the judge's Dukascopy download disagrees with a recorded Twelve Data bar beyond 1e-3 (A11
+    td_mismatch, a WARNING); the context still follows from its recorded bars (no A4)."""
     url = sorted(u for u in base.hour_files if "/XAUUSD/" in u)[5]
     files = dict(base.hour_files)
     http, body = files[url]
     from world import lzma_alone
     import lzma
+    import struct
     raw = lzma.decompress(body, format=lzma.FORMAT_ALONE)
-    files[url] = (200, lzma_alone(raw[:-20]))
+    out = b"".join(struct.pack(">IIIff", ms, ask + 9000, bid + 9000, av, bv)
+                   for ms, ask, bid, av, bv in struct.iter_unpack(">IIIff", raw))
+    files[url] = (200, lzma_alone(out))
     hs = HourSource(FakeHourFetcher(files), None, base.now)
     res = base.judge(hours=hs)
-    assert has(res, "A11", "hour_sha", WARNING)
+    assert has(res, "A11", "td_mismatch", WARNING)
     assert not keys(res, "A4")
 
 
-def test_A0_hours_unavailable(base):
+def test_A11_dukascopy_unavailable_is_td_unchecked(base):
     hs = HourSource(FakeHourFetcher({}, down=True), None, base.now)
     res = base.judge(hours=hs)
-    assert has(res, "A0", "hours_unavailable", WARNING) and not keys(res, severity=VIOLATION)
+    assert has(res, "A11", "td_unchecked", WARNING) and not keys(res, severity=VIOLATION)
 
 
 # ---------------------------------------------------------------- A6 chain and witness comments
