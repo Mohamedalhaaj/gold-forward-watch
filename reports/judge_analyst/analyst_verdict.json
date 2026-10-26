@@ -1,21 +1,15 @@
 {
- "analyst_verdict": "VIOLATION",
- "asof_utc": "2026-10-26T04:35:23Z",
- "cleared_keys": [],
- "head_sha": "cf9e822b9f44663a4d38d640d9e64df45b8df544",
- "schema": "analyst-verdict/1",
- "violation_first_seen": {
-  "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T024852Z.json|68c078cb5d0d52e5d53d2c2d9b9d711530add464": "2026-10-24T08:11:34Z",
-  "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T110641Z.json|e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040": "2026-10-24T13:26:55Z",
-  "A12|probe_failed|analyst/canary/checks/PROBE_p20261026T000513Z.json|79b9247901f15ee40d14d0f33cc8001f89bf31ce": "2026-10-26T01:38:15Z",
-  "A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f": "2026-10-24T08:11:34Z",
-  "A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f": "2026-10-24T08:11:34Z"
- },
- "violation_keys": [
+ "analyst_verdict": "SOUND",
+ "asof_utc": "2026-10-26T04:37:03Z",
+ "cleared_keys": [
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T024852Z.json|68c078cb5d0d52e5d53d2c2d9b9d711530add464",
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T110641Z.json|e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040",
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261026T000513Z.json|79b9247901f15ee40d14d0f33cc8001f89bf31ce",
   "A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f",
   "A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f"
- ]
+ ],
+ "head_sha": "cf9e822b9f44663a4d38d640d9e64df45b8df544",
+ "schema": "analyst-verdict/1",
+ "violation_first_seen": {},
+ "violation_keys": []
 }
