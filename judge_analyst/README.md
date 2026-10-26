@@ -494,6 +494,10 @@ aged out); a cleared key never clears another (R-JV-4).
   when `values_n` >= 1, and none otherwise. A no_call:data context with `store_mismatch` may hold any prefix of the
   requests (the order of that stop and the requests is not written), as before A9. The pacing (8 s between tries) and
   the budget are not judged: the record keeps only the last try's time.
+- J-D47 (§16.18 A11; R-AN-86 (a)(iv), (d)) Nothing is left open: (iv) is matched on S2, after the part rules and
+  the character rule, so `git status\t-s`, `git status --porcelain=v2` and `git log -n5` stay forbidden; D is
+  unchanged (the guard still refuses `git` with `bash_form` and `PushNotification` with `tool`), so a listed `git`
+  form or `PushNotification` refused gives `guard_denied_benign` and run gives `guard_not_enforced`.
 
 ## Open points
 
@@ -584,3 +588,8 @@ aged out); a cleared key never clears another (R-JV-4).
     and J-D45 (b) (what "at any judge run" means). Not verified: how the session code writes a `budget` request's
     `http` and `td_code`, and whether a no_call context keeps `bars_h1`, `fx` and `fresh` (the comparison stops at the
     status and the requests for a no_call:data context, as before); the first canary records will show both.
+17. **A11 (2026-10-26), not merged or pushed.** Built test-first (`tests/test_judge_a11.py`) on the local branch
+    `a11-judge` (worktree `gold-forward-watch-a11`, from origin/main 0652b30) from register R-AN-86 as amended by
+    §16.18 A11 (xauusd-quant a5eff94), without reading the analyst code: a `git status` or `git log` part of the
+    listed forms is harmless by (a)(iv), and `PushNotification` joins class (d) (J-D47). The findings table is
+    unchanged; the A7 unit test that classed `git status` forbidden now classes it harmless.

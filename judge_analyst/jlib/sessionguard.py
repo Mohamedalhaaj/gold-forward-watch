@@ -166,7 +166,8 @@ def _decide(tool, ti, roots):
 FILE_TOOLS = ("Read", "Write", "Edit", "MultiEdit", "NotebookEdit")
 BOOKKEEPING = {"Glob", "Grep", "LS", "LSP", "TodoWrite", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate",
                "TaskOutput", "TaskStop", "BashOutput", "KillShell", "KillBash", "ToolSearch", "EnterPlanMode",
-               "ExitPlanMode", "AskUserQuestion", "CronList"}
+               "ExitPlanMode", "AskUserQuestion", "CronList",
+               "PushNotification"}                                    # (d) since §16.18 A11 (2026-10-26)
 # R-AN-86 (a) since the first review of A7 (V6-3): the command is cut into parts at `&&`, `||`, `;` and `|`, the
 # two-character separators taken before a single `|`
 _PARTS = re.compile(r"&&|\|\||;|\|")
@@ -175,6 +176,9 @@ _CD = re.compile(r"cd [A-Za-z0-9_./~-]+")
 _SAFE_CHARS = re.compile(r"[A-Za-z0-9 _./,:=+@%~-]+")
 _RUN_WINDOW = re.compile(r"(python3|python) analyst/run_window\.py( [^ ]+)*")
 _LOCAL_WORD = re.compile(r"(ls|pwd|date|cat|head|tail|wc|stat|file|echo|true|uname|whoami|which)(?: |\Z)")
+# (a)(iv) since §16.18 A11 (2026-10-26): a read of the local repository's status or history
+_GIT_READ = re.compile(r"git status( (-s|-b|-sb|--short|--branch|--porcelain))*|"
+                       r"git log( (--oneline|-[0-9]{1,4}|-n [0-9]{1,4}|--max-count=[0-9]{1,4}))*")
 _DRAFT_SUFFIXES = tuple("/.analyst_run/" + name for name in DRAFTS)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
@@ -182,7 +186,8 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 def _harmless_part(part: str) -> bool:
     """One part S of R-AN-86 (a): S1 = S without spaces at its ends, less one final ` 2>&1` or ` 2>/dev/null`; S2 =
     S1 with runs of spaces made single and trimmed; S2 not empty, only the listed characters, and (i) another form of
-    the window script's command line without `..`, (ii) a local read-only word, or (iii) a `cd`."""
+    the window script's command line without `..`, (ii) a local read-only word, (iii) a `cd`, or (iv) a `git status`
+    or `git log` of the listed forms (§16.18 A11)."""
     s1 = part.strip(" ")
     for end in _QUIET:
         if s1.endswith(end):
@@ -191,7 +196,8 @@ def _harmless_part(part: str) -> bool:
     s2 = re.sub(" +", " ", s1).strip(" ")
     if not s2 or not _SAFE_CHARS.fullmatch(s2):
         return False
-    return bool((_RUN_WINDOW.fullmatch(s2) and ".." not in s2) or _LOCAL_WORD.match(s2) or _CD.fullmatch(s2))
+    return bool((_RUN_WINDOW.fullmatch(s2) and ".." not in s2) or _LOCAL_WORD.match(s2) or _CD.fullmatch(s2) or
+                _GIT_READ.fullmatch(s2))
 
 
 def harmless_bash(cmd) -> bool:

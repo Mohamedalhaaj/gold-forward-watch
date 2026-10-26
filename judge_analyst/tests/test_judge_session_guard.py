@@ -231,7 +231,7 @@ def test_input_refusals():
     ("python3 analyst/run_window.py st*", False),
     ("lsof -i", False),
     ("gh api repos/Mohamedalhaaj/gold-analyst-inbox/hooks", False),
-    ("git status", False), ("curl https://example.com", False), ("wget https://example.com", False),
+    ("git status", True), ("curl https://example.com", False), ("wget https://example.com", False),  # A11: (a)(iv)
     ("python3 -c 'print(1)'", False), ("env python3 analyst/run_window.py start", False),
     ("echo $HOME", False), ("ls | sh", False), ("ls; curl x", False),
     (f"cd {ROOT} && curl https://example.com", False),
