@@ -12,4 +12,4 @@ the A14 build commit is on gold-analyst main: every call is then judged as befor
 gives the A0 WARNING `a14_unpinned`.
 """
 A12_BUILD_COMMIT = "c45383a877848ee7616ac9d81efd51b7114f1a7e"   # gold-analyst A12 build (client approval 2026-10-26)
-A14_BUILD_COMMIT = None                                        # gold-analyst A14 build: pinned once it is on main
+A14_BUILD_COMMIT = "a6158a3bf37a82d1c2bdcb7a6a00465a5ea2c69f"   # gold-analyst A14 build (client approval 2026-10-27)
