@@ -1,7 +1,7 @@
 key,value
 version,1
-asof_utc,2026-10-27T15:31:57Z
-head_sha,4e6005cab4a9f639a66614570f6e60335462a640
+asof_utc,2026-10-27T18:40:44Z
+head_sha,67405a04462ebd6d9e715ebabf863f6b812fc113
 verdict,SOUND
 reason_ar,كل الفحوص سليمة
 checks_ok,9
