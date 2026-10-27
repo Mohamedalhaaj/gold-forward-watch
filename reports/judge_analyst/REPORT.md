@@ -1,7 +1,7 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-27T09:11:19Z
-- head_sha (gold-analyst main checked): 3b80a0141df2073e8688d9876d391e62c5b0519b
+- asof_utc: 2026-10-27T09:54:09Z
+- head_sha (gold-analyst main checked): bb05f110028356b3d5ef6808d842ed10306718aa
 - judge code_sha8: a75e5fde
 - **analyst_verdict: SOUND**
 
@@ -32,14 +32,14 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 
 - accepted_push_diffs_unverified: 0
 - canary_expected_windows: 0
-- canary_terminals: 2
+- canary_terminals: 3
 - cc_version_records_checked: 4
 - contexts_rebuilt: 2
-- ga_runs_read: 77
-- head: 3b80a0141df2073e8688d9876d391e62c5b0519b
-- inbox_activity_entries: 59
+- ga_runs_read: 81
+- head: bb05f110028356b3d5ef6808d842ed10306718aa
+- inbox_activity_entries: 62
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-10-27T09:11:19Z
+- inbox_last_complete_read_utc: 2026-10-27T09:54:09Z
 - live_expected_windows: 0
 - live_terminals: 0
 - probe_creations_max_day: 14
@@ -53,4 +53,4 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - td_pending: 0
 - td_unchecked: 0
 - witness_comments: 9
-- witness_files: 8
+- witness_files: 9
