@@ -7,6 +7,8 @@ Copies into a checkout of Mohamedalhaaj/gold-analyst ONLY the inputs the analyst
 3. `mirror/system/forecasts_slots.csv` = the header line of `data/system/forecasts.csv` plus, in source order, the
    exact source lines whose `slot` is 9, 10 or 15 (the only slots D_ref uses). The existing content must be a byte
    prefix of it.
+3b. (§16.18 A14-D10) `mirror/system/forecasts.csv` = a byte copy of `data/system/forecasts.csv` (every slot). The
+   mirror's existing content must be a byte prefix of it. Its sha256 is the row's `forecasts_sha256`.
 4. One row appended to `mirror/exports.csv`:
    `utc,source_sha,days_sha256,forecasts_sha256,slots_sha256,raw_files,new_raw_files,run_id`.
 Everything is checked before anything is written; a failed check stops the job (ops failure) and writes nothing.
@@ -87,6 +89,10 @@ def plan(src, dst):
     if old_s.exists() and not slots_b.startswith(old_s.read_bytes()):
         raise ExportError("mirror forecasts_slots.csv is not a prefix of the new content")
     writes["mirror/system/forecasts_slots.csv"] = slots_b
+    old_f = dst / "mirror/system/forecasts.csv"                     # step 3b (A14-D10)
+    if old_f.exists() and not fc_b.startswith(old_f.read_bytes()):
+        raise ExportError("mirror forecasts.csv is not a prefix of the source")
+    writes["mirror/system/forecasts.csv"] = fc_b
     return writes, {"days_sha256": sha(days_b), "forecasts_sha256": sha(fc_b), "slots_sha256": sha(slots_b),
                     "raw_files": n_raw, "new_raw_files": n_new}
 
@@ -99,6 +105,8 @@ def export(src, dst, source_sha, run_id, now):
         p.parent.mkdir(parents=True, exist_ok=True)
         if not p.exists() or p.read_bytes() != b:
             p.write_bytes(b)
+    if sha((dst / "mirror/system/forecasts.csv").read_bytes()) != summ["forecasts_sha256"]:
+        raise ExportError("mirror forecasts.csv differs from the row's forecasts_sha256")   # read back, no row
     ex = dst / "mirror/exports.csv"
     new = not ex.exists()
     with open(ex, "a", newline="") as f:

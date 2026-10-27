@@ -67,3 +67,25 @@ def sum_mid(s: int, sym: str) -> float:
 
 def summary_sha(body: bytes) -> str:
     return sha256_bytes(body)
+
+
+HALF_MS = 1_800_000
+HALF_KEYS = ("lo_first_ask", "lo_first_bid", "lo_last_ask", "lo_last_bid", "hi_first_ask", "hi_first_bid",
+             "hi_last_ask", "hi_last_bid")
+
+
+def classify_halves(http: int, body: bytes | None):
+    """§16.18 A14 (R-AN-68): `classify`'s status, and for a present file the first and the last tick of each half
+    hour (`lo` = [0, 30) min, `hi` = [30, 60) min; None for a half without a tick)."""
+    status, summ = classify(http, body)
+    if status != "present":
+        return status, None
+    out = {"ticks": summ["ticks"]}
+    out.update(dict.fromkeys(HALF_KEYS))
+    raw = lzma.decompress(body, format=lzma.FORMAT_ALONE)
+    for ms, ask, bid, _av, _bv in _TICK.iter_unpack(raw):
+        h = "lo" if ms < HALF_MS else "hi"
+        if out[h + "_first_ask"] is None:
+            out[h + "_first_ask"], out[h + "_first_bid"] = ask, bid
+        out[h + "_last_ask"], out[h + "_last_bid"] = ask, bid
+    return "present", out

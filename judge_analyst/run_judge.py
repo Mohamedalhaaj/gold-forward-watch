@@ -4,7 +4,7 @@ The judge lives in gold-forward-watch (R-AN-1). Usage, from the gold-forward-wat
     python -I judge_analyst/run_judge.py --repo <FULL clone of gold-analyst main> [--inbox <clone of the inbox>]
         [--now YYYY-MM-DDTHH:MM:SSZ] [--out reports/judge_analyst] [--site reports/forward_site/judge_analyst|none]
         [--api github|none|fake:<file.json>] [--hours dukascopy|none|fake:<dir>] [--store .|<path>|none]
-        [--fetch-pushes]
+        [--fetch-pushes] [--m30 twelvedata|none|fake:<file.json>]
 
 --repo is the public gold-analyst repository, read as data only: through git objects (cat-file, ls-tree, log, diff),
 never from its working tree, never imported or executed. Relative --out, --site and --store paths are taken from
@@ -14,6 +14,11 @@ the gold-watch site serves at <PINS.judge_site_url>/judge_analyst/ (R-AN-70).
 PINS.inbox_repo, into the gold-analyst clone, without credentials: from --inbox (a local clone of the public inbox,
 data only) when given, else from https://github.com/<PINS.inbox_repo>.git. It also allows the one fresh fetch of
 gold-analyst main that A4 repo_head_foreign and A12 inbox_main_foreign retest against.
+--m30 (§16.18 A14, R-AN-66): the judge's own Twelve Data 30-minute bars, one fetch per model day >= MODE.json
+`a14_from`, kept under <out>/m30/ (never repeated once `ok`); the key is read from the TWELVEDATA_API_KEY environment
+variable and only placed in the request's `Authorization: apikey` header, never printed or stored. Without a key the
+judge does not fetch (A14 `m30_unchecked` once a day is more than 3 weekdays old). The Dukascopy half hours of a
+trigger's bars are cached in <out>/halves.csv.
 The GitHub token is read from the GITHUB_TOKEN environment variable and only placed in request headers. Nothing from
 an agent-pushed commit is executed: pushed commits are fetched as data only and read with git.
 Only enums, counts and hashes are printed; model text never reaches stdout.
@@ -36,7 +41,9 @@ from jlib import report  # noqa: E402
 from jlib.common import UTC, fmt_utc, load_json_bytes  # noqa: E402
 from jlib.gitrepo import GitRepo  # noqa: E402
 from jlib.judge import EVIDENCE_HEADER, Judge  # noqa: E402
-from jlib.sources import FakeGitHub, FakeHourFetcher, GitHubAPI, HourSource, HttpHourFetcher  # noqa: E402
+from jlib.sources import (FakeGitHub, FakeHourFetcher, GitHubAPI, HalfSource, HourSource,  # noqa: E402
+                          HttpHourFetcher)
+from jlib.watch import FakeM30Fetcher, HttpM30Fetcher, M30Source  # noqa: E402
 
 MANIFEST = "FROZEN_JUDGE_ANALYST.sha256"
 NO_CREDENTIALS = ["-c", "credential.helper=", "-c", "core.askPass=", "-c", "http.https://github.com/.extraheader="]
@@ -154,6 +161,7 @@ def parse_args(argv=None):
     ap.add_argument("--hours", default="dukascopy")
     ap.add_argument("--store", default=".", help="gold-forward-watch at HEAD (default: this checkout), or none")
     ap.add_argument("--fetch-pushes", action="store_true")
+    ap.add_argument("--m30", default="twelvedata", help="twelvedata (key from TWELVEDATA_API_KEY), none, fake:<json>")
     ap.add_argument("--write-manifest", action="store_true", help="rewrite FROZEN_JUDGE_ANALYST.sha256 and exit")
     return ap.parse_args(argv)
 
@@ -218,6 +226,16 @@ def main(argv=None):
         fetcher = FakeHourFetcher({}, down=True)
     os.makedirs(out, exist_ok=True)
     hours = HourSource(fetcher, os.path.join(out, "hours.csv"), now)
+    halves = HalfSource(fetcher, os.path.join(out, "halves.csv"), now)
+    if a.m30 == "twelvedata":
+        m30_fetcher = HttpM30Fetcher(os.environ.get("TWELVEDATA_API_KEY") or None)
+    elif a.m30.startswith("fake:"):
+        with open(a.m30[5:], encoding="utf-8") as f:
+            m30_fetcher = FakeM30Fetcher({u: (h, b.encode("utf-8") if isinstance(b, str) else None)
+                                          for u, (h, b) in json.load(f).items()})
+    else:
+        m30_fetcher = None
+    m30 = M30Source(m30_fetcher, os.path.join(out, "m30"))
     store_git = GitRepo(a.store) if a.store else None
     fetch = fresh = None
     if a.fetch_pushes:
@@ -233,9 +251,11 @@ def main(argv=None):
     judge = Judge(git, now, api=api, hours=hours, store_git=store_git, fetch_commit=fetch, evidence_rows=evidence,
                   prev_anchor=report.last_anchor(out), judge_manifest_ok=ok, fresh_main=fresh,
                   prev_judge_utc=report.last_judge_utc(out), judge_adjudications=adjudications,
-                  judge_findings=findings)
+                  judge_findings=findings, m30=m30, halves=halves)
     res = judge.run()
     v = report.write_outputs(res, out, now, code_sha8, hours)
+    halves.flush()
+    m30.flush()
     if a.site:                               # R-AN-70: the feed analyst-settle reads, byte-identical to the record
         os.makedirs(a.site, exist_ok=True)
         with open(os.path.join(out, "analyst_verdict.json"), "rb") as f:

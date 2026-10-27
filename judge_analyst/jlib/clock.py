@@ -107,29 +107,58 @@ def add_months_12(d: dt.date) -> dt.date:
 # ---------------------------------------------------------------- windows (R-AN-4, R-AN-8)
 
 
+FIXED = ("W1", "W2")
+SECOND_LOOK = {"W1b": "W1", "W2b": "W2"}           # §16.18 A14 (R-AN-8): entry = the parent's entry + 120 min
+KIND = {"W1": "fixed", "W2": "fixed", "W1b": "second_look", "W2b": "second_look", "T": "trigger"}
+HALF = dt.timedelta(minutes=30)
+WID_RE = re.compile(r"^(W[12]|W[12]b|T([01][0-9]|2[0-3])(00|30))$")
+
+
 class Window:
-    __slots__ = ("day", "w", "entry", "exit", "deadline", "span_lo", "call_id", "exchange", "entry_server",
-                 "exit_server", "slot")
+    """One window of a model day (R-AN-4, R-AN-8; §16.18 A14 adds W1b, W2b and the trigger windows `T<hhmm>`).
+    `w` is the call file's and the context's `window` (`T` for every trigger window), `wid` the call_id's suffix,
+    `check` = entry − 30 min (R-AN-89), `span_lo` the span start (entry − 45 min for W1 and W2, entry − 30 min for the
+    new kinds), `exchange` the holiday exchange (None for a trigger window: either exchange, R-AN-9)."""
+    __slots__ = ("day", "w", "wid", "kind", "entry", "exit", "deadline", "span_lo", "check", "call_id", "exchange",
+                 "entry_server", "exit_server", "slot")
 
     def __init__(self, day: dt.date, w: str):
-        if w not in WINDOW_DEF:
+        if not WID_RE.match(w or ""):
             raise ValueError(w)
-        zone, (eh, em), (xh, xm), exch = WINDOW_DEF[w]
         self.day = day
-        self.w = w
-        self.entry = dt.datetime(day.year, day.month, day.day, eh, em, tzinfo=zone).astimezone(UTC)
-        self.exit = dt.datetime(day.year, day.month, day.day, xh, xm, tzinfo=zone).astimezone(UTC)
+        self.wid = w
+        if w in WINDOW_DEF or w in SECOND_LOOK:
+            zone, (eh, em), (xh, xm), exch = WINDOW_DEF[SECOND_LOOK.get(w, w)]
+            entry = dt.datetime(day.year, day.month, day.day, eh, em, tzinfo=zone).astimezone(UTC)
+            exit_ = dt.datetime(day.year, day.month, day.day, xh, xm, tzinfo=zone).astimezone(UTC)
+            if w in SECOND_LOOK:
+                entry += dt.timedelta(minutes=120)
+                exit_ = entry + dt.timedelta(minutes=240)
+            self.w = w
+            self.exchange = exch
+        else:
+            hh, mm = int(w[1:3]), int(w[3:5])
+            base = day - dt.timedelta(days=1) if hh >= 22 else day       # 22:00-23:59 UTC: the next date's model day
+            check = dt.datetime(base.year, base.month, base.day, hh, mm, tzinfo=UTC)
+            entry = check + HALF
+            exit_ = entry + dt.timedelta(minutes=240)
+            self.w = "T"
+            self.exchange = None
+        self.kind = KIND[self.w]
+        self.entry = entry
+        self.exit = exit_
         self.deadline = self.entry - dt.timedelta(minutes=15)
-        self.span_lo = self.entry - dt.timedelta(minutes=45)
+        self.span_lo = self.entry - dt.timedelta(minutes=45 if self.w in FIXED else 30)
+        self.check = self.entry - HALF
         self.call_id = f"{day.isoformat()}_{w}"
-        self.exchange = exch
         self.entry_server = fmt_server(to_server(self.entry))
         self.exit_server = fmt_server(to_server(self.exit))
         self.slot = slot_of(self.entry)
 
     @property
     def order(self):
-        return (self.day, self.w)
+        """R-AN-4 (§16.18 A14-D1): (model_day, entry_utc), the old order for W1 and W2."""
+        return (self.day, self.entry)
 
     def start_hi(self, t_run_min: int) -> dt.datetime:
         return self.deadline - dt.timedelta(minutes=t_run_min)
@@ -142,12 +171,14 @@ class Window:
 
 
 def parse_call_id(call_id: str):
+    """(model_day, wid) of a call_id of R-AN-4's form on a weekday (§16.18 A14: W1b, W2b and T<hhmm> too), else
+    None. Whether a `T<hhmm>` is a check of G(d) is `trigger_valid`'s."""
     try:
         day_s, w = call_id.split("_")
         d = dt.date.fromisoformat(day_s)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
-    if w not in WINDOW_DEF or not is_weekday(d) or d.isoformat() != day_s:
+    if not WID_RE.match(w) or not is_weekday(d) or d.isoformat() != day_s:
         return None
     return d, w
 
@@ -157,16 +188,58 @@ def window_of(call_id: str):
     return None if p is None else Window(*p)
 
 
-def windows_between(d0: dt.date, d1: dt.date):
-    """Every W1 and W2 of the weekdays in [d0, d1], in window order."""
+def windows_between(d0: dt.date, d1: dt.date, a14_from: dt.date | None = None):
+    """Every W1 and W2 of the weekdays in [d0, d1] and (§16.18 A14) every W1b and W2b of those >= a14_from, in
+    window order (model_day, entry_utc)."""
     out = []
     d = d0
     while d <= d1:
         if d.weekday() < 5:
-            out.append(Window(d, "W1"))
-            out.append(Window(d, "W2"))
+            ws = ("W1", "W2") + (("W1b", "W2b") if a14_from is not None and d >= a14_from else ())
+            out += sorted((Window(d, w) for w in ws), key=lambda x: x.order)
         d += dt.timedelta(days=1)
     return out
+
+
+# ---------------------------------------------------------------- watching: model days and checks (R-AN-89)
+
+
+def tday(x: dt.datetime) -> dt.date:
+    """R-AN-89: the model day of a UTC time, the UTC date of x + 2 h."""
+    return (x + dt.timedelta(hours=2)).date()
+
+
+def last_check(d: dt.date) -> dt.datetime:
+    """L_d = model_to_utc((d+1) 00:00) − 270 min (16:30 UTC on EDT, 17:30 on EST)."""
+    n = d + dt.timedelta(days=1)
+    return model_to_utc(dt.datetime(n.year, n.month, n.day)) - dt.timedelta(minutes=270)
+
+
+def check_grid(d: dt.date) -> list:
+    """G(d): 22:30 UTC of d − 1 day + k·30 min up to L_d (model weekdays only; [] otherwise)."""
+    if not is_weekday(d):
+        return []
+    p = d - dt.timedelta(days=1)
+    t = dt.datetime(p.year, p.month, p.day, 22, 30, tzinfo=UTC)
+    out, end = [], last_check(d)
+    while t <= end:
+        out.append(t)
+        t += HALF
+    return out
+
+
+def scheduled_checks(d: dt.date) -> dict:
+    """{check: wid} of W1, W2, W1b and W2b (R-AN-89: check = entry − 30 min)."""
+    return {Window(d, w).check: w for w in ("W1", "W1b", "W2", "W2b")}
+
+
+def trigger_wid(t: dt.datetime) -> str:
+    return f"T{t.hour:02d}{t.minute:02d}"
+
+
+def trigger_valid(win: Window) -> bool:
+    """A `T<hhmm>` window whose check is in G(d) and is not a scheduled check (R-AN-33, R-AN-89)."""
+    return win.w == "T" and win.check in check_grid(win.day) and win.check not in scheduled_checks(win.day)
 
 
 # ---------------------------------------------------------------- holidays (R-AN-9)
@@ -244,7 +317,14 @@ class Holidays:
     def covers(self, day: dt.date) -> bool:
         return day <= self.horizon
 
+    def any_exchange(self, day: dt.date) -> bool:
+        """A row of either exchange, full or early (§16.18 A14-D7: no trigger window on such a day)."""
+        return self.is_holiday(day, "LSE") or self.is_holiday(day, "NYSE")
+
     def window_holiday(self, win: Window) -> bool:
+        """W1 and W1b follow LSE, W2 and W2b NYSE; a trigger window either exchange (R-AN-9, §16.18 A14)."""
+        if win.exchange is None:
+            return self.any_exchange(win.day)
         return self.is_holiday(win.day, win.exchange)
 
 

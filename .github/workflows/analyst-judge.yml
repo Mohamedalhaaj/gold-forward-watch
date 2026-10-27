@@ -83,6 +83,8 @@ jobs:
         working-directory: gfw
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # §16.18 A14 (R-AN-66): the judge's own Twelve Data 30-minute fetch; the key is only put in its request header
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: |
           uv run --frozen --no-dev python -I judge_analyst/run_judge.py --repo ../ga --inbox ../inbox --fetch-pushes
           echo "finished=1" >> "$GITHUB_OUTPUT"

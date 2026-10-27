@@ -88,3 +88,47 @@ def test_the_workflow_pushes_mirror_only_with_a_named_deploy_key():
     assert "${{ secrets.ANALYST_MIRROR_DEPLOY_KEY }}" in wf
     assert "grep -v '^mirror/'" in wf and "pull_request" not in wf
     assert "permissions:\n  contents: read" in wf
+
+
+# §16.18 A14-D10 (R-AN-12 step 3b): the whole forecast store, byte copy, prefix rule.
+def test_step_3b_copies_the_whole_forecast_store(tmp_path):
+    src, dst = source(tmp_path), tmp_path / "ga"
+    dst.mkdir()
+    s = ex.export(src, dst, "a" * 40, "1", NOW)
+    fc_src = (src / "data/system/forecasts.csv").read_bytes()
+    fc_dst = (dst / "mirror/system/forecasts.csv").read_bytes()
+    assert fc_dst == fc_src                                                     # every slot, byte copy
+    assert hashlib.sha256(fc_dst).hexdigest() == s["forecasts_sha256"]
+    row = dict(zip(ex.EXPORT_COLS, (dst / "mirror/exports.csv").read_text().splitlines()[1].split(",")))
+    assert row["forecasts_sha256"] == hashlib.sha256(fc_dst).hexdigest()
+    assert (dst / "mirror/system/forecasts_slots.csv").exists()                 # step 3 unchanged
+    fc = src / "data/system/forecasts.csv"                                      # the store grows by appending
+    fc.write_bytes(fc_src + b"2026-10-22,0,2026-10-22 01:00,2026-10-22T00:00Z,1.0,2.0,4000.0,,0,0,0,0,"
+                            b"2026-10-23T08:40:00Z\n")
+    s2 = ex.export(src, dst, "b" * 40, "2", NOW)
+    assert (dst / "mirror/system/forecasts.csv").read_bytes() == fc.read_bytes()
+    assert s2["forecasts_sha256"] == hashlib.sha256(fc.read_bytes()).hexdigest()
+
+
+def test_step_3b_starts_on_a_mirror_that_has_only_the_slots_file(tmp_path):
+    src, dst = source(tmp_path), tmp_path / "ga"
+    dst.mkdir()
+    ex.export(src, dst, "a" * 40, "1", NOW)
+    (dst / "mirror/system/forecasts.csv").unlink()                              # gold-analyst main before A14
+    ex.export(src, dst, "a" * 40, "2", NOW)
+    assert (dst / "mirror/system/forecasts.csv").read_bytes() == (src / "data/system/forecasts.csv").read_bytes()
+
+
+def test_step_3b_prefix_rule_stops_and_writes_nothing(tmp_path):
+    src, dst = source(tmp_path), tmp_path / "ga"
+    dst.mkdir()
+    ex.export(src, dst, "a" * 40, "1", NOW)
+    before = {p: p.read_bytes() for p in dst.rglob("*") if p.is_file()}
+    fc = src / "data/system/forecasts.csv"                                      # a slot outside 9, 10, 15 rewritten:
+    fc.write_text(fc.read_text().replace("2026-10-21,3,", "2026-10-21,3,X", 1))  # the slots file still a prefix
+    with pytest.raises(ex.ExportError, match="forecasts.csv"):
+        ex.export(src, dst, "a" * 40, "2", NOW)
+    after = {p: p.read_bytes() for p in dst.rglob("*") if p.is_file()}
+    assert after == before
+    with pytest.raises(ex.ExportError):
+        ex.plan(src, dst)
