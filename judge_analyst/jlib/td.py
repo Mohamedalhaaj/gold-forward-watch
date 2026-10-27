@@ -1,6 +1,7 @@
 """The judge's own reading of R-AN-87 (§16.18 A9): the session's Twelve Data requests, re-implemented from the
-register text (never imported from gold-analyst). The judge never calls Twelve Data (R-AN-66: it holds no key, and a
-record must stand on its own); these functions check the recorded provenance objects of an `analyst-context/2`
+register text (never imported from gold-analyst). The judge does not call Twelve Data for these requests (R-AN-66: a
+record must stand on its own; since §16.18 A14 it fetches only its own 30-minute bars, jlib/watch.py); these functions
+check the recorded provenance objects of an `analyst-context/2`
 or (§16.18 A12) `analyst-context/3` (A4) and name the values the Dukascopy cross-check compares (A11, R-AN-68).
 """
 from __future__ import annotations

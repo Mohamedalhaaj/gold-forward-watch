@@ -31,6 +31,9 @@ def k_value(ys) -> float:
     return p[-1] if p else 1.0
 
 
+WINDOW_TYPES = ("W1", "W2", "W1b", "W2b", "T")     # §16.18 A14 (R-AN-47, R-AN-53): one type T for every trigger
+
+
 def promotion(trades, twins, first_day: dt.date, e: dt.date):
     """P1-P5 over `trades` (counted, model day <= e, in window order). `twins` = [(model_day, W, d_W)] of final twins.
     Returns dict with P1..P5, n, E."""
@@ -44,7 +47,7 @@ def promotion(trades, twins, first_day: dt.date, e: dt.date):
     out["P3"] = bool(n) and sum(t["stress"] for t in trades) > 0 and \
         sum(t["stress"] - 0.5 * t["cost"] for t in trades) > 0
     mu = {}
-    for w in ("W1", "W2"):
+    for w in WINDOW_TYPES:
         xs = [x for (d, ww, x) in twins if ww == w and first_day <= d <= e and x is not None]
         mu[w] = sum(xs) / len(xs) if xs else None
     if n and all(mu[t["w"]] is not None for t in trades):

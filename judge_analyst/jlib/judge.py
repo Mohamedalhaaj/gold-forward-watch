@@ -31,27 +31,30 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from . import derive, sessionguard, settle, stats, td
-from .clock import (MACRO_PATH, OPS_PATH, Events, Holidays, Window, add_months_12, iso_week, macro_problems,
-                    parse_call_id, to_server, windows_between)
+from . import derive, sessionguard, settle, stats, td, ticks, watch
+from .clock import (HALF, MACRO_PATH, OPS_PATH, Events, Holidays, Window, add_months_12, check_grid, iso_week,
+                    macro_problems, model_to_utc, parse_call_id, scheduled_checks, tday, to_server, windows_between)
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
                      sha256_compact)
 from . import config
-from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMAS as CONTEXT_SCHEMAS, compare_context, cross_detail,
-                      rebuild_context, td_cross_check)
+from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMAS as CONTEXT_SCHEMAS, compare_context, cross_detail,
+                      is_trading_hour, rebuild_context, td_cross_check)
 from .m1 import DaysTable, Store
 
 EPROC_SHA256 = "ee8d456ae3b5ddd1112bad92d12fffa95d2b12e0559335233c6a9b3a68067973"
 BOT_LOGIN = "github-actions[bot]"
 PREFIX = {"live": "analyst/", "canary": "analyst/canary/"}
-CALL_ID_RE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}_W[12]"
+# §16.18 A14 (R-AN-33): W1b, W2b and the trigger windows T<hhmm> too
+CALL_ID_RE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}_(?:W[12]b?|T(?:[01][0-9]|2[0-3])(?:00|30))"
 TERMINAL_STATUSES = {"called", "stay_out", "no_call:refusal", "no_call:invalid", "no_call:data", "no_call:d_ref",
-                     "no_call:late", "no_call:run", "missed:trigger", "missed:push", "skipped:holiday"}
+                     "no_call:late", "no_call:run", "missed:trigger", "missed:push", "skipped:holiday",
+                     "skipped:trade_open", "skipped:day_cap"}          # §16.18 A14 (R-AN-36): the closer's two
+GATED = ("skipped:trade_open", "skipped:day_cap")
 CALL_STATUSES = {"called", "stay_out", "no_call:data", "no_call:d_ref", "no_call:invalid", "no_call:refusal"}
 WITNESS_VIOLATION = {"agent_scope", "rewrite", "invalid_content", "attempt_cap"}
 WITNESS_WARNING = {"mode", "attempt_n", "window_closed", "no_settled", "lesson_cap", "not_saturday", "incomplete_week",
-                   "version", "week_done"}
+                   "version", "week_done", "window_order"}     # §16.18 A14 (R-AN-33): window_order
 H = dt.timedelta(hours=1)
 COMPLETENESS_GRACE = dt.timedelta(hours=36)   # judge decision J-D3: after deadline + 20 min
 COMMENT_GRACE = dt.timedelta(hours=24)
@@ -112,7 +115,11 @@ OPERATIONAL_A12 = {"probe_failed", "app_scope", "routine_connectors", "inbox_ide
 # §16.18 A7 (R-AN-55, R-AN-67, R-AN-86): the guard not acting, or its files wrong, is the system's fault; (third review
 # of A7, decisions 21 and 22) so are a routine in a claude.ai project and a harness that may not keep the guard closed.
 OPERATIONAL_A13 = {"guard_not_enforced", "guard_config", "routine_project", "cc_version_below", "cc_version_unknown"}
-OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13}
+# §16.18 A14 (R-AN-67): check A14's operational keys; `not_triggered`, `trade_open`, `day_cap` and `wake_record` are
+# integrity keys (the first three stop the canary at once, R-AN-75 item 1)
+OPERATIONAL_A14 = {"skipped_wrong", "a14_from"}
+OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13, "A14": OPERATIONAL_A14}
+WAKE_ROUTINES = ("analyst-wake", "analyst-w1", "analyst-w2")   # A14-D12: any of them can reach a new window
 C20_PATH = "analyst/canary/checks/C20.json"     # R-AN-74 C20: the probe session's root, when a run log has none
 SECURITY_LOG_FILTER = "repo:{} action:hook"     # R-AN-60 (A7, detection 2), with PINS.inbox_repo
 # The third review of A7 (2026-10-24, register §16.18 A7 decisions 21 and 22; R-AN-25, R-AN-60, R-AN-61, R-AN-67,
@@ -254,16 +261,24 @@ class Result:
 class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
-                 prev_judge_utc=None, judge_adjudications=None, judge_findings=None, a12_commit="config"):
+                 prev_judge_utc=None, judge_adjudications=None, judge_findings=None, a12_commit="config",
+                 a14_commit="config", m30=None, halves=None):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
         judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
         ADJUDICATIONS.csv (R-AN-70; the A11 check of a `lifted:` resume of a latched key, fourth review of A6);
         judge_findings are the rows of its FINDINGS.csv before this run (the A11 check of a retirement by time,
         sixth review of A6, R6-2). a12_commit (§16.18 A12, R-AN-23): the pinned A12 build commit; by default
-        config.A12_BUILD_COMMIT."""
+        config.A12_BUILD_COMMIT. (§16.18 A14) a14_commit: the pinned A14 build commit (config.A14_BUILD_COMMIT);
+        m30: the judge's own Twelve Data 30-minute fetch (watch.M30Source, R-AN-66), or None; halves: the Dukascopy
+        half-hour view (sources.HalfSource) for the cross-check of a trigger's bars (R-AN-68), or None."""
         self.git = git
         self.a12_commit = config.A12_BUILD_COMMIT if a12_commit == "config" else a12_commit
+        self.a14_commit = config.A14_BUILD_COMMIT if a14_commit == "config" else a14_commit
+        self.m30 = m30
+        self.halves = halves
+        self._wd = {}
+        self.term_by = {"canary": {}, "live": {}}
         self.now_s = now_utc
         self.now = parse_utc(now_utc)
         self.api = api
@@ -338,6 +353,7 @@ class Judge:
             self.F.v("A8", "mode_file", "analyst/MODE.json", "-", "MODE.json unreadable: expected windows unknown")
             self.mode_cfg = {}
         self.holidays = Holidays(self.bytes_at_head("analyst/tables/holidays.csv"))
+        self.a14_day = self.a14_from_value()
         self.load_api()
         self.safe("inbox_reads", self.load_inbox)
         self.wit = []
@@ -352,6 +368,8 @@ class Judge:
         self.safe("pushes", self.check_pushes)
         for mode in ("canary", "live"):
             self.safe(f"mode_{mode}", self.check_mode, mode)
+        self.safe("watching", self.check_watching)
+        self.safe("a14_from", self.check_a14_from)
         self.safe("start", self.check_start)
         self.safe("runs_exports", self.check_runs_exports)
         self.safe("routine_config", self.check_routine_config)
@@ -619,7 +637,11 @@ class Judge:
 
     def expected_context_schema(self, sha) -> str:
         """R-AN-23 (§16.18 A12): `analyst-context/3` for a repo_head_sha that is the pinned A12 build commit or has it
-        as an ancestor, `analyst-context/2` for an earlier one (and for every one while nothing is pinned)."""
+        as an ancestor, `analyst-context/2` for an earlier one (and for every one while nothing is pinned).
+        (§16.18 A14) `analyst-context/4` for one that is the pinned A14 build commit or descends from it."""
+        b = self.a14_commit
+        if b and self.git.commit_exists(b) and (sha == b or self.git.is_ancestor(b, sha)):
+            return SCHEMA_V4
         a = self.a12_commit
         if a and self.git.commit_exists(a) and (sha == a or self.git.is_ancestor(a, sha)):
             return SCHEMA_V3
@@ -983,7 +1005,19 @@ class Judge:
             return []
         d0 = dt.date.fromisoformat(f)
         d1 = dt.date.fromisoformat(t) if t else (self.now.date() + dt.timedelta(days=1))
-        return windows_between(d0, d1)
+        wins = windows_between(d0, d1, self.a14_day)
+        if self.a14_day is not None:
+            # R-AN-11 (§16.18 A14): a trigger window is expected once it has an accepted attempt witness
+            seen = set()
+            for r in self.wits(mode, "attempt", None, "accepted"):
+                p = parse_call_id(str(r.rec.get("id") or ""))
+                if p is None or not p[1].startswith("T") or p in seen:
+                    continue
+                seen.add(p)
+                if d0 <= p[0] <= d1 and p[0] >= self.a14_day:
+                    wins.append(Window(*p))
+            wins.sort(key=lambda w: w.order)
+        return wins
 
     def check_mode(self, mode):
         pre = PREFIX[mode]
@@ -993,7 +1027,7 @@ class Judge:
         terms = self.records(pre + "terminal/")
         calls = self.records(pre + "calls/")
         attempts = self.records(pre + "attempts/")
-        term_by_id = {}
+        term_by_id = self.term_by[mode] = {}
         for p, r in terms.items():
             cid = p.rsplit("/", 1)[-1][:-5]
             term_by_id[cid] = r
@@ -1120,6 +1154,19 @@ class Judge:
             exp = ("missed:trigger", t.get("detail") if status == "missed:trigger" else None)
             if not self.holidays.covers(win.day):
                 exp = ("missed:trigger", "no_table")
+        # §16.18 A14 (R-AN-39 step 2): the gates the closer applies after `no_call:run`, for model days >= a14_from
+        sw = None
+        gates = self.closer_gates(mode, win) if exp[0] == "missed:trigger" else {}
+        if gates.get("skipped:trade_open"):
+            opn = gates["skipped:trade_open"]
+            exp = ("skipped:trade_open", t.get("detail") if t.get("detail") in opn else opn[0])
+        elif gates.get("skipped:day_cap") is not None:
+            n_e = gates["skipped:day_cap"]
+            exp = ("skipped:day_cap", t.get("detail") if t.get("detail") in (n_e, str(n_e)) else n_e)
+        if status in GATED and not (status in gates and exp[0] in GATED):
+            sw = safe_detail(status, "condition does not hold", "expected", exp[0])
+        elif status == "missed:trigger" and exp[0] in GATED:
+            sw = safe_detail("missed:trigger while", exp[0], "holds")
         got = (status, t.get("detail"))
         if status in ("called", "stay_out"):
             if not cw:
@@ -1133,6 +1180,8 @@ class Judge:
                 pass  # reported by A5 on the call file
             elif got != exp:
                 self.F.v("A2", "terminal_status", tr.path, tr.commit, safe_detail("expected", exp[0], exp[1]))
+        elif sw is not None:
+            self.F.v("A14", "skipped_wrong", tr.path, tr.commit, sw)
         elif got != exp and not (exp[0] == "missed:trigger" and status == "missed:trigger"):
             self.F.w("A11", "terminal_status", tr.path, tr.commit, safe_detail("expected", exp[0], exp[1], "got",
                                                                               status, t.get("detail")))
@@ -1247,10 +1296,14 @@ class Judge:
             self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema, "expected",
                                                                 self.expected_context_schema(R)))
         else:
-            if schema == SCHEMA_V3:
+            if schema in (SCHEMA_V3, SCHEMA_V4):
                 self.check_macro_calendar(R)
+            wake = None
+            if schema == SCHEMA_V4:                  # A14 (R-AN-23): the wake of the call's attempt record
+                arec = self.json_at_head(f"{PREFIX[mode]}attempts/{win.call_id}_{call.get('attempt_n')}.json")
+                wake = arec.get("wake") if isinstance(arec, dict) else None
             rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events,
-                                 schema=schema)
+                                 schema=schema, wake=wake)
             if rb.error:
                 self.F.v("A4", "context_unreproducible", p, c, safe_detail("rebuild", rb.error))
             else:
@@ -1267,7 +1320,7 @@ class Judge:
             if status != ctx_status or plan is not None:
                 self.F.v("A5", "status_vs_context", p, c, "a no_call context must give that status and no plan")
         elif status in ("called", "stay_out"):
-            errs = derive.plan_errors(plan, v3=(schema == SCHEMA_V3))   # A12: analyst-plan/2 for a /3 call
+            errs = derive.plan_errors(plan, v3=(schema in (SCHEMA_V3, SCHEMA_V4)))   # A12: analyst-plan/2 from /3
             if errs:
                 self.F.v("A5", "plan_invalid", p, c, safe_detail(*errs))
                 derivable = False
@@ -1295,7 +1348,7 @@ class Judge:
                 self.F.v("A5", "d_ref_underivable", p, c, "D_ref does not follow from the context")
                 derivable = False
         if status == "called" and derivable and isinstance(plan, dict) and \
-                not derive.plan_errors(plan, v3=(schema == SCHEMA_V3)):
+                not derive.plan_errors(plan, v3=(schema in (SCHEMA_V3, SCHEMA_V4))):
             side = derive.side_of(plan["action"])
             sd, td = derive.st_dimes(dref["D_ref_cents"], plan["stop_mult"], plan["target_mult"])
             checks = [call.get("side") == side, num_exact(call.get("stop_mult"), float(plan["stop_mult"])),
@@ -1333,6 +1386,341 @@ class Judge:
         if fr.get("manifest_sha256") != msha or fr.get("code_sha8") != msha[:8] or \
                 (rp is not None and fr.get("routine_prompt_sha256") != sha256_bytes(rp)):
             self.F.w("A11", "frozen_selfreport", path, commit, "self-reported manifest or prompt sha differs")
+
+    # ================================================================ A14, watching (§16.18 A14)
+    def a14_from_value(self):
+        """MODE.json `a14_from` at main as a date (R-AN-5), or None (null, or not a weekday date: A14 `a14_from`)."""
+        v = (self.mode_cfg or {}).get("a14_from")
+        if not is_day(v):
+            return None
+        try:
+            d = dt.date.fromisoformat(v)
+        except ValueError:
+            return None
+        return d if d.weekday() < 5 else None
+
+    def watch_day(self, mode, d):
+        """[(win, accepted attempt witnesses in seq order, terminal status at main or None)] of the mode's expected
+        windows of model day d, in window order (R-AN-89's E(T) and O(T) for the judge and the closer)."""
+        key = (mode, d)
+        if key not in self._wd:
+            out = []
+            for win in self.windows.get(mode, []):
+                if win.day != d:
+                    continue
+                acc = sorted(self.wits(mode, "attempt", win.call_id, "accepted"),
+                             key=lambda r: r.rec.get("seq") if _int(r.rec.get("seq")) else 0)
+                tr = self.term_by[mode].get(win.call_id)
+                st = tr.rec.get("status") if tr is not None and isinstance(tr.rec, dict) else None
+                out.append((win, acc, st))
+            self._wd[key] = out
+        return self._wd[key]
+
+    def attempt_record(self, wit):
+        r = self.json_at_head(wit.rec.get("path") or "")
+        return r if isinstance(r, dict) else None
+
+    def e_o(self, mode, d, t_check):
+        """(E(T), O(T)) from main (R-AN-89): E = [(check, kind, reason)] of d's windows with check < T and an accepted
+        attempt witness (a trigger's reason from its first attempt record's `wake`); O = the call_ids of d's windows
+        with check < T, terminal `called` and exit_utc > T + 30 min."""
+        E, O = [], []
+        for win, acc, st in self.watch_day(mode, d):
+            if win.check >= t_check:
+                continue
+            if acc:
+                reason = None
+                if win.kind == "trigger":
+                    rec = self.attempt_record(acc[0]) or {}
+                    reason = (rec.get("wake") or {}).get("reason") if isinstance(rec.get("wake"), dict) else None
+                E.append((win.check, win.kind, reason))
+            if st == "called" and win.exit > t_check + HALF:
+                O.append(win.call_id)
+        return E, O
+
+    def closer_gates(self, mode, win):
+        """R-AN-39 step 2 (§16.18 A14) for a W1, W2, W1b or W2b window of a model day >= a14_from without an accepted
+        attempt: {"skipped:trade_open": [open call_ids]} when an earlier window of d has terminal `called` and an
+        exit_utc later than this entry; {"skipped:day_cap": n} when n >= 6 earlier windows of d have an accepted
+        attempt. {} otherwise."""
+        if self.a14_day is None or win.day < self.a14_day or win.kind == "trigger":
+            return {}
+        E, O = self.e_o(mode, win.day, win.check)
+        out = {}
+        if O:
+            out["skipped:trade_open"] = O
+        if len(E) >= watch.DAY_CAP:
+            out["skipped:day_cap"] = len(E)
+        return out
+
+    def check_watching(self):
+        """Check A14 (R-AN-67, R-AN-68, R-AN-89, R-AN-90): every accepted call attempt of a model day >= a14_from
+        (its `wake`, the gates at its check, a trigger's rule rebuilt from its own bars, their Dukascopy cross-check
+        and the comparison with the judge's own fetch); the judge's fetch per model day (R-AN-66), `wake_missed` and
+        `m30_unchecked`."""
+        a14 = self.a14_day
+        if a14 is not None:
+            self.fetch_m30_days()
+        for mode in ("canary", "live"):
+            for win in self.windows.get(mode, []):
+                self.safe(f"watch_{mode}_{win.call_id}", self.check_wake_window, mode, win)
+        if a14 is None:
+            return
+        for mode in ("canary", "live"):
+            for d in sorted({w.day for w in self.windows.get(mode, []) if w.day >= a14}):
+                self.safe(f"wake_missed_{mode}_{d}", self.check_wake_missed, mode, d)
+
+    def check_wake_window(self, mode, win):
+        """A14 `wake_record` for every `analyst-attempt/2` call attempt (and, from a14_from on, an attempt that is
+        not one); for model days >= a14_from the gates at the first accepted attempt's check and a trigger's rule."""
+        _w, acc, _st = next(x for x in self.watch_day(mode, win.day) if x[0].call_id == win.call_id)
+        a14 = self.a14_day is not None and win.day >= self.a14_day
+        if not acc:
+            return
+        recs = [(w, self.attempt_record(w)) for w in acc]
+        first = {}
+        for w, rec in recs:
+            if rec is not None and rec.get("n") == 1:
+                first = rec
+        for w, rec in recs:
+            if rec is None:
+                continue
+            p = w.rec.get("path") or "-"
+            c = self.commit_of(p)
+            if rec.get("schema") != "analyst-attempt/2":
+                if a14:
+                    self.F.v("A14", "wake_record", p, c, safe_detail("schema", rec.get("schema")))
+                continue
+            probs = watch.wake_problems(rec, win)
+            if rec.get("n") == 2 and first and rec.get("wake") != first.get("wake"):
+                probs.append("wake.second_draw")
+            if probs:
+                self.F.v("A14", "wake_record", p, c, safe_detail(*probs[:8]))
+        if not a14:
+            return
+        w0, rec0 = recs[0]
+        p0 = w0.rec.get("path") or "-"
+        c0 = self.commit_of(p0)
+        E, O = self.e_o(mode, win.day, win.check)
+        if win.kind != "trigger":
+            if O:
+                self.F.v("A14", "trade_open", p0, c0, safe_detail("open", *O))
+            if len(E) >= watch.DAY_CAP:
+                self.F.v("A14", "day_cap", p0, c0, safe_detail("earlier wakes", len(E)))
+            return
+        wk = (rec0 or {}).get("wake")
+        wk = wk if isinstance(wk, dict) else {}
+        bars = watch.recorded_bars(wk)
+        cond = None
+        if bars is not None:
+            cond = watch.conditions(watch.values_at(bars, win.day, win.check), win.day, win.check)
+        got = watch.rule(win.day, win.check, E, len(O), self.holidays.any_exchange(win.day), cond)
+        if bars is None or got != ("window", win.wid, "trigger", wk.get("reason")):
+            self.F.v("A14", "not_triggered", p0, c0,
+                     safe_detail("rule gives", got[0], got[1], got[3], "recorded", wk.get("reason"),
+                                 "no ok bars" if bars is None else None))
+        if bars is not None:
+            self.cross_check_m30(p0, c0, win, bars)
+            own = self.m30.get(win.day) if self.m30 is not None else None
+            if own is not None:
+                diffs = watch.m30_compare(bars, own.get("bars"), watch.m30_start(win.day), win.check - HALF)
+                self.summary["m30_compared"] = self.summary.get("m30_compared", 0) + 1
+                if diffs:
+                    self.F.w("A14", "m30_mismatch", p0, c0, safe_detail(len(diffs), "differences", *diffs[:6]))
+
+    def cross_check_m30(self, p, c, win, bars):
+        """R-AN-68 (A14): the o and the c of every bar of model day d in a trigger attempt's `wake.td.bars` against the
+        first and the last tick mid of the same Dukascopy half hour, with the 1e-3 rule (A11 `td_mismatch`,
+        `td_unchecked`). Judge decision: a half outside d's trading hours whose file is empty or has no tick is
+        skipped, as an optional hour is (R-AN-15); inside them it is pending, then unchecked."""
+        if self.halves is None:
+            self.summary["m30_cross_unavailable"] = self.summary.get("m30_cross_unavailable", 0) + 1
+            return
+        final = td.weekdays_since(win.day, self.now.date()) > td.UNCHECKED_AFTER
+        compared, outside, unchecked = [], [], []
+        for b in bars:
+            t = parse_utc(b["t_utc"])
+            if tday(t) != win.day:
+                continue
+            hour = t.replace(minute=0)
+            half = "lo" if t.minute == 0 else "hi"
+            row = self.halves.get("XAUUSD", hour, refresh=not final)
+            have = row is not None and row.get("status") == "present" and row.get(half + "_first_ask") is not None
+            if have:
+                for fld, end in (("o", "first"), ("c", "last")):
+                    dk = ticks.tick_mid(row[f"{half}_{end}_ask"], row[f"{half}_{end}_bid"], "XAUUSD")
+                    item = ("XAUUSD", b["t_utc"], fld, b[fld], dk, td.rel_diff(b[fld], dk))
+                    compared.append(item)
+                    if not item[5] <= td.CROSS_TOL:
+                        outside.append(item)
+            elif row is not None and row.get("status") in ("present", "empty") and not is_trading_hour(hour):
+                continue
+            elif not final:
+                self.summary["td_pending"] = self.summary.get("td_pending", 0) + 2
+            else:
+                unchecked += [("XAUUSD", b["t_utc"], "o", b["o"]), ("XAUUSD", b["t_utc"], "c", b["c"])]
+        self.summary["td_compared"] = self.summary.get("td_compared", 0) + len(compared)
+        if outside:
+            inside = [x for x in compared if x not in outside]
+            self.F.w("A11", "td_mismatch", p, c,
+                     f"outside 1e-3: {cross_detail(outside)}; within: {cross_detail(inside) or 'none'}")
+        if unchecked:
+            self.F.w("A11", "td_unchecked", p, c, f"no present Dukascopy half hour: {cross_detail(unchecked)}")
+
+    def fetch_m30_days(self):
+        """R-AN-66 (A14): one fetch per model day d >= a14_from of a mode's period, at the first run with now >=
+        model_to_utc((d+1) 00:00) + 60 min, never repeated once `ok`; A14 `m30_unchecked` while it is not `ok` once
+        d is more than 3 weekdays old. Days with a holiday-table row (no trigger window can open) are not fetched."""
+        days = sorted({w.day for m in ("canary", "live") for w in self.windows.get(m, []) if w.day >= self.a14_day})
+        for d in days:
+            if self.holidays.any_exchange(d):
+                continue
+            end = model_to_utc(dt.datetime(d.year, d.month, d.day) + dt.timedelta(days=1))
+            if self.now < end + dt.timedelta(minutes=60):
+                continue
+            rec = self.m30.get(d) if self.m30 is not None else None
+            if rec is None and self.m30 is not None:
+                rec, ev = self.m30.fetch(d, end)
+                if ev:
+                    self.evidence_new.append(self._ev("td_m30", **ev))
+            if rec is None and td.weekdays_since(d, self.now.date()) > td.UNCHECKED_AFTER:
+                self.F.w("A14", "m30_unchecked", d.isoformat(), "-", "no ok judge fetch of the 30-minute bars")
+
+    def mode_off_at(self, t):
+        """MODE.json's `mode` in force at t is `off`: the first-parent MODE.json version committed last at or before
+        t (the earliest version when none is)."""
+        if getattr(self, "_mode_versions", None) is None:
+            vs = []
+            for sha, _parent, changes in self.log:
+                if any(p == "analyst/MODE.json" for _st, p in changes):
+                    m = None
+                    try:
+                        b = self.git.show(sha, "analyst/MODE.json")
+                        m = load_json_bytes(b) if b is not None else None
+                    except Exception:  # noqa: BLE001
+                        m = None
+                    vs.append((self.git.commit_time(sha) or 0, (m or {}).get("mode") if isinstance(m, dict) else None))
+            self._mode_versions = vs
+        cur = self._mode_versions[0][1] if self._mode_versions else None
+        for ct, mode in self._mode_versions:
+            if ct <= t.timestamp():
+                cur = mode
+        return cur == "off"
+
+    def check_wake_missed(self, mode, d):
+        """A14 `wake_missed` (WARNING): the judge's R(T) on its own fetch, with E(T) and O(T) from main, gives a
+        trigger window at a check T of d where d has no window with that check; checks inside A10's pause intervals or
+        while the mode is `off` are left out."""
+        own = self.m30.get(d) if self.m30 is not None else None
+        if own is None or self.holidays.any_exchange(d):
+            return
+        bars = own.get("bars") or []
+        have = {w.check for w, _a, _s in self.watch_day(mode, d)}
+        sched = scheduled_checks(d)
+        if getattr(self, "_pauses", None) is None:
+            self._pauses = self.pause_intervals()
+        for t in check_grid(d):
+            if t in sched or t in have:
+                continue
+            if any(a <= t < b for a, b in self._pauses) or self.mode_off_at(t):
+                continue
+            E, O = self.e_o(mode, d, t)
+            cond = watch.conditions(watch.values_at(bars, d, t), d, t)
+            got = watch.rule(d, t, E, len(O), False, cond)
+            if got[0] == "window" and got[2] == "trigger":
+                self.F.w("A14", "wake_missed", d.isoformat(), got[1], safe_detail(mode, "reason", got[3]))
+
+    def main_at(self, x):
+        """Inbox main at instant x: the `after` of the latest counting inbox main entry with timestamp <= x; without
+        the inbox pins, gold-analyst main's latest first-parent commit committed at or before x. None when unknown."""
+        if not getattr(self, "inbox", None):
+            best = None
+            for sha, _parent, _changes in self.log:
+                ct = self.git.commit_time(sha)
+                if ct is not None and ct <= x.timestamp():
+                    best = sha
+            return best
+        best = None
+        xs = fmt_utc(x)
+        for e in getattr(self, "inbox_entries", None) or []:
+            if self.counts(e) and e["ref"] == "refs/heads/main" and not _zero(e["after"]) and \
+                    e["type"] != "branch_deletion" and e["ts"] and e["ts"] <= xs:
+                best = e["after"]
+        return best
+
+    def check_a14_from(self):
+        """A14 `a14_from` (R-AN-5): the value is null or a weekday, set once and never changed; valid iff inbox main at
+        22:00:00Z of the calendar day before it holds the pinned A14 build commit, this MODE.json and a
+        WATCHER_CONFIG.json whose source_commit is the build commit (or a later main commit with the same `watcher/`
+        tree) and whose deployed_utc is at or before that instant; and no W1b, W2b or trigger push accepted for a
+        model day before it."""
+        path = "analyst/MODE.json"
+        v = self.mode_cfg.get("a14_from")
+        set_sha, set_val = None, None
+        for sha, _parent, changes in self.log:
+            if not any(p == path for _st, p in changes):
+                continue
+            m = self.git.show(sha, path)
+            try:
+                val = (load_json_bytes(m) or {}).get("a14_from") if m is not None else None
+            except Exception:  # noqa: BLE001
+                val = None
+            if set_sha is None and val is not None:
+                set_sha, set_val = sha, val
+            elif set_sha is not None and val != set_val:
+                self.F.v("A14", "a14_from", path, sha, safe_detail("changed after it was set", set_val, val))
+        if v is not None and self.a14_day is None:
+            self.F.v("A14", "a14_from", path, set_sha or "-", "not a weekday date")
+        if self.a14_day is not None:
+            d = self.a14_day
+            x = dt.datetime(d.year, d.month, d.day, tzinfo=UTC) - dt.timedelta(hours=2)
+            b = self.a14_commit
+            if not b:
+                self.F.w("A0", "a14_unpinned", "judge_analyst/jlib/config.py", "-",
+                         "MODE.json sets a14_from but A14_BUILD_COMMIT is not pinned")
+            else:
+                M = self.main_at(x)
+                if M is None:
+                    self.F.w("A0", "a14_from_unverified", path, "-", safe_detail("inbox main unknown at", fmt_utc(x)))
+                else:
+                    bad = []
+                    if not self.git.commit_exists(b) or not self.shows(M, b):
+                        bad.append("build commit not on inbox main")
+                    mm = self.git.show(M, path)
+                    try:
+                        mv = (load_json_bytes(mm) or {}).get("a14_from") if mm is not None else None
+                    except Exception:  # noqa: BLE001
+                        mv = None
+                    if mv != v:
+                        bad.append("MODE.json")
+                    wb = self.git.show(M, "analyst/WATCHER_CONFIG.json")
+                    try:
+                        wc = load_json_bytes(wb) if wb is not None else None
+                    except Exception:  # noqa: BLE001
+                        wc = None
+                    if not isinstance(wc, dict):
+                        bad.append("WATCHER_CONFIG.json")
+                    else:
+                        sc = wc.get("source_commit")
+                        same = sc == b or (isinstance(sc, str) and re.fullmatch(r"[0-9a-f]{40}", sc or "") and
+                                           self.git.commit_exists(sc) and self.git.commit_exists(b) and
+                                           self.git.is_ancestor(b, sc) and self.on_main(sc) and
+                                           self.git.object_id(sc, "watcher") == self.git.object_id(b, "watcher"))
+                        if not same:
+                            bad.append("source_commit")
+                        if not is_utc(wc.get("deployed_utc")) or parse_utc(wc["deployed_utc"]) > x:
+                            bad.append("deployed_utc")
+                    if bad:
+                        self.F.v("A14", "a14_from", path, set_sha or "-", safe_detail(*bad))
+        for r in self.wit:
+            w = r.rec
+            if w.get("status") != "accepted" or w.get("kind") not in ("attempt", "call"):
+                continue
+            pc = parse_call_id(str(w.get("id") or ""))
+            if pc is None or pc[1] in ("W1", "W2"):
+                continue
+            if self.a14_day is None or pc[0] < self.a14_day:
+                self.F.v("A14", "a14_from", path, r.commit, safe_detail("accepted push before a14_from", w.get("id")))
 
     # ================================================================ START (A9)
     def check_start(self):
@@ -1422,6 +1810,8 @@ class Judge:
                 hi = w.deadline - dt.timedelta(minutes=t_run + t_setup)
                 if not (w.span_lo <= cu <= hi) or self.holidays.window_holiday(w):
                     continue
+                if (self.terminal_info.get((mode, cid)) or {}).get("status") in GATED:
+                    continue                     # A14-D16 (R-AN-60): a window the gates closed
                 # J-5 (decision 33, R-AN-67): not judged when a pause interval meets [created_utc, deadline_utc -
                 # T_run], the range in which the run's `start` read inbox main; canary windows too (J-D31). An empty
                 # interval (inbox main never showed the pause) meets nothing (J-D34).
@@ -1438,12 +1828,17 @@ class Judge:
             if not info or info["status"] not in ("called", "stay_out"):
                 continue
             sid = ((info["call"] or {}).get("self_reported") or {}).get("session_id")
-            routine = "analyst-w1" if win.w == "W1" else "analyst-w2"
-            cands = [(r, x) for r, x in runs if x.get("routine") == routine]
+            if win.w in ("W1", "W2"):
+                routine = "analyst-w1" if win.w == "W1" else "analyst-w2"
+                cands = [(r, x) for r, x in runs if x.get("routine") == routine]
+                lo, hi, late = win.entry - dt.timedelta(minutes=60), win.deadline, cands
+            else:                                # A14 (R-AN-60): any of the three call routines, by session id;
+                cands = [(r, x) for r, x in runs if x.get("routine") in WAKE_ROUTINES]   # else analyst-wake
+                lo, hi = win.entry - dt.timedelta(minutes=30), win.deadline
+                late = [(r, x) for r, x in cands if x.get("routine") == "analyst-wake"]
             match = [(r, x) for r, x in cands if sid and x.get("session_id") == sid]
             if not match:
-                lo, hi = win.entry - dt.timedelta(minutes=60), win.deadline
-                match = [(r, x) for r, x in cands if not x.get("session_id") and
+                match = [(r, x) for r, x in late if not x.get("session_id") and
                          _in(x.get("created_utc"), lo, hi)]
             if not match:
                 wk = iso_week(win.day)
@@ -2033,8 +2428,8 @@ class Judge:
                                    "y": o["y"], "R": o["R"], "net": o["net_usd"], "stress": o["stress_net_usd"],
                                    "cost": o["cost_usd"]})
                 row.update({"out": out})
-            # twin
-            if info["status"] != "skipped:holiday":
+            # twin (§16.18 A14: every status but skipped:*)
+            if not str(info["status"]).startswith("skipped:"):
                 tw = settle.twin(mins, void) if processable else None
                 trc = twins_r.get(tp)
                 if trc is None:
@@ -2051,13 +2446,17 @@ class Judge:
         for d, lst in by_day.items():
             ok = True
             for win, info in lst:
-                if info["status"] == "skipped:holiday":
+                if str(info["status"]).startswith("skipped:"):
                     continue
                 if f"analyst/twins/{win.call_id}.json" not in twins_r:
                     ok = False
                 if info["status"] == "called" and f"analyst/settled/{win.call_id}.json" not in settled:
                     ok = False
-            if ok and len(lst) == 2:
+            # every expected window of d processed; (§16.18 A14-D14) for d >= a14_from also once d's trading ended
+            n_exp = sum(1 for w in live_wins if w.day == d)
+            if ok and len(lst) == n_exp and (self.a14_day is None or d < self.a14_day or
+                                              self.now >= model_to_utc(dt.datetime(d.year, d.month, d.day) +
+                                                                       dt.timedelta(days=1))):
                 processed.add(d)
         self.summary["settled_checked"] = n_checked
         # E path over counted trades (window order), ledger and state
@@ -2257,7 +2656,7 @@ class Judge:
             if not rel_eq(S.get("side_share"), share) or S.get("side_label") != (share > 0.85):
                 bad.append("side_share")
         known = self.terminals_at_last_change("analyst/STATE.json")
-        last40 = [r for r in rows_expected if r["terminal_status"] != "skipped:holiday" and
+        last40 = [r for r in rows_expected if not str(r["terminal_status"]).startswith("skipped:") and
                   (known is None or r["call_id"] in known)][-40:]
         if last40:
             ms = sum(1 for r in last40 if r["status"].startswith(("missed:", "no_call:"))) / len(last40)
@@ -2504,6 +2903,21 @@ class Judge:
                 if not want.startswith(ms):
                     self.F.w("A11", "mirror_slots", "mirror/system/forecasts_slots.csv", "-",
                              "not a prefix of the source's slot 9/10/15 lines")
+        # §16.18 A14-D10 (R-AN-12 step 3b): the whole forecast store, a byte prefix of the source, and its sha256 the
+        # latest exports.csv row's forecasts_sha256
+        mf = self.bytes_at_head("mirror/system/forecasts.csv")
+        if mf is not None:
+            if sf is None or not sf.startswith(mf):
+                self.F.w("A11", "mirror_forecasts", "mirror/system/forecasts.csv", "-",
+                         "not a byte prefix of the source forecasts.csv")
+            try:
+                rows = list(csv.DictReader(io.StringIO((self.bytes_at_head("mirror/exports.csv") or b"")
+                                                       .decode("utf-8"))))
+            except Exception:  # noqa: BLE001
+                rows = []
+            if not rows or rows[-1].get("forecasts_sha256") != sha256_bytes(mf):
+                self.F.w("A11", "mirror_forecasts", "mirror/system/forecasts.csv", "-",
+                         "the latest exports.csv row's forecasts_sha256 is not the copy's sha256")
         for p in self.git.ls_tree(self.head, "mirror/system/raw/"):
             src = "data/system/raw/" + p[len("mirror/system/raw/"):]
             a = self.bytes_at_head(p)

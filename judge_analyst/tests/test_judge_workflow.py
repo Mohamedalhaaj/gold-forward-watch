@@ -80,12 +80,15 @@ def test_permissions_are_declared_and_minimal():
     assert "write" not in judge.replace("wrote", "")
 
 
-def test_secrets_reach_only_the_deploy_step():
+def test_secrets_reach_only_the_deploy_step_and_the_judges_twelve_data_key():
     refs = re.findall(r"secrets\.([A-Z_]+)", WF)
-    assert refs == ["CLOUDFLARE_API_TOKEN"]
+    assert refs == ["TWELVEDATA_API_KEY", "CLOUDFLARE_API_TOKEN"]
     assert "secrets." in step("Deploy the site from the post-commit checkout")
     judge = job("judge")
-    assert "secrets." not in judge and "wrangler" not in judge and "git push" not in judge
+    # §16.18 A14 (R-AN-66): the judge run gets the Twelve Data key for its own 30-minute fetch, and nothing else
+    assert re.findall(r"secrets\.([A-Z_]+)", judge) == ["TWELVEDATA_API_KEY"]
+    assert "TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}" in step("Judge run")
+    assert "wrangler" not in judge and "git push" not in judge
     assert "GITHUB_TOKEN: ${{ github.token }}" in step("Judge run")
 
 

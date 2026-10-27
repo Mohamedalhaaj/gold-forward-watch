@@ -342,6 +342,11 @@ class HourSource:
     """The judge's view of one hour file: its own download, cached in `hours.csv` (append-only).
     A file whose download fails (status `error`) is not cached and is retried by a later run."""
 
+    HEADER = HOURS_HEADER
+    INTS = _INTS
+    SUMMARY = ("first_ms", "first_ask", "first_bid", "last_ms", "last_ask", "last_bid", "max_sum", "min_sum")
+    classify = staticmethod(ticks.classify)
+
     def __init__(self, fetcher, cache_path: str | None, now_utc: str, max_fetch: int = 3000):
         self.fetcher = fetcher
         self.cache_path = cache_path
@@ -354,8 +359,8 @@ class HourSource:
         if cache_path and os.path.exists(cache_path):
             with open(cache_path, newline="", encoding="utf-8") as f:
                 for r in csv.DictReader(f):
-                    row = {k: r[k] for k in HOURS_HEADER}
-                    for k in _INTS:
+                    row = {k: r[k] for k in self.HEADER}
+                    for k in self.INTS:
                         row[k] = int(row[k]) if row[k] != "" else None
                     self.cache[(row["sym"], row["hour_utc"])] = row
 
@@ -374,7 +379,7 @@ class HourSource:
         url = ticks.hour_url(sym, hour)
         self.fetched += 1
         http, body = self.fetcher.get(url)
-        status, summ = ticks.classify(http, body)
+        status, summ = self.classify(http, body)
         if status == "error":
             self.unavailable += 1
             return cached
@@ -384,7 +389,7 @@ class HourSource:
         row = {"judge_utc": self.now_utc, "sym": sym, "hour_utc": key[1], "url": url, "http": http,
                "bytes": len(body or b""), "sha256": sha256_bytes(body) if body else "", "ticks": None,
                "status": status}
-        for k in ("first_ms", "first_ask", "first_bid", "last_ms", "last_ask", "last_bid", "max_sum", "min_sum"):
+        for k in self.SUMMARY:
             row[k] = None
         if summ:
             row.update(summ)
@@ -400,9 +405,23 @@ class HourSource:
         buf = io.StringIO()
         w = csv.writer(buf, lineterminator="\n")
         if new:
-            w.writerow(HOURS_HEADER)
+            w.writerow(self.HEADER)
         for r in self.new_rows:
-            w.writerow(["" if r[k] is None else r[k] for k in HOURS_HEADER])
+            w.writerow(["" if r[k] is None else r[k] for k in self.HEADER])
         with open(self.cache_path, "a", encoding="utf-8", newline="") as f:
             f.write(buf.getvalue())
         self.new_rows = []
+
+
+HALVES_HEADER = ["judge_utc", "sym", "hour_utc", "url", "http", "bytes", "sha256", "ticks", "status",
+                 *ticks.HALF_KEYS]
+
+
+class HalfSource(HourSource):
+    """§16.18 A14 (R-AN-68): the first and the last tick of each half hour of an hour file, for the cross-check of a
+    trigger attempt's 30-minute bars; its own download and append-only cache, `halves.csv`."""
+
+    HEADER = HALVES_HEADER
+    INTS = ("http", "bytes", "ticks", *ticks.HALF_KEYS)
+    SUMMARY = ticks.HALF_KEYS
+    classify = staticmethod(ticks.classify_halves)
