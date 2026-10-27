@@ -7,3 +7,4 @@ first_seen_utc,severity,check,key
 2026-10-26T01:38:15Z,VIOLATION,A12,A12|probe_failed|analyst/canary/checks/PROBE_p20261026T000513Z.json|79b9247901f15ee40d14d0f33cc8001f89bf31ce
 2026-10-26T07:52:05Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-10-26_W1.json|43bbb42e58a4dd66e768a86e84b32a335c6eb79c
 2026-10-26T13:25:00Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-10-26_W2.json|e6008594960ece17a99cd9837c68c4782900b8da
+2026-10-27T13:22:39Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-10-27_W2.json|80cbca5d9e610f5235c4c6dbecf2132d41881c26
