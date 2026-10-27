@@ -1,8 +1,8 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-27T16:33:37Z
-- head_sha (gold-analyst main checked): d516a329109ffa592920638ea7442f77dd5d69c5
-- judge code_sha8: a75e5fde
+- asof_utc: 2026-10-27T17:20:08Z
+- head_sha (gold-analyst main checked): 2dc34e25cab519ac4ae362b43854c4a4923c1e65
+- judge code_sha8: 147552d3
 - **analyst_verdict: SOUND**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
@@ -34,13 +34,13 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - accepted_push_diffs_unverified: 0
 - canary_expected_windows: 0
 - canary_terminals: 4
-- cc_version_records_checked: 6
+- cc_version_records_checked: 7
 - contexts_rebuilt: 3
-- ga_runs_read: 92
-- head: d516a329109ffa592920638ea7442f77dd5d69c5
-- inbox_activity_entries: 70
+- ga_runs_read: 99
+- head: 2dc34e25cab519ac4ae362b43854c4a4923c1e65
+- inbox_activity_entries: 74
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-10-27T16:33:37Z
+- inbox_last_complete_read_utc: 2026-10-27T17:20:08Z
 - live_expected_windows: 0
 - live_terminals: 0
 - probe_creations_max_day: 14
@@ -49,9 +49,9 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - run_log_calls_scanned: 0
 - run_logs_scanned: 0
 - settled_checked: 0
-- td_compared: 99
+- td_compared: 100
 - td_outside: 5
-- td_pending: 1
+- td_pending: 0
 - td_unchecked: 0
-- witness_comments: 12
-- witness_files: 12
+- witness_comments: 14
+- witness_files: 14
