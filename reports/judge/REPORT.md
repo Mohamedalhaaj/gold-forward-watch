@@ -4,7 +4,7 @@
 
 **الحكم: سليم** · السبب: كل الفحوص سليمة
 
-- وقت الفحص: 2026-10-28T09:49:09Z
+- وقت الفحص: 2026-10-28T16:11:35Z
 - الفحوص السليمة 8 من 9، ولم يُتحقق من 1
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **SOUND** (reason code `sound`), checks ok 9 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `38cd42b064f075b63f17d7f1fcd4fbc7b8ef7680`
+- HEAD checked: `9736d0a7a270c871e997ec5e7f7b44f856b5e9eb`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-10-28T09:49:09Z; data root repo
+- judge run 2026-10-28T16:11:35Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 135 (checked now: 135); older days sampled: 20; sides compared equal: 21; revised: 0; known revisions: 0; unverified downloads: 289
-- unverified: 289 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 127 (checked now: 127); older days sampled: 20; sides compared equal: 14; revised: 0; known revisions: 0; unverified downloads: 280
+- unverified: 280 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -53,12 +53,12 @@
 
 ### J3: OK
 
-- v1 raw files checked against their days.csv rows: 112 (0 problems)
+- v1 raw files checked against their days.csv rows: 114 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
-- raw folders: 13 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 20 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- raw folders: 14 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
+- v1 append-only files: 15 files, 21 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 4 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 18 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 19 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,7 +68,7 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 922, 'compared': 922}, 'l1': {'blocks': 0, 'green_ok': 1, 'trials': 0}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 0, 'trades': 0}, 'v2': {'days': 0, 'checked_days': [], 'trades': 0}, 'summary': {'asof': '2026-10-28T09:48:40Z'}, 'status': {'asof': '2026-10-28T09:41:00Z', 'lines': 28}}
+- recomputed: {'forecasts': {'store_rows': 945, 'compared': 945}, 'l1': {'blocks': 0, 'green_ok': 1, 'trials': 0}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 0, 'trades': 0}, 'v2': {'days': 0, 'checked_days': [], 'trades': 0}, 'summary': {'asof': '2026-10-28T16:11:04Z'}, 'status': {'asof': '2026-10-28T16:06:13Z', 'lines': 28}}
 - lab v2 days recomputed this run: 0 (new 0, rotating sample 0); new adjudication rows: 0
 
 ### J6: OK
@@ -80,16 +80,16 @@
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: 1b50f26f2087 at 2026-10-28T09:48:37Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: 91f48afb5faa at 2026-10-28T16:11:00Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 67405a04462e is an ancestor of HEAD 38cd42b064f0
-- the published VolMapJudge.csv head 67405a04462e is an ancestor of HEAD 38cd42b064f0
-- the deployed VolMapJudge.csv head 67405a04462e is an ancestor of HEAD 38cd42b064f0
+- the previous VERDICTS.csv row head 38cd42b064f0 is an ancestor of HEAD 9736d0a7a270
+- the published VolMapJudge.csv head 38cd42b064f0 is an ancestor of HEAD 9736d0a7a270
+- the deployed VolMapJudge.csv head 38cd42b064f0 is an ancestor of HEAD 9736d0a7a270
 
 ### J9: OK
 
-- 2026-10-26 already checked (exceeds); no request sent
+- 2026-10-27: ok; credits 1
