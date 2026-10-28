@@ -1,7 +1,7 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-27T22:37:32Z
-- head_sha (gold-analyst main checked): f2043e3e27c0ad43def784717e61143d94dede93
+- asof_utc: 2026-10-28T02:33:45Z
+- head_sha (gold-analyst main checked): e460398dc63e51020376b198006a0740af1808d9
 - judge code_sha8: 1ba45fbb
 - **analyst_verdict: SOUND**
 
@@ -32,15 +32,15 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 ## Run summary
 
 - accepted_push_diffs_unverified: 0
-- canary_expected_windows: 1
+- canary_expected_windows: 2
 - canary_terminals: 4
 - cc_version_records_checked: 7
 - contexts_rebuilt: 3
-- ga_runs_read: 106
-- head: f2043e3e27c0ad43def784717e61143d94dede93
-- inbox_activity_entries: 77
+- ga_runs_read: 114
+- head: e460398dc63e51020376b198006a0740af1808d9
+- inbox_activity_entries: 78
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-10-27T22:37:32Z
+- inbox_last_complete_read_utc: 2026-10-28T02:33:45Z
 - live_expected_windows: 0
 - live_terminals: 0
 - probe_creations_max_day: 14
