@@ -1,0 +1,4 @@
+judge_utc,sym,hour_utc,url,http,bytes,sha256,ticks,status,lo_first_ask,lo_first_bid,lo_last_ask,lo_last_bid,hi_first_ask,hi_first_bid,hi_last_ask,hi_last_bid
+2026-10-29T02:47:41Z,XAUUSD,2026-10-28T22:00:00Z,https://datafeed.dukascopy.com/datafeed/XAUUSD/2026/09/28/22h_ticks.bi5,200,9772,cdd57ec59366373f9ddeb02d5ad53fb010736420918eea5e0782f74b235b1fb2,2032,present,4068976,4067354,4055125,4054545,4055285,4054695,4052165,4051585
+2026-10-29T02:47:41Z,XAUUSD,2026-10-28T23:00:00Z,https://datafeed.dukascopy.com/datafeed/XAUUSD/2026/09/28/23h_ticks.bi5,200,8632,42d5c3fb7328977a8f83f47d3e480bb748728d009d5daf36631b44e12bd7e62d,2008,present,4052295,4051705,4053095,4052505,4052966,4052505,4054785,4054195
+2026-10-29T02:47:41Z,XAUUSD,2026-10-29T00:00:00Z,https://datafeed.dukascopy.com/datafeed/XAUUSD/2026/09/29/00h_ticks.bi5,200,23551,e321db12f0096b1edeabae6a5a9762b7b2d66d86629af49726de7e06986e5a9b,5899,present,4055005,4054425,4042636,4042055,4042505,4041925,4037265,4036685
