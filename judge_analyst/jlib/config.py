@@ -19,4 +19,4 @@ WARNING `a15_unpinned`.
 """
 A12_BUILD_COMMIT = "c45383a877848ee7616ac9d81efd51b7114f1a7e"   # gold-analyst A12 build (client approval 2026-10-26)
 A14_BUILD_COMMIT = "a6158a3bf37a82d1c2bdcb7a6a00465a5ea2c69f"   # gold-analyst A14 build (client approval 2026-10-27)
-A15_BUILD_COMMIT = None                                         # gold-analyst A15 build: not on main yet
+A15_BUILD_COMMIT = "ced2ab9c27f6e587843bfe0ccb548b4b344b302b"   # gold-analyst A15 build (client approval 2026-10-29)

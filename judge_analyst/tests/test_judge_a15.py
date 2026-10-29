@@ -39,7 +39,7 @@ def test_statuses_keys_and_pin():
     assert OPERATIONAL["A15"] == {"review_open", "open_cap", "a15_from", "lesson_source"}
     for k in ("review_open", "open_cap", "a15_from", "lesson_source"):
         assert operational(f"A15|{k}|p|c")
-    assert config.A15_BUILD_COMMIT is None                       # None until the A15 build is on gold-analyst main
+    assert config.A15_BUILD_COMMIT is None or (isinstance(config.A15_BUILD_COMMIT, str) and len(config.A15_BUILD_COMMIT) == 40)  # pinned at the build
     assert KEY_ORDER_V5 == KEY_ORDER_V4[:KEY_ORDER_V4.index("wake") + 1] + ("review",) + \
         KEY_ORDER_V4[KEY_ORDER_V4.index("wake") + 1:]
     assert context_keys(SCHEMA_V5) == KEY_ORDER_V5
