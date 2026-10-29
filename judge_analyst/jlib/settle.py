@@ -52,8 +52,11 @@ def _null_outcome(status, S):
     return o
 
 
-def settle_side(mins: Minutes, s: int, S_dimes: int, T_dimes: int, void: bool):
-    """Outcome dict of R-AN-46 for side s, plus private keys `_exit_t` (epoch) and `_pe_pts`."""
+def settle_side(mins: Minutes, s: int, S_dimes: int, T_dimes: int, void: bool, m: int | None = None):
+    """Outcome dict of R-AN-46 for side s, plus private keys `_exit_t` (epoch) and `_pe_pts`. (§16.18 A15, R-AN-93)
+    m: the managed minute (epoch of the closing review's entry), or None: R-AN-42's loop then runs for t0 .. m − 1,
+    and without an exit there the trade exits at m (the exit side's open of m, reason `managed`, fill `open`), else
+    at the latest quoted close in [t0, m) (`managed`, `close`), else at X (`gap`, `level`, exit minute null)."""
     S = S_dimes / 10
     if void:
         o = _null_outcome("void", S)
@@ -82,7 +85,8 @@ def settle_side(mins: Minutes, s: int, S_dimes: int, T_dimes: int, void: bool):
     Tg = pe + s * T_pts
     run = 0
     exit_t = px = reason = fill = None
-    for t in range(t0, t1, MIN):
+    end = t1 if m is None else m
+    for t in range(t0, end, MIN):
         q = mins.row(exit_side, t)
         if q is not None:
             o_, h_, l_, _c = q[0], q[1], q[2], q[3]
@@ -106,7 +110,23 @@ def settle_side(mins: Minutes, s: int, S_dimes: int, T_dimes: int, void: bool):
         if run >= 15:
             exit_t, px, reason, fill = t, X, "gap", "level"
             break
+    where = "loop"
+    no_minute = False
+    if exit_t is None and m is not None:
+        where = "managed"
+        q = mins.row(exit_side, m)
+        if q is not None:
+            exit_t, px, reason, fill = m, q[0], "managed", "open"
+        else:
+            for t in range(m - MIN, t0 - 1, -MIN):
+                q = mins.row(exit_side, t)
+                if q is not None:
+                    exit_t, px, reason, fill = t, q[3], "managed", "close"
+                    break
+            if exit_t is None:
+                exit_t, px, reason, fill, no_minute = m, X, "gap", "level", True
     if exit_t is None:
+        where = "time"
         last = t1 - MIN
         q = mins.row(exit_side, last)
         if q is not None:
@@ -121,16 +141,34 @@ def settle_side(mins: Minutes, s: int, S_dimes: int, T_dimes: int, void: bool):
                 exit_t, px, reason, fill = last, X, "gap", "level"
     net = s * (px - pe) / 1000 - 0.10
     stress = net - 0.25
-    cost = 0.10 + mins.half_spread(pe_t, pe_field) + mins.half_spread(exit_t, "o" if fill == "open" else "c")
+    cost = 0.10 + mins.half_spread(pe_t, pe_field) + \
+        (0.0 if no_minute else mins.half_spread(exit_t, "o" if fill == "open" else "c"))
     return {"status": "final", "P_e": pe / 1000, "P_e_src": pe_src,
             "P_e_minute_utc": fmt_utc(dt.datetime.fromtimestamp(pe_t, UTC)), "X": X / 1000, "Tg": Tg / 1000,
-            "exit_minute_utc": fmt_utc(dt.datetime.fromtimestamp(exit_t, UTC)), "P_x": px / 1000, "reason": reason,
-            "fill": fill, "cost_usd": cost, "gross_usd": net + cost, "net_usd": net, "stress_net_usd": stress,
-            "R": net / S, "R_stress": stress / S, "y": _clip(stress / S, -2.0, 2.0), "_exit_t": exit_t,
-            "_pe_pts": pe}
+            "exit_minute_utc": None if no_minute else fmt_utc(dt.datetime.fromtimestamp(exit_t, UTC)),
+            "P_x": px / 1000, "reason": reason, "fill": fill, "cost_usd": cost, "gross_usd": net + cost,
+            "net_usd": net, "stress_net_usd": stress, "R": net / S, "R_stress": stress / S,
+            "y": _clip(stress / S, -2.0, 2.0), "_exit_t": exit_t, "_pe_pts": pe, "_where": where}
 
 
-def path_summary(mins: Minutes, s: int, outcome: dict):
+def x_end(outcome: dict, mins: Minutes, m: int | None = None) -> int:
+    """R-AN-93's x_end_utc (epoch): an exit inside the loop at minute i: i for an open fill, i + 1 min for a level
+    fill; a time exit (reason `time`, or `gap` at X after the loop): exit_utc; a managed exit (reason `managed`, or
+    the managed case's `gap` at X): m; status `void` or `no_quote`: m when a review closed the trade, else
+    exit_utc."""
+    if outcome.get("status") != "final":
+        return m if m is not None else mins.t1
+    if outcome["_where"] == "managed":
+        return m
+    if outcome["_where"] == "time":
+        return mins.t1
+    i = outcome["_exit_t"]
+    return i if outcome["fill"] == "open" else i + MIN
+
+
+def path_summary(mins: Minutes, s: int, outcome: dict, m: int | None = None):
+    """(§16.18 A15, R-AN-93) for reason `managed`, mfe_usd and mae_usd run from t0 through minute m − 1; the buckets
+    and range_mid_usd keep the full [t0, t1)."""
     if outcome["status"] != "final":
         return None
     st = mins.store
@@ -154,7 +192,8 @@ def path_summary(mins: Minutes, s: int, outcome: dict):
     exit_side = "BID" if s == 1 else "ASK"
     pe = outcome["_pe_pts"]
     hs, ls = [], []
-    for t in range(t0, outcome["_exit_t"] + MIN, MIN):
+    last = m - MIN if outcome.get("_where") == "managed" else outcome["_exit_t"]
+    for t in range(t0, last + MIN, MIN):
         q = st.side(exit_side, t)
         if q is not None:
             hs.append(q[1])
@@ -167,7 +206,7 @@ def path_summary(mins: Minutes, s: int, outcome: dict):
     else:
         mfe = mae = None
     return {"buckets": buckets, "mfe_usd": mfe, "mae_usd": mae,
-            "exit_after_min": (outcome["_exit_t"] - t0) // MIN,
+            "exit_after_min": None if outcome["exit_minute_utc"] is None else (outcome["_exit_t"] - t0) // MIN,
             "range_mid_usd": None if hi_all is None else hi_all - lo_all}
 
 
