@@ -1,8 +1,8 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-29T11:29:08Z
-- head_sha (gold-analyst main checked): 358489616dad53d15bd6cb988703f1f9dd801a39
-- judge code_sha8: 1ba45fbb
+- asof_utc: 2026-10-29T16:16:20Z
+- head_sha (gold-analyst main checked): ced2ab9c27f6e587843bfe0ccb548b4b344b302b
+- judge code_sha8: 166ed4de
 - **analyst_verdict: SOUND**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
@@ -40,22 +40,22 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - canary_terminals: 10
 - cc_version_records_checked: 15
 - contexts_rebuilt: 7
-- ga_runs_read: 98
-- head: 358489616dad53d15bd6cb988703f1f9dd801a39
-- inbox_activity_entries: 109
+- ga_runs_read: 103
+- head: ced2ab9c27f6e587843bfe0ccb548b4b344b302b
+- inbox_activity_entries: 126
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-10-29T11:29:08Z
+- inbox_last_complete_read_utc: 2026-10-29T16:16:20Z
 - live_expected_windows: 0
 - live_terminals: 0
-- probe_creations_max_day: 14
+- probe_creations_max_day: 15
 - probe_records: 11
 - routine_config_versions_checked: 5
 - run_log_calls_scanned: 0
 - run_logs_scanned: 0
 - settled_checked: 0
-- td_compared: 419
+- td_compared: 422
 - td_outside: 15
-- td_pending: 3
+- td_pending: 0
 - td_unchecked: 0
 - witness_comments: 28
 - witness_files: 28
