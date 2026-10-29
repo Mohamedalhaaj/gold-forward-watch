@@ -354,6 +354,40 @@ PLANS = {"2026-12-02_T0630": ("call", PLAN_ADD), "2026-12-02_W1": ("call", PLAN_
          "2026-12-04_W2": ("call", PLAN_STAY)}
 
 
+class _TreeGit:
+    """A one-commit tree for R-AN-50 (path -> bytes)."""
+
+    def __init__(self, files):
+        self.files = {p: (b if isinstance(b, bytes) else b.encode()) for p, b in files.items()}
+
+    def ls_tree(self, commit, prefix=""):
+        return sorted(p for p in self.files if p.startswith(prefix))
+
+    def show(self, commit, path):
+        return self.files.get(path)
+
+
+def test_canary_playbook_in_force_only_after_a15_from():
+    """R-AN-50 (A15-D22): a canary revision effective on a15_from (written before a15_from was set, from the fixture's
+    lesson) is never in force; one effective after a15_from is, from its effective_from."""
+    from jlib.context import playbook_in_force
+    a15 = dt.date(2026, 11, 2)
+    files = {"analyst/playbooks/v0.md": "# playbook v0\n",
+             "analyst/canary/playbooks/v1.md": "# playbook v1\nfixture\n",
+             "analyst/canary/revisions/2026-W44.json": json.dumps({"status": "written", "version": 1,
+                                                                   "effective_from": "2026-11-02"})}
+    git = _TreeGit(files)
+    for d in (dt.date(2026, 11, 2), dt.date(2026, 11, 3), dt.date(2026, 11, 9)):
+        assert playbook_in_force(git, "c", "analyst/canary/", d, a15) == (0, "analyst/playbooks/v0.md",
+                                                                           b"# playbook v0\n")
+    git.files["analyst/canary/playbooks/v2.md"] = b"# playbook v2\n"
+    git.files["analyst/canary/revisions/2026-W45.json"] = json.dumps(
+        {"status": "written", "version": 2, "effective_from": "2026-11-09"}).encode()
+    assert playbook_in_force(git, "c", "analyst/canary/", dt.date(2026, 11, 6), a15)[0] == 0
+    assert playbook_in_force(git, "c", "analyst/canary/", dt.date(2026, 11, 9), a15) == (
+        2, "analyst/canary/playbooks/v2.md", b"# playbook v2\n")
+
+
 def a15_world(root, hooks=None):
     return World(root, plans=dict(PLANS), hooks=hooks or {}, **A15_WORLD).build()
 

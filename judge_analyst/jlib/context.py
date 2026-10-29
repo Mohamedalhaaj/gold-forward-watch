@@ -103,8 +103,8 @@ def _json_at(git, commit, path):
 
 def playbook_in_force(git, commit, prefix: str, d: dt.date, since: dt.date | None = None):
     """R-AN-50: the largest k with k = 0 or a `written` revisions record of version k with effective_from <= d.
-    (§16.18 A15) since: the canary's a15_from, which effective_from must also reach; the canary's v0 is
-    `analyst/playbooks/v0.md`."""
+    (§16.18 A15) since: the canary's a15_from, which effective_from must also pass (A15-D22: a canary revision
+    effective on a15_from or earlier is never in force); the canary's v0 is `analyst/playbooks/v0.md`."""
     k_best = 0
     for p in git.ls_tree(commit, prefix + "revisions/"):
         rec = _json_at(git, commit, p)
@@ -112,7 +112,7 @@ def playbook_in_force(git, commit, prefix: str, d: dt.date, since: dt.date | Non
             continue
         if rec.get("status") == "written" and isinstance(rec.get("version"), int) and \
                 isinstance(rec.get("effective_from"), str) and rec["effective_from"] <= d.isoformat() and \
-                (since is None or rec["effective_from"] >= since.isoformat()):
+                (since is None or rec["effective_from"] > since.isoformat()):
             k_best = max(k_best, rec["version"])
     path = f"{prefix}playbooks/v{k_best}.md"
     if since is not None and k_best == 0:
