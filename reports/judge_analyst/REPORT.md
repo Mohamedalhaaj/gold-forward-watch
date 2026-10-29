@@ -1,7 +1,7 @@
 # Analyst judge report
 
-- asof_utc: 2026-10-29T16:19:04Z
-- head_sha (gold-analyst main checked): b451cbaf3f533e9e064e8762b1174fa2a7f3fc38
+- asof_utc: 2026-10-29T21:46:38Z
+- head_sha (gold-analyst main checked): 183849dd67eb134cfe11bfb61401216fe6374cc5
 - judge code_sha8: 166ed4de
 - **analyst_verdict: SOUND**
 
@@ -36,26 +36,26 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 ## Run summary
 
 - accepted_push_diffs_unverified: 0
-- canary_expected_windows: 4
-- canary_terminals: 10
-- cc_version_records_checked: 15
-- contexts_rebuilt: 7
-- ga_runs_read: 104
-- head: b451cbaf3f533e9e064e8762b1174fa2a7f3fc38
-- inbox_activity_entries: 127
+- canary_expected_windows: 5
+- canary_terminals: 13
+- cc_version_records_checked: 21
+- contexts_rebuilt: 10
+- ga_runs_read: 116
+- head: 183849dd67eb134cfe11bfb61401216fe6374cc5
+- inbox_activity_entries: 128
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-10-29T16:19:04Z
+- inbox_last_complete_read_utc: 2026-10-29T21:46:38Z
 - live_expected_windows: 0
 - live_terminals: 0
 - probe_creations_max_day: 15
-- probe_records: 11
+- probe_records: 14
 - routine_config_versions_checked: 5
 - run_log_calls_scanned: 0
 - run_logs_scanned: 0
 - settled_checked: 0
-- td_compared: 422
+- td_compared: 565
 - td_outside: 15
-- td_pending: 0
+- td_pending: 23
 - td_unchecked: 0
-- witness_comments: 28
-- witness_files: 28
+- witness_comments: 37
+- witness_files: 37
