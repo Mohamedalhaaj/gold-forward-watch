@@ -32,25 +32,38 @@ def _bad_control(s: str) -> bool:
     return False
 
 
-def plan_errors(plan, v3: bool = False) -> list:
+def status_of_action(action):
+    """R-AN-29 (§16.18 A15): the call status a plan action gives."""
+    return {"buy": "called", "sell": "called", "reverse": "called", "add": "called", "stay_out": "stay_out",
+            "hold": "review_hold", "close": "review_close"}.get(action)
+
+
+def plan_errors(plan, v3: bool = False, v5: bool = False) -> list:
     """Enum reasons why `plan` is not a valid R-AN-26 plan (empty list = valid). Never returns plan text.
     v3 (§16.18 A12): the plan of an `analyst-context/3` call, `analyst-plan/2`: a stay_out also has
     `stay_out_reason`, exactly one of STAY_REASONS (another value or type: `stay_out_reason`); a trade has none (the
-    key sets differ: `keys`). An `analyst-context/2` call keeps the old key set."""
+    key sets differ: `keys`). An `analyst-context/2` call keeps the old key set. v5 (§16.18 A15): the plan of an
+    `analyst-context/5` call, `analyst-plan/3`: also `hold` and `close` (the stay_out keys without
+    `stay_out_reason`) and `reverse` and `add` (the keys and multiples of buy and sell). Whether the action is one
+    the context allows is the caller's check (R-AN-26 `action_not_allowed`)."""
     if not isinstance(plan, dict):
         return ["not_object"]
     errs = []
     action = plan.get("action")
-    if action not in ("buy", "sell", "stay_out"):
+    trades = ("buy", "sell", "reverse", "add") if v5 else ("buy", "sell")
+    if action not in trades + ("stay_out",) + (("hold", "close") if v5 else ()):
         return ["action"]
-    want = TRADE_KEYS if action in ("buy", "sell") else (STAY_KEYS_V2 if v3 else STAY_KEYS)
+    if action in ("hold", "close"):
+        want = STAY_KEYS
+    else:
+        want = TRADE_KEYS if action in trades else (STAY_KEYS_V2 if v3 else STAY_KEYS)
     if set(plan.keys()) != want:
         errs.append("keys")
     if v3 and action == "stay_out" and "stay_out_reason" in plan:
         sr = plan["stay_out_reason"]
         if not (isinstance(sr, str) and sr in STAY_REASONS):
             errs.append("stay_out_reason")
-    if action in ("buy", "sell"):
+    if action in trades:
         sm, tm = plan.get("stop_mult"), plan.get("target_mult")
         if not (_is_num(sm) and float(sm) in STOP_MULTS):
             errs.append("stop_mult")

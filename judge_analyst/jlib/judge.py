@@ -31,15 +31,15 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from . import derive, sessionguard, settle, stats, td, ticks, watch
+from . import derive, review, sessionguard, settle, stats, td, ticks, watch
 from .clock import (HALF, MACRO_PATH, OPS_PATH, Events, Holidays, Window, add_months_12, check_grid, iso_week,
                     macro_problems, model_to_utc, parse_call_id, scheduled_checks, tday, to_server, windows_between)
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
                      sha256_compact)
 from . import config
-from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMAS as CONTEXT_SCHEMAS, compare_context, cross_detail,
-                      is_trading_hour, rebuild_context, td_cross_check)
+from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMAS as CONTEXT_SCHEMAS, compare_context,
+                      cross_detail, is_trading_hour, rebuild_context, td_cross_check)
 from .m1 import DaysTable, Store
 
 EPROC_SHA256 = "ee8d456ae3b5ddd1112bad92d12fffa95d2b12e0559335233c6a9b3a68067973"
@@ -49,9 +49,12 @@ PREFIX = {"live": "analyst/", "canary": "analyst/canary/"}
 CALL_ID_RE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}_(?:W[12]b?|T(?:[01][0-9]|2[0-3])(?:00|30))"
 TERMINAL_STATUSES = {"called", "stay_out", "no_call:refusal", "no_call:invalid", "no_call:data", "no_call:d_ref",
                      "no_call:late", "no_call:run", "missed:trigger", "missed:push", "skipped:holiday",
-                     "skipped:trade_open", "skipped:day_cap"}          # §16.18 A14 (R-AN-36): the closer's two
+                     "skipped:trade_open", "skipped:day_cap",          # §16.18 A14 (R-AN-36): the closer's two
+                     "review_hold", "review_close"}                    # §16.18 A15 (R-AN-36): from the call
 GATED = ("skipped:trade_open", "skipped:day_cap")
-CALL_STATUSES = {"called", "stay_out", "no_call:data", "no_call:d_ref", "no_call:invalid", "no_call:refusal"}
+CALL_STATUSES = {"called", "stay_out", "no_call:data", "no_call:d_ref", "no_call:invalid", "no_call:refusal",
+                 "review_hold", "review_close"}                        # §16.18 A15 (R-AN-29)
+ANSWERS = ("called", "stay_out", "review_hold", "review_close")       # A1's answers in time (R-AN-36, A15)
 WITNESS_VIOLATION = {"agent_scope", "rewrite", "invalid_content", "attempt_cap"}
 WITNESS_WARNING = {"mode", "attempt_n", "window_closed", "no_settled", "lesson_cap", "not_saturday", "incomplete_week",
                    "version", "week_done", "window_order"}     # §16.18 A14 (R-AN-33): window_order
@@ -60,6 +63,12 @@ COMPLETENESS_GRACE = dt.timedelta(hours=36)   # judge decision J-D3: after deadl
 COMMENT_GRACE = dt.timedelta(hours=24)
 PUSH_GRACE = dt.timedelta(hours=24)
 SETTLE_GRACE = dt.timedelta(hours=36)
+# R-AN-46 / R-AN-93 (§16.18 A15): the keys of an `analyst-settled/2` record
+SETTLED2_KEYS = {"schema", "call_id", "mode", "window", "model_day", "class", "action", "side", "stop_mult",
+                 "target_mult", "D_ref", "S", "T", "S_dimes", "T_dimes", "entry_utc", "exit_utc", "managed_utc",
+                 "closed_by", "x_end_utc", "weight", "cluster", "outcome", "opposite", "unmanaged", "reviews",
+                 "path_summary", "call", "context", "inputs", "call_sha256", "terminal_sha256", "context_sha256",
+                 "settled_utc", "run_id", "head_sha"}
 
 # Path classes (R-AN-2, R-AN-59).
 _CREATE_ONLY = re.compile(
@@ -118,7 +127,9 @@ OPERATIONAL_A13 = {"guard_not_enforced", "guard_config", "routine_project", "cc_
 # §16.18 A14 (R-AN-67): check A14's operational keys; `not_triggered`, `trade_open`, `day_cap` and `wake_record` are
 # integrity keys (the first three stop the canary at once, R-AN-75 item 1)
 OPERATIONAL_A14 = {"skipped_wrong", "a14_from"}
-OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13, "A14": OPERATIONAL_A14}
+# §16.18 A15 (R-AN-55, R-AN-67): check A15's operational VIOLATION keys
+OPERATIONAL_A15 = {"review_open", "open_cap", "a15_from", "lesson_source"}
+OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13, "A14": OPERATIONAL_A14, "A15": OPERATIONAL_A15}
 WAKE_ROUTINES = ("analyst-wake", "analyst-w1", "analyst-w2")   # A14-D12: any of them can reach a new window
 C20_PATH = "analyst/canary/checks/C20.json"     # R-AN-74 C20: the probe session's root, when a run log has none
 SECURITY_LOG_FILTER = "repo:{} action:hook"     # R-AN-60 (A7, detection 2), with PINS.inbox_repo
@@ -262,7 +273,7 @@ class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
                  prev_judge_utc=None, judge_adjudications=None, judge_findings=None, a12_commit="config",
-                 a14_commit="config", m30=None, halves=None):
+                 a14_commit="config", m30=None, halves=None, a15_commit="config"):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
         judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
@@ -271,10 +282,13 @@ class Judge:
         sixth review of A6, R6-2). a12_commit (§16.18 A12, R-AN-23): the pinned A12 build commit; by default
         config.A12_BUILD_COMMIT. (§16.18 A14) a14_commit: the pinned A14 build commit (config.A14_BUILD_COMMIT);
         m30: the judge's own Twelve Data 30-minute fetch (watch.M30Source, R-AN-66), or None; halves: the Dukascopy
-        half-hour view (sources.HalfSource) for the cross-check of a trigger's bars (R-AN-68), or None."""
+        half-hour view (sources.HalfSource) for the cross-check of a trigger's bars (R-AN-68), or None. (§16.18 A15)
+        a15_commit: the pinned A15 build commit (config.A15_BUILD_COMMIT, None until the build is on main)."""
         self.git = git
         self.a12_commit = config.A12_BUILD_COMMIT if a12_commit == "config" else a12_commit
         self.a14_commit = config.A14_BUILD_COMMIT if a14_commit == "config" else a14_commit
+        self.a15_commit = config.A15_BUILD_COMMIT if a15_commit == "config" else a15_commit
+        self.open_info = {}
         self.m30 = m30
         self.halves = halves
         self._wd = {}
@@ -354,6 +368,7 @@ class Judge:
             self.mode_cfg = {}
         self.holidays = Holidays(self.bytes_at_head("analyst/tables/holidays.csv"))
         self.a14_day = self.a14_from_value()
+        self.a15_day = self.a14_from_value("a15_from")
         self.load_api()
         self.safe("inbox_reads", self.load_inbox)
         self.wit = []
@@ -368,8 +383,11 @@ class Judge:
         self.safe("pushes", self.check_pushes)
         for mode in ("canary", "live"):
             self.safe(f"mode_{mode}", self.check_mode, mode)
+        self.safe("reviews", self.check_reviews)
         self.safe("watching", self.check_watching)
         self.safe("a14_from", self.check_a14_from)
+        self.safe("a15_from", self.check_a15_from)
+        self.safe("lesson_source", self.check_lesson_source)
         self.safe("start", self.check_start)
         self.safe("runs_exports", self.check_runs_exports)
         self.safe("routine_config", self.check_routine_config)
@@ -638,7 +656,11 @@ class Judge:
     def expected_context_schema(self, sha) -> str:
         """R-AN-23 (§16.18 A12): `analyst-context/3` for a repo_head_sha that is the pinned A12 build commit or has it
         as an ancestor, `analyst-context/2` for an earlier one (and for every one while nothing is pinned).
-        (§16.18 A14) `analyst-context/4` for one that is the pinned A14 build commit or descends from it."""
+        (§16.18 A14) `analyst-context/4` for one that is the pinned A14 build commit or descends from it;
+        (§16.18 A15) `analyst-context/5` for the pinned A15 build commit or a descendant (never while it is None)."""
+        c = self.a15_commit
+        if c and self.git.commit_exists(c) and (sha == c or self.git.is_ancestor(c, sha)):
+            return SCHEMA_V5
         b = self.a14_commit
         if b and self.git.commit_exists(b) and (sha == b or self.git.is_ancestor(b, sha)):
             return SCHEMA_V4
@@ -1168,7 +1190,7 @@ class Judge:
         elif status == "missed:trigger" and exp[0] in GATED:
             sw = safe_detail("missed:trigger while", exp[0], "holds")
         got = (status, t.get("detail"))
-        if status in ("called", "stay_out"):
+        if status in ANSWERS:                     # §16.18 A15 (R-AN-36, A1): review_hold and review_close too
             if not cw:
                 self.F.v("A2", "call_without_witness", tr.path, tr.commit, "no accepted call push")
             elif lock is not None and lock > fmt_utc(win.deadline):
@@ -1268,7 +1290,8 @@ class Judge:
             if call.get(k) != v:
                 self.F.v("A5", "call_times", p, c, f"field {k}")
         status = call.get("status")
-        if status not in CALL_STATUSES:
+        if status not in CALL_STATUSES or (status in review.REVIEW_STATUSES and
+                                           (ctx or {}).get("schema") != SCHEMA_V5):
             self.F.v("A5", "call_status", p, c, safe_detail(status))
         if not isinstance(ctx, dict):
             self.F.v("A4", "context_missing", p, c, "")
@@ -1296,14 +1319,17 @@ class Judge:
             self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema, "expected",
                                                                 self.expected_context_schema(R)))
         else:
-            if schema in (SCHEMA_V3, SCHEMA_V4):
+            if schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5):
                 self.check_macro_calendar(R)
             wake = None
-            if schema == SCHEMA_V4:                  # A14 (R-AN-23): the wake of the call's attempt record
+            if schema in (SCHEMA_V4, SCHEMA_V5):     # A14 (R-AN-23): the wake of the call's attempt record
                 arec = self.json_at_head(f"{PREFIX[mode]}attempts/{win.call_id}_{call.get('attempt_n')}.json")
                 wake = arec.get("wake") if isinstance(arec, dict) else None
+            trades, bad_open = self.review_trades(mode, ctx) if schema == SCHEMA_V5 else (None, False)
             rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events,
-                                 schema=schema, wake=wake)
+                                 schema=schema, wake=wake, review_trades=trades, a15_from=self.a15_day)
+            if bad_open:
+                rb.mismatches.append("review.open.call_id")
             if rb.error:
                 self.F.v("A4", "context_unreproducible", p, c, safe_detail("rebuild", rb.error))
             else:
@@ -1314,20 +1340,28 @@ class Judge:
         if schema in CONTEXT_SCHEMAS:
             self.cross_check(p, c, win, ctx)
         # ---- A5: derivable from the plan and the context
+        v3 = schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)                 # A12: analyst-plan/2 from /3
+        v5 = schema == SCHEMA_V5                                          # A15: analyst-plan/3 with /5
         ctx_status = ctx.get("status")
         plan = call.get("plan")
+        rv = ctx.get("review") if v5 else None
         if ctx_status in ("no_call:data", "no_call:d_ref"):
             if status != ctx_status or plan is not None:
                 self.F.v("A5", "status_vs_context", p, c, "a no_call context must give that status and no plan")
-        elif status in ("called", "stay_out"):
-            errs = derive.plan_errors(plan, v3=(schema in (SCHEMA_V3, SCHEMA_V4)))   # A12: analyst-plan/2 from /3
+        elif status in ANSWERS:
+            errs = derive.plan_errors(plan, v3=v3, v5=v5)
             if errs:
                 self.F.v("A5", "plan_invalid", p, c, safe_detail(*errs))
                 derivable = False
             else:
                 act = plan["action"]
-                if (status == "called") != (act in ("buy", "sell")):
+                if derive.status_of_action(act) != status:
                     self.F.v("A5", "status_vs_plan", p, c, "status does not follow from plan.action")
+                # §16.18 A15 (R-AN-26, A15-D18): the action must be one the context allows
+                allowed = rv.get("options") if isinstance(rv, dict) else review.NORMAL_ACTIONS
+                if v5 and (not isinstance(allowed, list) or act not in allowed):
+                    self.F.v("A5", "action_not_allowed", p, c, safe_detail("action", act, "options",
+                                                                           *(allowed or [])))
         dref = ctx.get("d_ref")
         if call.get("d_ref") != dref:
             self.F.v("A5", "d_ref_copy", p, c, "call.d_ref is not context.d_ref")
@@ -1348,8 +1382,13 @@ class Judge:
                 self.F.v("A5", "d_ref_underivable", p, c, "D_ref does not follow from the context")
                 derivable = False
         if status == "called" and derivable and isinstance(plan, dict) and \
-                not derive.plan_errors(plan, v3=(schema in (SCHEMA_V3, SCHEMA_V4))):
+                not derive.plan_errors(plan, v3=v3, v5=v5):
             side = derive.side_of(plan["action"])
+            if plan["action"] in ("reverse", "add"):      # A15 (R-AN-27): from the one trade of review.open
+                op = (rv or {}).get("open") if isinstance(rv, dict) else None
+                sw = derive.side_of(op[0].get("side")) if isinstance(op, list) and len(op) == 1 and \
+                    isinstance(op[0], dict) else 0
+                side = (-sw if plan["action"] == "reverse" else sw) if sw else None
             sd, td = derive.st_dimes(dref["D_ref_cents"], plan["stop_mult"], plan["target_mult"])
             checks = [call.get("side") == side, num_exact(call.get("stop_mult"), float(plan["stop_mult"])),
                       num_exact(call.get("target_mult"), float(plan["target_mult"])),
@@ -1358,12 +1397,12 @@ class Judge:
             if not all(checks):
                 self.F.v("A5", "st_underivable", p, c, "side, multiples, S or T do not follow from plan and D_ref")
                 derivable = False
-        elif status in ("stay_out",) and isinstance(plan, dict):
+        elif status in ("stay_out", "review_hold", "review_close") and isinstance(plan, dict):
             if call.get("side") not in (0, None) or any(call.get(k) is not None for k in
                                                          ("stop_mult", "target_mult", "S", "T", "S_dimes", "T_dimes")):
                 self.F.v("A5", "st_underivable", p, c, "stay_out carries trade fields")
                 derivable = False
-        elif status not in ("called", "stay_out"):
+        elif status not in ANSWERS:
             if any(call.get(k) is not None for k in ("S", "T", "S_dimes", "T_dimes")):
                 self.F.v("A5", "st_underivable", p, c, "a no_call carries S or T")
         req = call.get("request") or {}
@@ -1371,6 +1410,103 @@ class Judge:
             self.F.w("A11", "request_pins", p, c, "request.model_set/effort_set differ from PINS")
         self.check_frozen_selfreport(p, c, call, R)
         return derivable
+
+    # ---------------------------------------------------------------- §16.18 A15: reviews (R-AN-92)
+    def trade_fields(self, mode, cid):
+        """The fields R-AN-92 takes from a trade's call file at main (a `called` call), or None."""
+        if not isinstance(cid, str) or parse_call_id(cid) is None:
+            return None
+        call = self.json_at_head(f"{PREFIX[mode]}calls/{cid}.json")
+        if not isinstance(call, dict) or call.get("status") != "called" or call.get("side") not in (1, -1):
+            return None
+        return {"call_id": cid, "action": (call.get("plan") or {}).get("action"), "side": call["side"],
+                "entry_utc": call.get("entry_utc"), "exit_utc": call.get("exit_utc"), "S": call.get("S"),
+                "T": call.get("T"), "stop_mult": call.get("stop_mult"), "target_mult": call.get("target_mult")}
+
+    def review_trades(self, mode, ctx):
+        """(trades, unresolved): the call-file fields of the trades a `/5` context's `review.open` names, in its
+        order (A4 rebuilds the block from them); [] for a null block."""
+        rv = ctx.get("review")
+        if not isinstance(rv, dict):
+            return [], False
+        op = rv.get("open")
+        out = []
+        for o in op if isinstance(op, list) else []:
+            t = self.trade_fields(mode, o.get("call_id") if isinstance(o, dict) else None)
+            if t is None:
+                return [], True
+            out.append(t)
+        return out, not isinstance(op, list)
+
+    def check_m30r(self, p, c, win, ctx):
+        """R-AN-68 (A15): an `ok` `XAUUSD_M30R` request's bars: their o and c against Dukascopy half hours (A11
+        `td_mismatch`, `td_unchecked`), and against the judge's own fetch for the model day (A15 `m30r_mismatch`)."""
+        f = next((x for x in ctx.get("files") or [] if isinstance(x, dict) and x.get("req") == review.M30R_REQ),
+                 None)
+        bars = review.ok_m30r_bars(f)
+        if not bars:
+            return
+        self.cross_check_m30(p, c, win, bars)
+        own = self.m30.get(win.day) if self.m30 is not None else None
+        rv = ctx.get("review")
+        try:
+            trades = [{"entry_utc": o["entry_utc"]} for o in rv["open"]]
+            a, b = review.m30r_bounds(trades, parse_utc(ctx["asof_utc"]))
+        except (KeyError, TypeError, ValueError):
+            return
+        if own is not None:
+            diffs = watch.m30_compare(bars, own.get("bars"), a, b - HALF)
+            self.summary["m30r_compared"] = self.summary.get("m30r_compared", 0) + 1
+            if diffs:
+                self.F.w("A15", "m30r_mismatch", p, c, safe_detail(len(diffs), "differences", *diffs[:6]))
+
+    def day_windows(self, mode, d):
+        """R-AN-92's input for model day d of a mode, from main: each expected window with its terminal status, its
+        call's plan action and the call_ids its context's `review.open` names."""
+        out = []
+        for win in self.windows.get(mode, []):
+            if win.day != d:
+                continue
+            info = self.terminal_info.get((mode, win.call_id)) or {}
+            call = info.get("call") or {}
+            rv = (call.get("context") or {}).get("review") if isinstance(call.get("context"), dict) else None
+            names = [o.get("call_id") for o in rv.get("open") or [] if isinstance(o, dict)] \
+                if isinstance(rv, dict) and isinstance(rv.get("open"), list) else None
+            out.append({"cid": win.call_id, "entry": win.entry, "exit": win.exit, "status": info.get("status"),
+                        "action": (call.get("plan") or {}).get("action") if isinstance(call.get("plan"), dict)
+                        else None, "names": names, "win": win, "info": info})
+        return out
+
+    def check_reviews(self):
+        """Check A15 `review_open` and `open_cap` (R-AN-67, R-AN-92): every open set of a model day >= a15_from,
+        recomputed from main's terminals and call files, in both modes."""
+        if self.a15_day is None:
+            return
+        for mode in ("canary", "live"):
+            for d in sorted({w.day for w in self.windows.get(mode, []) if self.is_a15(w.day)}):
+                ws = self.day_windows(mode, d)
+                r = review.open_sets(ws)
+                self.open_info[(mode, d)] = (ws, r)
+                big = [w["cid"] for w in ws if len(r.open[w["cid"]]) > 2]
+                if big:
+                    self.F.v("A15", "open_cap", d.isoformat(), mode, safe_detail("windows", *big))
+                for w in ws:
+                    call_r = w["info"].get("call_raw")
+                    call = w["info"].get("call")
+                    if call_r is None or not isinstance(call, dict) or not isinstance(call.get("context"), dict):
+                        continue
+                    O = r.open[w["cid"]]
+                    rv = call["context"].get("review")
+                    if not O:
+                        bad = [] if rv is None else ["review not null"]
+                    elif not isinstance(rv, dict):
+                        bad = ["review null"]
+                    else:
+                        got = [o.get("call_id") for o in rv.get("open") or [] if isinstance(o, dict)]
+                        bad = (["open", *got, "main", *O] if got != O else []) + \
+                            (["options"] if rv.get("options") != review.options(len(O)) else [])
+                    if bad:
+                        self.F.v("A15", "review_open", call_r.path, call_r.commit, safe_detail(*bad[:12]))
 
     def check_frozen_selfreport(self, path, commit, call, R):
         fr = call.get("frozen") or {}
@@ -1388,9 +1524,10 @@ class Judge:
             self.F.w("A11", "frozen_selfreport", path, commit, "self-reported manifest or prompt sha differs")
 
     # ================================================================ A14, watching (§16.18 A14)
-    def a14_from_value(self):
-        """MODE.json `a14_from` at main as a date (R-AN-5), or None (null, or not a weekday date: A14 `a14_from`)."""
-        v = (self.mode_cfg or {}).get("a14_from")
+    def a14_from_value(self, key="a14_from"):
+        """MODE.json `a14_from` (or, §16.18 A15, `a15_from`) at main as a date (R-AN-5), or None (null, or not a
+        weekday date: A14 `a14_from`, A15 `a15_from`)."""
+        v = (self.mode_cfg or {}).get(key)
         if not is_day(v):
             return None
         try:
@@ -1398,6 +1535,10 @@ class Judge:
         except ValueError:
             return None
         return d if d.weekday() < 5 else None
+
+    def is_a15(self, d) -> bool:
+        """Model day d is on or after MODE.json `a15_from` (§16.18 A15)."""
+        return self.a15_day is not None and d >= self.a15_day
 
     def watch_day(self, mode, d):
         """[(win, accepted attempt witnesses in seq order, terminal status at main or None)] of the mode's expected
@@ -1447,7 +1588,7 @@ class Judge:
             return {}
         E, O = self.e_o(mode, win.day, win.check)
         out = {}
-        if O:
+        if O and not self.is_a15(win.day):       # §16.18 A15 (R-AN-39): never `skipped:trade_open` from a15_from
             out["skipped:trade_open"] = O
         if len(E) >= watch.DAY_CAP:
             out["skipped:day_cap"] = len(E)
@@ -1469,6 +1610,12 @@ class Judge:
         for mode in ("canary", "live"):
             for d in sorted({w.day for w in self.windows.get(mode, []) if w.day >= a14}):
                 self.safe(f"wake_missed_{mode}_{d}", self.check_wake_missed, mode, d)
+        # §16.18 A15 (R-AN-68): each `/5` call's `XAUUSD_M30R` bars, after the judge's own fetch
+        for (mode, cid), info in sorted(self.terminal_info.items()):
+            call, call_r = info.get("call"), info.get("call_raw")
+            ctx = call.get("context") if isinstance(call, dict) else None
+            if call_r is not None and isinstance(ctx, dict) and ctx.get("schema") == SCHEMA_V5:
+                self.safe(f"m30r_{mode}_{cid}", self.check_m30r, call_r.path, call_r.commit, info["win"], ctx)
 
     def check_wake_window(self, mode, win):
         """A14 `wake_record` for every `analyst-attempt/2` call attempt (and, from a14_from on, an attempt that is
@@ -1502,6 +1649,8 @@ class Judge:
         p0 = w0.rec.get("path") or "-"
         c0 = self.commit_of(p0)
         E, O = self.e_o(mode, win.day, win.check)
+        if self.is_a15(win.day):
+            O = []                                # §16.18 A15 (R-AN-89): R(T) without step 1, no `trade_open` row
         if win.kind != "trigger":
             if O:
                 self.F.v("A14", "trade_open", p0, c0, safe_detail("open", *O))
@@ -1626,7 +1775,7 @@ class Judge:
                 continue
             E, O = self.e_o(mode, d, t)
             cond = watch.conditions(watch.values_at(bars, d, t), d, t)
-            got = watch.rule(d, t, E, len(O), False, cond)
+            got = watch.rule(d, t, E, 0 if self.is_a15(d) else len(O), False, cond)
             if got[0] == "window" and got[2] == "trigger":
                 self.F.w("A14", "wake_missed", d.isoformat(), got[1], safe_detail(mode, "reason", got[3]))
 
@@ -1648,47 +1797,46 @@ class Judge:
                 best = e["after"]
         return best
 
-    def check_a14_from(self):
-        """A14 `a14_from` (R-AN-5): the value is null or a weekday, set once and never changed; valid iff inbox main at
-        22:00:00Z of the calendar day before it holds the pinned A14 build commit, this MODE.json and a
-        WATCHER_CONFIG.json whose source_commit is the build commit (or a later main commit with the same `watcher/`
-        tree) and whose deployed_utc is at or before that instant; and no W1b, W2b or trigger push accepted for a
-        model day before it."""
+    def check_from_value(self, check, key, day, b, unpinned):
+        """R-AN-5's rule for MODE.json `key` (`a14_from`, §16.18 A14; `a15_from`, §16.18 A15), reported as `check`:
+        null or a weekday, set once and never changed; valid iff inbox main at 22:00:00Z of the calendar day before it
+        holds the pinned build commit b, this MODE.json and a WATCHER_CONFIG.json whose source_commit is b (or a later
+        main commit with the same `watcher/` tree) and whose deployed_utc is at or before that instant. Returns the
+        commit that set it (or None)."""
         path = "analyst/MODE.json"
-        v = self.mode_cfg.get("a14_from")
+        v = self.mode_cfg.get(key)
         set_sha, set_val = None, None
         for sha, _parent, changes in self.log:
             if not any(p == path for _st, p in changes):
                 continue
             m = self.git.show(sha, path)
             try:
-                val = (load_json_bytes(m) or {}).get("a14_from") if m is not None else None
+                val = (load_json_bytes(m) or {}).get(key) if m is not None else None
             except Exception:  # noqa: BLE001
                 val = None
             if set_sha is None and val is not None:
                 set_sha, set_val = sha, val
             elif set_sha is not None and val != set_val:
-                self.F.v("A14", "a14_from", path, sha, safe_detail("changed after it was set", set_val, val))
-        if v is not None and self.a14_day is None:
-            self.F.v("A14", "a14_from", path, set_sha or "-", "not a weekday date")
-        if self.a14_day is not None:
-            d = self.a14_day
+                self.F.v(check, key, path, sha, safe_detail("changed after it was set", set_val, val))
+        if v is not None and day is None:
+            self.F.v(check, key, path, set_sha or "-", "not a weekday date")
+        if day is not None:
+            d = day
             x = dt.datetime(d.year, d.month, d.day, tzinfo=UTC) - dt.timedelta(hours=2)
-            b = self.a14_commit
             if not b:
-                self.F.w("A0", "a14_unpinned", "judge_analyst/jlib/config.py", "-",
-                         "MODE.json sets a14_from but A14_BUILD_COMMIT is not pinned")
+                self.F.w("A0", unpinned, "judge_analyst/jlib/config.py", "-",
+                         f"MODE.json sets {key} but {check}_BUILD_COMMIT is not pinned")
             else:
                 M = self.main_at(x)
                 if M is None:
-                    self.F.w("A0", "a14_from_unverified", path, "-", safe_detail("inbox main unknown at", fmt_utc(x)))
+                    self.F.w("A0", f"{key}_unverified", path, "-", safe_detail("inbox main unknown at", fmt_utc(x)))
                 else:
                     bad = []
                     if not self.git.commit_exists(b) or not self.shows(M, b):
                         bad.append("build commit not on inbox main")
                     mm = self.git.show(M, path)
                     try:
-                        mv = (load_json_bytes(mm) or {}).get("a14_from") if mm is not None else None
+                        mv = (load_json_bytes(mm) or {}).get(key) if mm is not None else None
                     except Exception:  # noqa: BLE001
                         mv = None
                     if mv != v:
@@ -1711,7 +1859,94 @@ class Judge:
                         if not is_utc(wc.get("deployed_utc")) or parse_utc(wc["deployed_utc"]) > x:
                             bad.append("deployed_utc")
                     if bad:
-                        self.F.v("A14", "a14_from", path, set_sha or "-", safe_detail(*bad))
+                        self.F.v(check, key, path, set_sha or "-", safe_detail(*bad))
+        return set_sha
+
+    def check_a15_from(self):
+        """A15 `a15_from` (R-AN-5, R-AN-67): R-AN-5's rule as for a14_from, with the pinned A15 build commit, plus
+        a14_from set and a15_from >= a14_from; and no call with a non-null `review`, no `review_hold` or
+        `review_close` terminal, no canary settled record and no canary twin for a model day before it (or at all
+        while it is null)."""
+        path = "analyst/MODE.json"
+        set_sha = self.check_from_value("A15", "a15_from", self.a15_day, self.a15_commit, "a15_unpinned")
+        if self.a15_day is not None and (self.a14_day is None or self.a15_day < self.a14_day):
+            self.F.v("A15", "a15_from", path, set_sha or "-", safe_detail("a14_from", self.mode_cfg.get("a14_from")))
+
+        def before(cid):
+            pc = parse_call_id(str(cid))
+            return pc is not None and not self.is_a15(pc[0])
+        for mode in ("canary", "live"):
+            for cid, info in sorted((k[1], v) for k, v in self.terminal_info.items() if k[0] == mode):
+                if not before(cid):
+                    continue
+                call = info.get("call") or {}
+                rv = (call.get("context") or {}).get("review") if isinstance(call.get("context"), dict) else None
+                if rv is not None and info.get("call_raw") is not None:
+                    self.F.v("A15", "a15_from", path, info["call_raw"].commit, safe_detail("review", cid))
+                if info.get("status") in review.REVIEW_STATUSES:
+                    self.F.v("A15", "a15_from", path, info["term"].commit, safe_detail(info["status"], cid))
+        for folder in ("analyst/canary/settled/", "analyst/canary/twins/"):
+            for p in self.git.ls_tree(self.head, folder):
+                cid = p.rsplit("/", 1)[-1][:-5]
+                if before(cid) or parse_call_id(cid) is None:
+                    self.F.v("A15", "a15_from", path, self.commit_of(p), safe_detail(folder.split("/")[2], cid))
+
+    FIXTURE = "analyst/tests/fixtures/canary_settled.json"
+
+    def check_lesson_source(self):
+        """A15 `lesson_source` (R-AN-67, R-AN-95): a canary lesson whose lesson attempt was pushed at or after
+        a15_from 00:00:00Z and whose settled record is the synthetic fixture, or a canary lesson of a model day >=
+        a15_from without a canary settled record. Judge decision (README J-D64): a lesson's settled record is the
+        fixture when its settled_sha256 is the fixture's sha256 at main, or is not the sha256 of the canary settled
+        record of its call_id; the attempt's push time is its accepted witness's (server time, else the witness's
+        window time), else the commit time of the lesson file."""
+        if self.a15_day is None:
+            return
+        a15 = dt.datetime(self.a15_day.year, self.a15_day.month, self.a15_day.day, tzinfo=UTC)
+        fx = self.bytes_at_head(self.FIXTURE)
+        fx_sha = sha256_bytes(fx) if fx is not None else None
+        for p in self.git.ls_tree(self.head, "analyst/canary/lessons/"):
+            rec = self.json_at_head(p)
+            if not isinstance(rec, dict):
+                continue
+            cid = rec.get("call_id") if isinstance(rec.get("call_id"), str) else p.rsplit("/", 1)[-1][:-5]
+            sb = self.bytes_at_head(f"analyst/canary/settled/{cid}.json")
+            pc = parse_call_id(cid)
+            c = self.commit_of(p)
+            if pc is not None and self.is_a15(pc[0]) and sb is None:
+                self.F.v("A15", "lesson_source", p, c, safe_detail("no canary settled record", cid))
+                continue
+            ss = rec.get("settled_sha256")
+            fixture = (fx_sha is not None and ss == fx_sha) or sb is None or ss != sha256_bytes(sb)
+            if not fixture:
+                continue
+            ts = None
+            apath = f"analyst/canary/attempts/lesson-{cid}_{rec.get('attempt_n')}.json"
+            for r in self.wits("canary", "attempt", None, "accepted"):
+                if r.rec.get("path") == apath:
+                    push = r.rec.get("push") or {}
+                    ts, _src = self.server_time(push.get("after"), (r.rec.get("run") or {}).get("id"),
+                                                push.get("ref"))
+                    ts = ts or (r.rec.get("window") or {}).get("time_utc") or push.get("activity_utc")
+                    break
+            try:
+                t = parse_utc(ts) if ts else None
+            except ValueError:
+                t = None
+            if t is None:
+                ct = self.git.commit_time(c) if c and c != "-" else None
+                t = dt.datetime.fromtimestamp(ct, UTC) if ct is not None else None
+            if t is not None and t >= a15:
+                self.F.v("A15", "lesson_source", p, c, safe_detail("lesson from the fixture", cid, fmt_utc(t)))
+
+    def check_a14_from(self):
+        """A14 `a14_from` (R-AN-5): the value is null or a weekday, set once and never changed; valid iff inbox main at
+        22:00:00Z of the calendar day before it holds the pinned A14 build commit, this MODE.json and a
+        WATCHER_CONFIG.json whose source_commit is the build commit (or a later main commit with the same `watcher/`
+        tree) and whose deployed_utc is at or before that instant; and no W1b, W2b or trigger push accepted for a
+        model day before it."""
+        path = "analyst/MODE.json"
+        self.check_from_value("A14", "a14_from", self.a14_day, self.a14_commit, "a14_unpinned")
         for r in self.wit:
             w = r.rec
             if w.get("status") != "accepted" or w.get("kind") not in ("attempt", "call"):
@@ -2370,109 +2605,269 @@ class Judge:
         except ValueError:
             self.F.w("A11", "mirror_days", "mirror/system/days.csv", "-", "unreadable")
             return
-        settled = self.records("analyst/settled/")
-        twins_r = self.records("analyst/twins/")
-        trades = []
-        twins = []
-        processed = set()
-        n_checked = 0
-        rows_expected = []
-        live_wins = self.windows.get("live", [])
-        by_day = {}
-        for win in live_wins:
-            info = self.terminal_info.get(("live", win.call_id))
-            if info is None:
-                continue
-            by_day.setdefault(win.day, []).append((win, info))
         store = Store(days, lambda p: self.bytes_at_head(p))
-        for win in live_wins:
-            info = self.terminal_info.get(("live", win.call_id))
+        self._n_checked = 0
+        trades, twins, processed, rows_expected = self.settle_mode("live", days, store)
+        if self.a15_day is not None:            # §16.18 A15 (R-AN-95): canary days >= a15_from settle as live ones
+            self.settle_mode("canary", days, store)
+        self.summary["settled_checked"] = self._n_checked
+        # E path over counted trades (window order; §16.18 A15: one factor per cluster, on its last trade), ledger
+        # and state
+        cl = stats.clusters(trades)
+        epath = stats.e_path(stats.cluster_ys(trades))
+        for t in trades:
+            t["E"] = None
+        for (_c, ts), e in zip(cl, epath):
+            ts[-1]["E"] = e
+        self.check_ledger(rows_expected, trades)
+        self.check_states(trades, twins, processed, rows_expected)
+
+    def settle_mode(self, mode, days, store):
+        """A11 (R-AN-40..47) over one mode's terminal windows in window order: live windows of every day, canary
+        windows of model days >= a15_from only (R-AN-95). Returns (counted trades, final twins, processed days, ledger
+        rows) for live."""
+        pre = PREFIX[mode]
+        settled = self.records(pre + "settled/")
+        twins_r = self.records(pre + "twins/")
+        wins = [w for w in self.windows.get(mode, []) if mode == "live" or self.is_a15(w.day)]
+        trades, twins, rows, processed = [], [], [], set()
+        for d in sorted({w.day for w in wins}):
+            dwins = [w for w in wins if w.day == d]
+            if self.is_a15(d):
+                ok = self.settle_day_a15(mode, d, dwins, days, store, settled, twins_r, rows, trades, twins)
+            else:
+                ok = True
+                for win in dwins:
+                    info = self.terminal_info.get((mode, win.call_id))
+                    if info is None:
+                        ok = False
+                        continue
+                    ok = self.settle_window(win, info, days, store, settled, twins_r, rows, trades, twins) and ok
+                ok = ok and (self.a14_day is None or d < self.a14_day or
+                             self.now >= model_to_utc(dt.datetime(d.year, d.month, d.day) + dt.timedelta(days=1)))
+            # every expected window of d processed; (§16.18 A14-D14) for d >= a14_from also once d's trading ended
+            if ok:
+                processed.add(d)
+        return trades, twins, processed, rows
+
+    def settle_window(self, win, info, days, store, settled, twins_r, rows, trades, twins) -> bool:
+        """One live window of a model day before a15_from (R-AN-40..47 as before §16.18 A15). Returns whether its
+        records exist."""
+        two = (win.day - dt.timedelta(days=1), win.day)
+        for x in two:
+            store.load_day(x)
+        final_inputs = all(days.row(x, s) is not None and days.row(x, s)["status"] in ("ok", "missing")
+                           for x in two for s in ("BID", "ASK"))
+        bad_store = any(m[0] in (two[0].isoformat(), two[1].isoformat()) for m in store.mismatch)
+        processable = final_inputs and not bad_store and self.now >= win.exit
+        mins = settle.Minutes(store, win)
+        void = settle.is_void(days, win.day)
+        sp = f"analyst/settled/{win.call_id}.json"
+        tp = f"analyst/twins/{win.call_id}.json"
+        cls = "counted" if (self.first_day is not None and win.day >= self.first_day) else "shakedown"
+        row = self.ledger_row(win, info, cls)
+        call = info["call"] or {}
+        have = True
+        if info["status"] == "called" and isinstance(call.get("S_dimes"), int):
+            s = call.get("side")
+            out = settle.settle_side(mins, s, call["S_dimes"], call["T_dimes"], void) if processable else None
+            sr = settled.get(sp)
+            have = sr is not None
+            if sr is None:
+                if processable and self.now >= win.exit + SETTLE_GRACE:
+                    self.F.w("A11", "unsettled", sp, "-", "processable trade without a settled record")
+            elif out is None:
+                self.F.w("A11", "settled_unverifiable", sp, sr.commit, "inputs at HEAD not final")
+            else:
+                self._n_checked += 1
+                mm = self.compare_settled(sr, out, mins, s, call, info, cls, days)
+                if mm:
+                    self.F.w("A11", "settled_mismatch", sp, sr.commit, safe_detail(*mm[:12]))
+            if out is not None and sr is not None and cls == "counted" and win.call_id not in self.overlay:
+                trades.append(self.trade_of(win, s, out, 1.0, win.call_id))
+            row.update({"out": out})
+        elif info["status"] == "called":
+            have = f"analyst/settled/{win.call_id}.json" in settled
+        # twin (§16.18 A14: every status but skipped:*)
+        if not str(info["status"]).startswith("skipped:"):
+            tw = settle.twin(mins, void) if processable else None
+            trc = twins_r.get(tp)
+            have = have and trc is not None
+            if trc is None:
+                if processable and self.now >= win.exit + SETTLE_GRACE:
+                    self.F.w("A11", "untwinned", tp, "-", "processed window without a twin")
+            elif tw is not None:
+                mm = self.compare_twin(trc, tw, win, info)
+                if mm:
+                    self.F.w("A11", "twin_mismatch", tp, trc.commit, safe_detail(*mm))
+            if tw is not None and tw[5] == "final":
+                twins.append((win.day, win.w, tw[4]))
+            row["d_W"] = tw[4] if tw else None
+        rows.append(row)
+        return have
+
+    def ledger_row(self, win, info, cls):
+        row = {"call_id": win.call_id, "model_day": win.day.isoformat(), "window": win.w,
+               "terminal_status": info["status"], "status": info["status"], "class": cls,
+               "terminal_sha256": sha256_bytes(info["term"].raw)}
+        if win.call_id in self.overlay:
+            row["status"] = "no_call:model"
+        return row
+
+    @staticmethod
+    def trade_of(win, s, o, wt, cluster):
+        return {"call_id": win.call_id, "model_day": win.day, "w": win.w, "side": s, "y": o["y"], "R": o["R"],
+                "net": o["net_usd"], "stress": o["stress_net_usd"], "cost": o["cost_usd"], "wt": wt,
+                "cluster": cluster}
+
+    def final_at(self, days, d):
+        """The instant the mirror's days.csv has final rows for both sides of UTC day d: the later fetched_utc of the
+        two rows at main (judge decision, README J-D65), or None while either is not final."""
+        rows = [days.row(d, s) for s in ("BID", "ASK")]
+        if not all(r is not None and r["status"] in ("ok", "missing") for r in rows):
+            return None
+        try:
+            return max(parse_utc(r["fetched_utc"]) for r in rows)
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def settle_day_a15(self, mode, d, dwins, days, store, settled, twins_r, rows, trades, twins) -> bool:
+        """R-AN-40 (§16.18 A15-D12): a model day >= a15_from is settled as one unit, in each mode: processable once
+        every expected window of d has a terminal, every `called` one its call file, d's trading has ended and the
+        inputs of d − 1 and d are final. Each `called` window: R-AN-93's managed exit from R-AN-92's open sets,
+        `unmanaged`, `reviews`, x_end_utc, and R-AN-94's weight and cluster over the day's trades; every window but
+        `skipped:*` its twin. A record missing more than 2 weekdays after d's final mirror rows: A15 `unsettled`.
+        Returns whether d was processed (all its records exist)."""
+        pre = PREFIX[mode]
+        two = (d - dt.timedelta(days=1), d)
+        for x in two:
+            store.load_day(x)
+        final_inputs = all(days.row(x, s) is not None and days.row(x, s)["status"] in ("ok", "missing")
+                           for x in two for s in ("BID", "ASK"))
+        bad_store = any(m[0] in (two[0].isoformat(), two[1].isoformat()) for m in store.mismatch)
+        infos = {w.call_id: self.terminal_info.get((mode, w.call_id)) for w in dwins}
+        calls_ok = all(i is None or i["status"] != "called" or
+                       (isinstance(i["call"], dict) and isinstance(i["call"].get("S_dimes"), int) and
+                        i["call"].get("side") in (1, -1)) for i in infos.values())
+        end = model_to_utc(dt.datetime(d.year, d.month, d.day) + dt.timedelta(days=1))
+        processable = final_inputs and not bad_store and all(infos.values()) and calls_ok and self.now >= end
+        ws, r = self.open_info.get((mode, d)) or (None, None)
+        if r is None:
+            ws = self.day_windows(mode, d)
+            r = review.open_sets(ws)
+        void = settle.is_void(days, d)
+        fa = self.final_at(days, d)
+        late = fa is not None and td.weekdays_since(fa.date(), self.now.date()) > 2
+        res = {}
+        if processable:
+            for win in dwins:
+                info = infos[win.call_id]
+                if info["status"] != "called":
+                    continue
+                call = info["call"]
+                m = int(r.managed[win.call_id].timestamp()) if win.call_id in r.managed else None
+                mins = settle.Minutes(store, win)
+                out = settle.settle_side(mins, call["side"], call["S_dimes"], call["T_dimes"], void, m)
+                res[win.call_id] = {"out": out, "m": m, "mins": mins,
+                                    "x_end": settle.x_end(out, mins, m)}
+            wts = review.overlap_weights([(cid, int(next(w for w in dwins if w.call_id == cid).entry.timestamp()),
+                                           x["x_end"]) for cid, x in res.items()])
+            for cid, (wt, cl) in wts.items():
+                res[cid]["weight"], res[cid]["cluster"] = wt, cl
+        have_all = True
+        for win in dwins:
+            info = infos[win.call_id]
             if info is None:
+                have_all = False
                 continue
-            two = (win.day - dt.timedelta(days=1), win.day)
-            for x in two:
-                store.load_day(x)
-            final_inputs = all(days.row(x, s) is not None and days.row(x, s)["status"] in ("ok", "missing")
-                               for x in two for s in ("BID", "ASK"))
-            bad_store = any(m[0] in (two[0].isoformat(), two[1].isoformat()) for m in store.mismatch)
-            processable = final_inputs and not bad_store and self.now >= win.exit
-            mins = settle.Minutes(store, win)
-            void = settle.is_void(days, win.day)
-            sp = f"analyst/settled/{win.call_id}.json"
-            tp = f"analyst/twins/{win.call_id}.json"
-            cls = "counted" if (self.first_day is not None and win.day >= self.first_day) else "shakedown"
-            row = {"call_id": win.call_id, "model_day": win.day.isoformat(), "window": win.w,
-                   "terminal_status": info["status"], "status": info["status"], "class": cls,
-                   "terminal_sha256": sha256_bytes(info["term"].raw)}
-            if win.call_id in self.overlay:
-                row["status"] = "no_call:model"
-            call = info["call"] or {}
-            out = None
-            if info["status"] == "called" and isinstance(call.get("S_dimes"), int):
-                s = call.get("side")
-                out = settle.settle_side(mins, s, call["S_dimes"], call["T_dimes"], void) if processable else None
+            cid = win.call_id
+            sp, tp = f"{pre}settled/{cid}.json", f"{pre}twins/{cid}.json"
+            if mode == "canary":
+                cls = "canary"
+            else:
+                cls = "counted" if (self.first_day is not None and d >= self.first_day) else "shakedown"
+            row = self.ledger_row(win, info, cls)
+            term = info["term"]
+            if info["status"] == "called":
                 sr = settled.get(sp)
+                x = res.get(cid)
                 if sr is None:
-                    if processable and self.now >= win.exit + SETTLE_GRACE:
-                        self.F.w("A11", "unsettled", sp, "-", "processable trade without a settled record")
-                elif out is None:
+                    have_all = False
+                    if late:
+                        self.F.w("A15", "unsettled", term.path, term.commit, safe_detail("no settled record", sp))
+                elif x is None:
                     self.F.w("A11", "settled_unverifiable", sp, sr.commit, "inputs at HEAD not final")
                 else:
-                    n_checked += 1
-                    mm = self.compare_settled(sr, out, mins, s, call, info, cls, days)
+                    self._n_checked += 1
+                    extra = self.settled_extras(cid, x, ws, r)
+                    mm = self.compare_settled(sr, x["out"], x["mins"], info["call"]["side"], info["call"], info,
+                                              cls, days, mode=mode, extra=extra, m=x["m"])
                     if mm:
                         self.F.w("A11", "settled_mismatch", sp, sr.commit, safe_detail(*mm[:12]))
-                if out is not None and sr is not None and cls == "counted" and win.call_id not in self.overlay:
-                    o = out
-                    trades.append({"call_id": win.call_id, "model_day": win.day, "w": win.w, "side": s,
-                                   "y": o["y"], "R": o["R"], "net": o["net_usd"], "stress": o["stress_net_usd"],
-                                   "cost": o["cost_usd"]})
-                row.update({"out": out})
-            # twin (§16.18 A14: every status but skipped:*)
+                    row.update({"out": x["out"], "a15": extra})
+                    if mode == "live" and cls == "counted" and cid not in self.overlay:
+                        trades.append(self.trade_of(win, info["call"]["side"], x["out"], x["weight"],
+                                                    x["cluster"]))
             if not str(info["status"]).startswith("skipped:"):
+                mins = settle.Minutes(store, win)
                 tw = settle.twin(mins, void) if processable else None
                 trc = twins_r.get(tp)
                 if trc is None:
-                    if processable and self.now >= win.exit + SETTLE_GRACE:
-                        self.F.w("A11", "untwinned", tp, "-", "processed window without a twin")
+                    have_all = False
+                    if late:
+                        self.F.w("A15", "unsettled", term.path, term.commit, safe_detail("no twin", tp))
                 elif tw is not None:
-                    mm = self.compare_twin(trc, tw, win, info)
+                    mm = self.compare_twin(trc, tw, win, info, mode)
                     if mm:
                         self.F.w("A11", "twin_mismatch", tp, trc.commit, safe_detail(*mm))
                 if tw is not None and tw[5] == "final":
                     twins.append((win.day, win.w, tw[4]))
                 row["d_W"] = tw[4] if tw else None
-            rows_expected.append(row)
-        for d, lst in by_day.items():
-            ok = True
-            for win, info in lst:
-                if str(info["status"]).startswith("skipped:"):
-                    continue
-                if f"analyst/twins/{win.call_id}.json" not in twins_r:
-                    ok = False
-                if info["status"] == "called" and f"analyst/settled/{win.call_id}.json" not in settled:
-                    ok = False
-            # every expected window of d processed; (§16.18 A14-D14) for d >= a14_from also once d's trading ended
-            n_exp = sum(1 for w in live_wins if w.day == d)
-            if ok and len(lst) == n_exp and (self.a14_day is None or d < self.a14_day or
-                                              self.now >= model_to_utc(dt.datetime(d.year, d.month, d.day) +
-                                                                       dt.timedelta(days=1))):
-                processed.add(d)
-        self.summary["settled_checked"] = n_checked
-        # E path over counted trades (window order), ledger and state
-        ys = [t["y"] for t in trades]
-        epath = stats.e_path(ys)
-        for t, e in zip(trades, epath):
-            t["E"] = e
-        self.check_ledger(rows_expected, trades)
-        self.check_states(trades, twins, processed, rows_expected)
+            rows.append(row)
+        return processable and have_all
 
-    def compare_settled(self, sr, out, mins, s, call, info, cls, days):
+    def settled_extras(self, cid, x, ws, r):
+        """R-AN-93's new fields of trade cid: managed_utc, closed_by, x_end_utc, weight, cluster, unmanaged, reviews."""
+        closer = r.closed_by.get(cid)
+        un = None
+        if closer is not None:
+            info = next(w["info"] for w in ws if w["cid"] == cid)
+            call = info["call"]
+            un = settle.public(settle.settle_side(x["mins"], call["side"], call["S_dimes"], call["T_dimes"],
+                                                  x["out"]["status"] == "void"))
+        revs = []
+        for w in ws:
+            if cid in r.open.get(w["cid"], []):
+                plan = (w["info"].get("call") or {}).get("plan")
+                plan = plan if isinstance(plan, dict) else {}
+                revs.append({"call_id": w["cid"], "status": w["info"].get("status"), "action": plan.get("action"),
+                             "confidence": plan.get("confidence"), "reason_ar": plan.get("reason_ar")})
+        return {"managed_utc": fmt_utc(r.managed[cid]) if closer else None, "closed_by": closer,
+                "x_end_utc": fmt_utc(dt.datetime.fromtimestamp(x["x_end"], UTC)), "weight": x["weight"],
+                "cluster": x["cluster"], "unmanaged": un, "reviews": revs}
+
+    def compare_settled(self, sr, out, mins, s, call, info, cls, days, mode="live", extra=None, m=None):
+        """A11 on one settled record. (§16.18 A15) extra: R-AN-93's new fields as recomputed (a model day >=
+        a15_from: `analyst-settled/2`), m: the managed minute for `opposite` and the path summary."""
         r = sr.rec if isinstance(sr.rec, dict) else {}
         mm = []
         if sr.raw != record_form(r):
             mm.append("record_form")
-        exp_fixed = {"schema": "analyst-settled/1", "call_id": info["win"].call_id, "mode": "live",
+        if extra is not None:
+            if set(r) != SETTLED2_KEYS:
+                mm.append("keys")
+            for k in ("managed_utc", "closed_by", "x_end_utc", "cluster", "reviews"):
+                if r.get(k) != extra[k]:
+                    mm.append(k)
+            if not num_exact(r.get("weight"), extra["weight"]):
+                mm.append("weight")
+            if extra["unmanaged"] is None:
+                if r.get("unmanaged") is not None:
+                    mm.append("unmanaged")
+            else:
+                mm += [f"unmanaged.{x}" for x in _cmp_outcome(r.get("unmanaged"), extra["unmanaged"])]
+        exp_fixed = {"schema": "analyst-settled/2" if extra is not None else "analyst-settled/1",
+                     "call_id": info["win"].call_id, "mode": mode,
                      "window": info["win"].w, "model_day": info["win"].day.isoformat(), "class": cls,
                      "action": (call.get("plan") or {}).get("action"), "side": s,
                      "S_dimes": call.get("S_dimes"), "T_dimes": call.get("T_dimes"),
@@ -2496,9 +2891,9 @@ class Judge:
         if any(not (rc.get(k) == v or num_exact(rc.get(k), v)) for k, v in want_call.items()):
             mm.append("call")
         mm += [f"outcome.{x}" for x in _cmp_outcome(r.get("outcome"), out)]
-        opp = settle.settle_side(mins, -s, call["S_dimes"], call["T_dimes"], out["status"] == "void")
+        opp = settle.settle_side(mins, -s, call["S_dimes"], call["T_dimes"], out["status"] == "void", m)
         mm += [f"opposite.{x}" for x in _cmp_outcome(r.get("opposite"), opp)]
-        ps = settle.path_summary(mins, s, out)
+        ps = settle.path_summary(mins, s, out, m)
         if ps is not None:
             mm += [f"path_summary.{x}" for x in _cmp_path(r.get("path_summary"), ps)]
         inp = r.get("inputs") or {}
@@ -2524,11 +2919,11 @@ class Judge:
             mm.append("head_sha")
         return mm
 
-    def compare_twin(self, trc, tw, win, info):
+    def compare_twin(self, trc, tw, win, info, mode="live"):
         r = trc.rec if isinstance(trc.rec, dict) else {}
         mm = []
         me, mes, mx, mxs, dW, status = tw
-        want = {"schema": "analyst-twin/1", "call_id": win.call_id, "mode": "live", "window": win.w,
+        want = {"schema": "analyst-twin/1", "call_id": win.call_id, "mode": mode, "window": win.w,
                 "model_day": win.day.isoformat(), "terminal_status": info["status"], "entry_utc": fmt_utc(win.entry),
                 "exit_utc": fmt_utc(win.exit), "status": status}
         for k, v in want.items():
@@ -2569,6 +2964,10 @@ class Judge:
             return
         by = {r.get("call_id"): r for r in led}
         tno = {t["call_id"]: (i + 1, t) for i, t in enumerate(trades)}
+        nw, cum = {}, 0.0
+        for t in trades:                         # §16.18 A15 (R-AN-58): n_w, the cumulative weight through the row
+            cum += stats.wt(t)
+            nw[t["call_id"]] = cum
         bad = []
         # the ledger is a snapshot: compare the windows whose terminal existed at its last commit
         known = self.terminals_at_last_change("analyst/ledger.csv")
@@ -2582,16 +2981,25 @@ class Judge:
             for k in ("model_day", "window", "terminal_status", "status", "terminal_sha256"):
                 if lr.get(k, "") != str(row[k]):
                     bad.append(f"{row['call_id']}:{k}")
+            a15 = self.is_a15(dt.date.fromisoformat(row["model_day"]))
             if row["call_id"] in tno:
                 i, t = tno[row["call_id"]]
-                if lr.get("trade_no") != str(i) or not rel_eq(_f(lr.get("E")), t["E"]) or \
-                        not rel_eq(_f(lr.get("y")), t["y"]):
+                # §16.18 A15: E on the row of each cluster's last counted trade only (every trade before a15_from is
+                # its own cluster); n_w on the rows of model days >= a15_from
+                e_ok = rel_eq(_f(lr.get("E")), t["E"]) if t["E"] is not None else lr.get("E", "") == ""
+                if lr.get("trade_no") != str(i) or not e_ok or not rel_eq(_f(lr.get("y")), t["y"]) or \
+                        (a15 and not rel_eq(_f(lr.get("n_w")), nw[t["call_id"]])):
                     bad.append(f"{row['call_id']}:trade")
             elif lr.get("trade_no", "") != "":
                 bad.append(f"{row['call_id']}:trade_no")
             o = row.get("out")
             if o is not None and not rel_eq(_f(lr.get("net_usd")), o["net_usd"]):
                 bad.append(f"{row['call_id']}:net_usd")
+            x = row.get("a15")
+            if a15 and x is not None:             # R-AN-58 (A15): weight, cluster, x_end_utc, closed_by
+                if not num_exact(_f(lr.get("weight")), x["weight"]) or lr.get("cluster") != x["cluster"] or \
+                        lr.get("x_end_utc") != x["x_end_utc"] or lr.get("closed_by", "") != (x["closed_by"] or ""):
+                    bad.append(f"{row['call_id']}:a15")
             if row.get("d_W") is not None and not rel_eq(_f(lr.get("d_W")), row["d_W"]):
                 bad.append(f"{row['call_id']}:d_W")
         if bad:
@@ -2634,15 +3042,18 @@ class Judge:
         bad = []
         lpd = S.get("last_processed_day")
         upto = [t for t in trades if lpd and t["model_day"].isoformat() <= lpd]
-        if S.get("n") != len(upto):
+        if not num_exact(S.get("n"), stats.n_weighted(upto)):      # §16.18 A15: the weighted count
             bad.append("n")
-        if not rel_eq(S.get("E"), stats.e_value([t["y"] for t in upto])):
+        if S.get("schema") == "analyst-state/2" and (S.get("n_trades") != len(upto) or
+                                                     S.get("n_clusters") != len(stats.clusters(upto))):
+            bad.append("n_trades")
+        if not rel_eq(S.get("E"), stats.e_trades(upto)):
             bad.append("E")
         if S.get("E_star") not in (400, 400.0):
             bad.append("E_star")
         promo = [r.rec.get("model_day") for r in evs if r.rec.get("event") == "PROMOTED"]
-        post = [t["y"] for t in upto if promo and t["model_day"].isoformat() > promo[0]]
-        if not rel_eq(S.get("K"), stats.k_value(post) if promo else 1.0):
+        post = [t for t in upto if promo and t["model_day"].isoformat() > promo[0]]
+        if not rel_eq(S.get("K"), stats.k_trades(post) if promo else 1.0):
             bad.append("K")
         if (S.get("first_day") or None) != (self.first_day.isoformat() if self.first_day else None):
             bad.append("first_day")
@@ -2652,7 +3063,7 @@ class Judge:
         if S.get("state") != want_state:
             bad.append("state")
         if upto:
-            share = max(sum(1 for t in upto if t["side"] == 1), sum(1 for t in upto if t["side"] == -1)) / len(upto)
+            share = stats.side_share(upto)
             if not rel_eq(S.get("side_share"), share) or S.get("side_label") != (share > 0.85):
                 bad.append("side_share")
         known = self.terminals_at_last_change("analyst/STATE.json")

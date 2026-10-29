@@ -16,7 +16,7 @@ import datetime as dt
 import json
 import math
 
-from . import derive, levels, td, ticks, watch
+from . import derive, levels, review, td, ticks, watch
 from .clock import MACRO_PATH, Window, model_to_utc, to_server, weekday_before
 from .common import (UTC, fmt_server, fmt_utc, fmt_utc_ms, load_json_bytes, parse_utc, price_eq, rel_eq,
                      sha256_bytes, utc_ms)
@@ -25,8 +25,9 @@ from .m1 import DaysTable, Store
 SCHEMA_V2 = "analyst-context/2"
 SCHEMA_V3 = "analyst-context/3"          # §16.18 A12 (R-AN-23)
 SCHEMA_V4 = "analyst-context/4"          # §16.18 A14 (R-AN-23): /3 plus `wake` right after `levels`
+SCHEMA_V5 = "analyst-context/5"          # §16.18 A15 (R-AN-23): /4 plus `review` right after `wake`
 SCHEMA = SCHEMA_V2
-SCHEMAS = (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4)
+SCHEMAS = (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)
 KEY_ORDER_V2 = ("schema", "call_id", "mode", "window", "model_day", "entry_utc", "exit_utc", "deadline_utc",
                 "entry_server", "exit_server", "asof_utc", "repo_head_sha", "params", "store", "files", "bars_h1",
                 "bars_d1", "p_ref", "fx", "us2y", "fresh", "sources", "events", "d_ref", "memory", "status", "detail")
@@ -36,18 +37,23 @@ KEY_ORDER_V3 = KEY_ORDER_V2[:KEY_ORDER_V2.index("fx") + 1] + ("risk",) + \
     KEY_ORDER_V2[KEY_ORDER_V2.index("d_ref") + 1:]
 KEY_ORDER_V4 = KEY_ORDER_V3[:KEY_ORDER_V3.index("levels") + 1] + ("wake",) + \
     KEY_ORDER_V3[KEY_ORDER_V3.index("levels") + 1:]
+KEY_ORDER_V5 = KEY_ORDER_V4[:KEY_ORDER_V4.index("wake") + 1] + ("review",) + \
+    KEY_ORDER_V4[KEY_ORDER_V4.index("wake") + 1:]
 CONTEXT_KEYS = set(KEY_ORDER_V2)
-HIST_WEEKDAYS = {SCHEMA_V2: 10, SCHEMA_V3: 25, SCHEMA_V4: 25}     # bars_d1 (R-AN-17); /3: from start_lv (R-AN-14)
+HIST_WEEKDAYS = {SCHEMA_V2: 10, SCHEMA_V3: 25, SCHEMA_V4: 25, SCHEMA_V5: 25}     # bars_d1 (R-AN-17); /3: from start_lv (R-AN-14)
 RISK_KEYS = {"pair", "p0", "p1", "pct", "t0_hour_utc", "t1_hour_utc"}
 
 
 def context_keys(schema: str) -> tuple:
     """The context's keys in the register's order (R-AN-23) for `schema`."""
-    return {SCHEMA_V3: KEY_ORDER_V3, SCHEMA_V4: KEY_ORDER_V4}.get(schema, KEY_ORDER_V2)
+    return {SCHEMA_V3: KEY_ORDER_V3, SCHEMA_V4: KEY_ORDER_V4, SCHEMA_V5: KEY_ORDER_V5}.get(schema, KEY_ORDER_V2)
 
 
 def sources_block(schema: str) -> dict:
-    """R-AN-23's `sources`: /2, /3 (A12-D21) and /4 (A14: the /3 note followed by the wake sentence)."""
+    """R-AN-23's `sources`: /2, /3 (A12-D21), /4 (A14: the /3 note followed by the wake sentence) and /5 (A15: the
+    /4 note followed by the review sentence)."""
+    if schema == SCHEMA_V5:
+        return dict(td.SOURCES_V3, note=td.SOURCES_V3["note"] + watch.WAKE_NOTE + review.NOTE)
     if schema == SCHEMA_V4:
         return dict(td.SOURCES_V3, note=td.SOURCES_V3["note"] + watch.WAKE_NOTE)
     return td.SOURCES_V3 if schema == SCHEMA_V3 else td.SOURCES
@@ -95,23 +101,32 @@ def _json_at(git, commit, path):
         return None
 
 
-def playbook_in_force(git, commit, prefix: str, d: dt.date):
-    """R-AN-50: the largest k with k = 0 or a `written` revisions record of version k with effective_from <= d."""
+def playbook_in_force(git, commit, prefix: str, d: dt.date, since: dt.date | None = None):
+    """R-AN-50: the largest k with k = 0 or a `written` revisions record of version k with effective_from <= d.
+    (§16.18 A15) since: the canary's a15_from, which effective_from must also reach; the canary's v0 is
+    `analyst/playbooks/v0.md`."""
     k_best = 0
     for p in git.ls_tree(commit, prefix + "revisions/"):
         rec = _json_at(git, commit, p)
         if not isinstance(rec, dict):
             continue
         if rec.get("status") == "written" and isinstance(rec.get("version"), int) and \
-                isinstance(rec.get("effective_from"), str) and rec["effective_from"] <= d.isoformat():
+                isinstance(rec.get("effective_from"), str) and rec["effective_from"] <= d.isoformat() and \
+                (since is None or rec["effective_from"] >= since.isoformat()):
             k_best = max(k_best, rec["version"])
     path = f"{prefix}playbooks/v{k_best}.md"
+    if since is not None and k_best == 0:
+        path = "analyst/playbooks/v0.md"
     b = git.show(commit, path)
     return k_best, path, b
 
 
-def build_memory(git, commit, d: dt.date):
-    prefix = "analyst/"
+def build_memory(git, commit, d: dt.date, canary_from: dt.date | None = None, side: bool = False):
+    """R-AN-22's memory from the live records at `commit`. (§16.18 A15) canary_from: a canary memory (R-AN-95) from
+    the canary records, with a15_from = canary_from: lessons only with a canary settled record, pending only from
+    model days >= a15_from, the canary playbook in force. side: `analyst-context/5`'s `side` in the settled and
+    pending entries."""
+    prefix = "analyst/" if canary_from is None else "analyst/canary/"
     settled = []
     for p in git.ls_tree(commit, prefix + "settled/"):
         rec = _json_at(git, commit, p)
@@ -120,40 +135,44 @@ def build_memory(git, commit, d: dt.date):
         if rec.get("model_day", "") >= d.isoformat():
             continue
         out = rec.get("outcome") or {}
-        settled.append({"call_id": rec["call_id"], "action": rec.get("action"), "stop_mult": rec.get("stop_mult"),
+        settled.append({"call_id": rec["call_id"], "action": rec.get("action"), **({"side": rec.get("side")}
+                                                                                    if side else {}),
+                        "stop_mult": rec.get("stop_mult"),
                         "target_mult": rec.get("target_mult"), "S": rec.get("S"), "T": rec.get("T"),
                         "reason": out.get("reason"), "R": out.get("R"), "R_stress": out.get("R_stress"),
                         "class": rec.get("class"), "_reason_ar": (rec.get("call") or {}).get("reason_ar")})
     settled.sort(key=lambda r: window_order_key(r["call_id"]))
     settled = settled[-20:]
+    settled_ids = {p.rsplit("/", 1)[-1][:-5] for p in git.ls_tree(commit, prefix + "settled/")}
     lessons = []
     for p in git.ls_tree(commit, prefix + "lessons/"):
         rec = _json_at(git, commit, p)
-        if isinstance(rec, dict) and rec.get("status") == "ok" and isinstance(rec.get("call_id"), str):
+        if isinstance(rec, dict) and rec.get("status") == "ok" and isinstance(rec.get("call_id"), str) and \
+                (canary_from is None or rec["call_id"] in settled_ids):
             lessons.append({"call_id": rec["call_id"], "text_ar": rec.get("text_ar")})
     lessons.sort(key=lambda r: window_order_key(r["call_id"]))
     lessons = lessons[-30:]
-    settled_ids = {p.rsplit("/", 1)[-1][:-5] for p in git.ls_tree(commit, prefix + "settled/")}
     pending = []
     for p in git.ls_tree(commit, prefix + "terminal/"):
         rec = _json_at(git, commit, p)
         if not isinstance(rec, dict) or rec.get("status") != "called":
             continue
         cid = rec.get("call_id")
-        if cid in settled_ids:
+        if cid in settled_ids or (canary_from is not None and str(rec.get("model_day")) < canary_from.isoformat()):
             continue
         call = _json_at(git, commit, f"{prefix}calls/{cid}.json") or {}
-        pending.append({"call_id": cid, "action": (call.get("plan") or {}).get("action")})
+        pending.append({"call_id": cid, "action": (call.get("plan") or {}).get("action"),
+                        **({"side": call.get("side")} if side else {})})
     pending.sort(key=lambda r: window_order_key(r["call_id"]))
     pending = pending[-5:]
-    k, path, b = playbook_in_force(git, commit, prefix, d)
+    k, path, b = playbook_in_force(git, commit, prefix, d, canary_from)
     playbook = {"version": k, "sha256": sha256_bytes(b) if b is not None else None,
                 "text": b.decode("utf-8") if b is not None else None}
     return {"settled": settled, "lessons": lessons, "pending": pending, "playbook": playbook,
             "header": MEMORY_HEADER}
 
 
-def compare_memory(exp, rec, out, base="memory"):
+def compare_memory(exp, rec, out, base="memory", side=False):
     if exp is None or rec is None:
         if not (exp is None and rec is None):
             out.append(base)
@@ -168,11 +187,12 @@ def compare_memory(exp, rec, out, base="memory"):
         out.append(base + ".settled")
     else:
         for i, (a, b) in enumerate(zip(es, rs)):
-            keys = {"call_id", "action", "stop_mult", "target_mult", "S", "T", "reason", "R", "R_stress", "class"}
+            keys = {"call_id", "action", "stop_mult", "target_mult", "S", "T", "reason", "R", "R_stress", "class"} | \
+                ({"side"} if side else set())
             if not isinstance(b, dict) or set(b.keys()) != keys:
                 out.append(f"{base}.settled[{i}].keys")
                 continue
-            for k in ("call_id", "action", "class"):
+            for k in ("call_id", "action", "class") + (("side",) if side else ()):
                 if a[k] != b[k]:
                     out.append(f"{base}.settled[{i}].{k}")
             for k in ("stop_mult", "target_mult", "S", "T", "R", "R_stress"):
@@ -201,16 +221,20 @@ def compare_memory(exp, rec, out, base="memory"):
 
 
 def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, events,
-                    schema: str = SCHEMA_V2, wake=None) -> Rebuild:
+                    schema: str = SCHEMA_V2, wake=None, review_trades=None, a15_from=None) -> Rebuild:
     """Build the judge's expected context for a recorded context `rec` (its asof_utc, repo_head_sha and files list are
     the inputs; everything else is recomputed). `hours` is unused since §16.18 A9 (the Dukascopy downloads serve
     td_cross_check only); the parameter is kept for the callers. `schema` is the schema the call's repo_head_sha
     requires (R-AN-23, §16.18 A12): `analyst-context/3` adds the AUDJPY request, `risk`, `levels` and the
     25-weekday `bars_d1`. (§16.18 A14) `analyst-context/4` adds `wake`, rebuilt from `wake` (the call attempt
-    record's, R-AN-90), and reads D_ref's rows from `mirror/system/forecasts.csv` (every slot, R-AN-21)."""
+    record's, R-AN-90), and reads D_ref's rows from `mirror/system/forecasts.csv` (every slot, R-AN-21).
+    (§16.18 A15) `analyst-context/5` adds `review`, rebuilt from `review_trades` (the call files' fields of the trades
+    the recorded `review.open` names, in its order; None or [] for a null block) and the recorded `XAUUSD_M30R`
+    bars, the request after `fresh`; a canary context of a model day >= a15_from has the canary memory."""
     rb = Rebuild()
-    v4 = schema == SCHEMA_V4
-    v3 = schema in (SCHEMA_V3, SCHEMA_V4)
+    v5 = schema == SCHEMA_V5
+    v4 = schema in (SCHEMA_V4, SCHEMA_V5)
+    v3 = schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)
     win = Window(*_parse(call_id))
     d = win.day
     asof_s = rec.get("asof_utc")
@@ -289,6 +313,10 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
         if v3:                                   # A12: AUDJPY after USD/CHF, in the pairs' form
             plan.append((td.RISK_PAIR, td.hourly_url(td.RISK_PAIR, t0, h_new + HOUR), {fmt_utc(t0), fmt_utc(h_new)}))
         plan.append(("fresh", td.FRESH_URL, None))
+        # A15 (R-AN-92): `XAUUSD_M30R` last, iff O(R) is not empty and some trade's entry + 30 min <= asof_utc
+        if v5 and review_trades and review.m30r_needed(review_trades, asof):
+            a, b = review.m30r_bounds(review_trades, asof)
+            plan.append((review.M30R_REQ, (a, b), "M30R"))
     e["_plan"] = [x[0] for x in plan]
     e["_listed"] = [fmt_utc(h) for h in listed]
     e["_t0"], e["_h_new"] = fmt_utc(t0), fmt_utc(h_new)
@@ -317,7 +345,9 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
             name, url, hrs = plan[i]
         else:
             name, url, hrs = (req, None, set())
-        for why in td.provenance_problems(f, name, url, hrs, asof):
+        probs = review.m30r_problems(f, url[0], url[1], asof) if hrs == "M30R" else \
+            td.provenance_problems(f, name, url, hrs, asof)
+        for why in probs:
             rb.file_problems.append((i, why))
         if isinstance(req, str) and req not in by_req:
             by_req[req] = f
@@ -457,7 +487,12 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
     e["_dref_detail"] = dref_detail
 
     # ---- memory
-    e["memory"] = build_memory(git, R, d) if mode == "live" else None
+    if mode == "live":
+        e["memory"] = build_memory(git, R, d, side=v5)
+    elif v5 and a15_from is not None and d >= a15_from:            # A15 (R-AN-95): the canary's own memory
+        e["memory"] = build_memory(git, R, d, canary_from=a15_from, side=True)
+    else:
+        e["memory"] = None
 
     # ---- status
     if rb.data_details:
@@ -479,6 +514,9 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
             e["_levels_hist"] = (u["asia"] or {}).get("hist")
     if v4:                                       # A14 (R-AN-23): the wake, whatever the status
         e["wake"] = watch.wake_block(wake, win)
+    if v5:                                       # A15 (R-AN-92): the review, whatever the status
+        m30r = by_req.get(review.M30R_REQ) if review.M30R_REQ in e["_plan"] else None
+        e["review"] = review.review_block(review_trades or [], win.entry, review.ok_m30r_bars(m30r))
     return rb
 
 
@@ -507,8 +545,9 @@ def compare_context(rb: Rebuild, rec: dict) -> list:
     """Field paths where the recorded context differs from the rebuild beyond R-AN-68 (A4)."""
     out = list(rb.mismatches)
     e = rb.expected
-    v3 = e["schema"] in (SCHEMA_V3, SCHEMA_V4)
-    v4 = e["schema"] == SCHEMA_V4
+    v3 = e["schema"] in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)
+    v4 = e["schema"] in (SCHEMA_V4, SCHEMA_V5)
+    v5 = e["schema"] == SCHEMA_V5
     if set(rec.keys()) != set(context_keys(e["schema"])):
         out.append("keys")
     for k in ("schema", "call_id", "mode", "window", "model_day", "entry_utc", "exit_utc", "deadline_utc",
@@ -525,6 +564,8 @@ def compare_context(rb: Rebuild, rec: dict) -> list:
         out.append("events")
     if v4:
         out += watch.compare_wake(e["wake"], rec.get("wake"))
+    if v5:
+        out += review.compare_review(e["review"], rec.get("review"))
     status = rec.get("status")
     detail = rec.get("detail")
     rs, es = e["_rec_seq"], e["_plan"]
@@ -566,7 +607,7 @@ def compare_context(rb: Rebuild, rec: dict) -> list:
     if v3:
         _cmp_risk(e["risk"], rec.get("risk"), out)
         _cmp_levels(e, rec, out)
-    compare_memory(e["memory"], rec.get("memory"), out)
+    compare_memory(e["memory"], rec.get("memory"), out, side=v5)
     return out
 
 
