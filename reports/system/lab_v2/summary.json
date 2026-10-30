@@ -1,6 +1,6 @@
 {
  "version": 2,
- "asof_utc": "2026-10-29T16:15:35Z",
+ "asof_utc": "2026-10-30T10:04:27Z",
  "state": "RUNNING",
  "halted": false,
  "halt_reasons": [],
@@ -55,7 +55,7 @@
    "net_avg": null,
    "mean_R": null,
    "mu_bar": null,
-   "flow_values_before_today": 153,
+   "flow_values_before_today": 154,
    "warmup": true,
    "waits_for_lookback": false
   },
