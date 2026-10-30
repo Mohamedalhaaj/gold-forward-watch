@@ -4,7 +4,7 @@
 
 **الحكم: تحذير** · السبب: سعر مصدر مستقل يخالف البيانات
 
-- وقت الفحص: 2026-10-30T15:59:18Z
+- وقت الفحص: 2026-10-30T18:34:31Z
 - الفحوص السليمة 7 من 9، ولم يُتحقق من 1
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `690254163321a53d56e1de5392bbdf69e9afd2b4`
+- HEAD checked: `d0616a2943a1e6cbcfbb850b3d13ec727a5a1bbf`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-10-30T15:59:18Z; data root repo
+- judge run 2026-10-30T18:34:31Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 58 (checked now: 58); older days sampled: 20; sides compared equal: 25; revised: 0; known revisions: 0; unverified downloads: 131
-- unverified: 131 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 46 (checked now: 46); older days sampled: 20; sides compared equal: 31; revised: 0; known revisions: 0; unverified downloads: 101
+- unverified: 101 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -58,7 +58,7 @@
 - raw folders: 16 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
 - v1 append-only files: 15 files, 26 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 4 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 25 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 26 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -86,9 +86,9 @@
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 73c4f965c6c2 is an ancestor of HEAD 690254163321
-- the published VolMapJudge.csv head 73c4f965c6c2 is an ancestor of HEAD 690254163321
-- the deployed VolMapJudge.csv head 73c4f965c6c2 is an ancestor of HEAD 690254163321
+- the previous VERDICTS.csv row head 690254163321 is an ancestor of HEAD d0616a2943a1
+- the published VolMapJudge.csv head 690254163321 is an ancestor of HEAD d0616a2943a1
+- the deployed VolMapJudge.csv head 690254163321 is an ancestor of HEAD d0616a2943a1
 
 ### J9: WARNING
 
