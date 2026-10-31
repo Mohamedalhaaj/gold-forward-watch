@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-10-31T15:43Z",
+ "updated_utc": "2026-10-31T19:56Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
@@ -91,8 +91,8 @@
     },
     {
      "day": "2026-10-30",
-     "net": 15.05,
-     "trades": 2
+     "net": 24.22,
+     "trades": 3
     }
    ],
    "trades": [
@@ -865,19 +865,33 @@
      "reason": "target",
      "net": "8.56",
      "recorded_at": "2026-10-30T20:44Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-10-30",
+     "fill_time": "2026-10-30 05:15",
+     "fill": 4022.76,
+     "stop": 4033.12,
+     "target": 4013.34,
+     "exit_time": "2026-10-30 05:30",
+     "exit": 4013.34,
+     "reason": "target",
+     "net": 9.17,
+     "recorded_at": "2026-10-31T19:56Z"
     }
    ],
    "stats": {
     "days": 10,
-    "total": 130.27,
-    "avg_day": 13.03,
+    "total": 139.44,
+    "avg_day": 13.94,
     "days_pos": 0.7,
     "best_day": 44.57,
     "worst_day": -15.39,
-    "t": 2.15,
-    "p": 0.0157,
-    "trades": 55,
-    "win": 0.691
+    "t": 2.27,
+    "p": 0.0117,
+    "trades": 56,
+    "win": 0.696
    }
   },
   "causal_M30": {
@@ -1431,8 +1445,8 @@
     },
     {
      "day": "2026-10-30",
-     "net": 8.56,
-     "trades": 1
+     "net": 17.73,
+     "trades": 2
     }
    ],
    "trades": [
@@ -1911,19 +1925,33 @@
      "reason": "target",
      "net": "8.56",
      "recorded_at": "2026-10-30T20:44Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-10-30",
+     "fill_time": "2026-10-30 05:15",
+     "fill": 4022.76,
+     "stop": 4033.12,
+     "target": 4013.34,
+     "exit_time": "2026-10-30 05:30",
+     "exit": 4013.34,
+     "reason": "target",
+     "net": 9.17,
+     "recorded_at": "2026-10-31T19:56Z"
     }
    ],
    "stats": {
     "days": 10,
-    "total": 48.24,
-    "avg_day": 4.82,
+    "total": 57.41,
+    "avg_day": 5.74,
     "days_pos": 0.7,
     "best_day": 31.05,
     "worst_day": -23.48,
-    "t": 1.11,
-    "p": 0.1333,
-    "trades": 34,
-    "win": 0.588
+    "t": 1.27,
+    "p": 0.1022,
+    "trades": 35,
+    "win": 0.6
    }
   },
   "strict_M30": {
