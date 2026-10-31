@@ -1,11 +1,11 @@
 {
- "updated_utc": "2026-10-30T20:44Z",
+ "updated_utc": "2026-10-31T02:42Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-10-30 23:34",
- "last_price": 3885.5,
+ "last_price_time_server": "2026-10-30 23:59",
+ "last_price": 3884.9,
  "days_done": 10,
  "in_sample": {
   "causal_M15": {
@@ -843,13 +843,13 @@
      "tf": "M15",
      "day": "2026-10-30",
      "fill_time": "2026-10-30 01:00",
-     "fill": 4036.73,
-     "stop": 4044.14,
-     "target": 4029.99,
+     "fill": "4036.73",
+     "stop": "4044.14",
+     "target": "4029.99",
      "exit_time": "2026-10-30 01:15",
-     "exit": 4029.99,
+     "exit": "4029.99",
      "reason": "target",
-     "net": 6.49,
+     "net": "6.49",
      "recorded_at": "2026-10-30T20:44Z"
     },
     {
@@ -857,13 +857,13 @@
      "tf": "M15",
      "day": "2026-10-30",
      "fill_time": "2026-10-30 05:00",
-     "fill": 4020.22,
-     "stop": 4029.91,
-     "target": 4011.4,
+     "fill": "4020.22",
+     "stop": "4029.91",
+     "target": "4011.4",
      "exit_time": "2026-10-30 05:45",
-     "exit": 4011.4,
+     "exit": "4011.4",
      "reason": "target",
-     "net": 8.56,
+     "net": "8.56",
      "recorded_at": "2026-10-30T20:44Z"
     }
    ],
@@ -1903,13 +1903,13 @@
      "tf": "M15",
      "day": "2026-10-30",
      "fill_time": "2026-10-30 05:00",
-     "fill": 4020.22,
-     "stop": 4029.91,
-     "target": 4011.4,
+     "fill": "4020.22",
+     "stop": "4029.91",
+     "target": "4011.4",
      "exit_time": "2026-10-30 05:45",
-     "exit": 4011.4,
+     "exit": "4011.4",
      "reason": "target",
-     "net": 8.56,
+     "net": "8.56",
      "recorded_at": "2026-10-30T20:44Z"
     }
    ],
@@ -2263,7 +2263,7 @@
  },
  "open_trades": [],
  "wick": {
-  "days": 10,
+  "days": 11,
   "triggers": 1,
   "up": 1,
   "rows": [
@@ -2316,6 +2316,11 @@
     "day": "2026-10-29",
     "trigger": 0,
     "B_pts": 0.8
+   },
+   {
+    "day": "2026-10-30",
+    "trigger": 0,
+    "B_pts": -78.7
    }
   ]
  },
