@@ -1,12 +1,12 @@
 {
- "updated_utc": "2026-11-02T20:21Z",
+ "updated_utc": "2026-11-02T23:28Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-11-02 22:11",
- "last_price": 3954.0,
- "days_done": 10,
+ "last_price_time_server": "2026-11-03 01:18",
+ "last_price": 3954.3,
+ "days_done": 11,
  "in_sample": {
   "causal_M15": {
    "avg_day": 0.48,
@@ -93,6 +93,11 @@
      "day": "2026-10-30",
      "net": 24.22,
      "trades": 3
+    },
+    {
+     "day": "2026-11-02",
+     "net": 4.86,
+     "trades": 6
     }
    ],
    "trades": [
@@ -879,19 +884,103 @@
      "reason": "target",
      "net": "9.17",
      "recorded_at": "2026-10-31T19:56Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 01:00",
+     "fill": 3903.0,
+     "stop": 3905.74,
+     "target": 3894.66,
+     "exit_time": "2026-11-02 01:15",
+     "exit": 3905.74,
+     "reason": "stop",
+     "net": -2.99,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 07:30",
+     "fill": 3923.1,
+     "stop": 3933.03,
+     "target": 3914.07,
+     "exit_time": "2026-11-02 08:30",
+     "exit": 3914.07,
+     "reason": "target",
+     "net": 8.78,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 08:45",
+     "fill": 3917.6,
+     "stop": 3925.29,
+     "target": 3910.62,
+     "exit_time": "2026-11-02 09:30",
+     "exit": 3910.62,
+     "reason": "target",
+     "net": 6.74,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 13:30",
+     "fill": 3914.2,
+     "stop": 3920.84,
+     "target": 3908.16,
+     "exit_time": "2026-11-02 14:00",
+     "exit": 3908.16,
+     "reason": "target",
+     "net": 5.79,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 15:15",
+     "fill": 3915.88,
+     "stop": 3921.62,
+     "target": 3910.66,
+     "exit_time": "2026-11-02 15:30",
+     "exit": 3921.62,
+     "reason": "stop",
+     "net": -5.99,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 16:45",
+     "fill": 3965.2,
+     "stop": 3972.42,
+     "target": 3953.78,
+     "exit_time": "2026-11-02 16:45",
+     "exit": 3972.42,
+     "reason": "stop",
+     "net": -7.47,
+     "recorded_at": "2026-11-02T23:28Z"
     }
    ],
    "stats": {
-    "days": 10,
-    "total": 139.44,
-    "avg_day": 13.94,
-    "days_pos": 0.7,
+    "days": 11,
+    "total": 144.3,
+    "avg_day": 13.12,
+    "days_pos": 0.727,
     "best_day": 44.57,
     "worst_day": -15.39,
-    "t": 2.27,
-    "p": 0.0117,
-    "trades": 56,
-    "win": 0.696
+    "t": 2.33,
+    "p": 0.0099,
+    "trades": 62,
+    "win": 0.677
    }
   },
   "causal_M30": {
@@ -945,6 +1034,11 @@
      "day": "2026-10-30",
      "net": 0,
      "trades": 0
+    },
+    {
+     "day": "2026-11-02",
+     "net": -2.64,
+     "trades": 2
     }
    ],
    "trades": [
@@ -1381,19 +1475,47 @@
      "reason": "target",
      "net": "13.21",
      "recorded_at": "2026-10-29T21:04Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M30",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 07:30",
+     "fill": 3922.9,
+     "stop": 3935.04,
+     "target": 3911.85,
+     "exit_time": "2026-11-02 09:30",
+     "exit": 3911.85,
+     "reason": "target",
+     "net": 10.79,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M30",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 15:30",
+     "fill": 3932.0,
+     "stop": 3945.18,
+     "target": 3920.02,
+     "exit_time": "2026-11-02 15:30",
+     "exit": 3945.18,
+     "reason": "stop",
+     "net": -13.43,
+     "recorded_at": "2026-11-02T23:28Z"
     }
    ],
    "stats": {
-    "days": 10,
-    "total": 94.33,
-    "avg_day": 9.43,
-    "days_pos": 0.667,
+    "days": 11,
+    "total": 91.69,
+    "avg_day": 8.34,
+    "days_pos": 0.6,
     "best_day": 33.53,
     "worst_day": -20.68,
-    "t": 1.89,
-    "p": 0.0293,
-    "trades": 31,
-    "win": 0.645
+    "t": 1.8,
+    "p": 0.0363,
+    "trades": 33,
+    "win": 0.636
    }
   },
   "strict_M15": {
@@ -1447,6 +1569,11 @@
      "day": "2026-10-30",
      "net": 17.73,
      "trades": 2
+    },
+    {
+     "day": "2026-11-02",
+     "net": -2.74,
+     "trades": 5
     }
    ],
    "trades": [
@@ -1939,19 +2066,89 @@
      "reason": "target",
      "net": "9.17",
      "recorded_at": "2026-10-31T19:56Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 01:00",
+     "fill": 3903.0,
+     "stop": 3905.74,
+     "target": 3894.66,
+     "exit_time": "2026-11-02 01:15",
+     "exit": 3905.74,
+     "reason": "stop",
+     "net": -2.99,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 07:30",
+     "fill": 3923.1,
+     "stop": 3933.03,
+     "target": 3914.07,
+     "exit_time": "2026-11-02 08:30",
+     "exit": 3914.07,
+     "reason": "target",
+     "net": 8.78,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 08:45",
+     "fill": 3917.6,
+     "stop": 3925.29,
+     "target": 3910.62,
+     "exit_time": "2026-11-02 09:30",
+     "exit": 3910.62,
+     "reason": "target",
+     "net": 6.74,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 15:30",
+     "fill": 3927.41,
+     "stop": 3934.96,
+     "target": 3920.55,
+     "exit_time": "2026-11-02 15:30",
+     "exit": 3934.96,
+     "reason": "stop",
+     "net": -7.8,
+     "recorded_at": "2026-11-02T23:28Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 16:45",
+     "fill": 3965.2,
+     "stop": 3972.42,
+     "target": 3953.78,
+     "exit_time": "2026-11-02 16:45",
+     "exit": 3972.42,
+     "reason": "stop",
+     "net": -7.47,
+     "recorded_at": "2026-11-02T23:28Z"
     }
    ],
    "stats": {
-    "days": 10,
-    "total": 57.41,
-    "avg_day": 5.74,
-    "days_pos": 0.7,
+    "days": 11,
+    "total": 54.67,
+    "avg_day": 4.97,
+    "days_pos": 0.636,
     "best_day": 31.05,
     "worst_day": -23.48,
-    "t": 1.27,
-    "p": 0.1022,
-    "trades": 35,
-    "win": 0.6
+    "t": 1.19,
+    "p": 0.1163,
+    "trades": 40,
+    "win": 0.575
    }
   },
   "strict_M30": {
@@ -2005,6 +2202,11 @@
      "day": "2026-10-30",
      "net": 0,
      "trades": 0
+    },
+    {
+     "day": "2026-11-02",
+     "net": -13.43,
+     "trades": 1
     }
    ],
    "trades": [
@@ -2273,25 +2475,39 @@
      "reason": "stop",
      "net": "-7.49",
      "recorded_at": "2026-10-28T21:00Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M30",
+     "day": "2026-11-02",
+     "fill_time": "2026-11-02 15:30",
+     "fill": 3932.0,
+     "stop": 3945.18,
+     "target": 3920.02,
+     "exit_time": "2026-11-02 15:30",
+     "exit": 3945.18,
+     "reason": "stop",
+     "net": -13.43,
+     "recorded_at": "2026-11-02T23:28Z"
     }
    ],
    "stats": {
-    "days": 10,
-    "total": 49.44,
-    "avg_day": 4.94,
-    "days_pos": 0.571,
+    "days": 11,
+    "total": 36.01,
+    "avg_day": 3.27,
+    "days_pos": 0.5,
     "best_day": 19.42,
-    "worst_day": -3.67,
-    "t": 1.87,
-    "p": 0.0305,
-    "trades": 19,
-    "win": 0.579
+    "worst_day": -13.43,
+    "t": 1.12,
+    "p": 0.1306,
+    "trades": 20,
+    "win": 0.55
    }
   }
  },
  "open_trades": [],
  "wick": {
-  "days": 11,
+  "days": 12,
   "triggers": 1,
   "up": 1,
   "rows": [
@@ -2349,6 +2565,11 @@
     "day": "2026-10-30",
     "trigger": 0,
     "B_pts": -78.7
+   },
+   {
+    "day": "2026-11-02",
+    "trigger": 0,
+    "B_pts": 8.8
    }
   ]
  },
