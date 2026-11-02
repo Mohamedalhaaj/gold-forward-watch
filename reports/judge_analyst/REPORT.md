@@ -1,9 +1,9 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-02T02:43:13Z
-- head_sha (gold-analyst main checked): d7b288e6e1c5d0f74313380dddf39424f6e779ca
+- asof_utc: 2026-11-02T10:23:56Z
+- head_sha (gold-analyst main checked): 5b6ebee76a67d435f6cfb93e129a247b6385219d
 - judge code_sha8: 166ed4de
-- **analyst_verdict: SOUND**
+- **analyst_verdict: WARNING**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
 
@@ -19,9 +19,65 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 - `A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 
-## WARNINGs needing an ADJUDICATIONS row or a fix (0)
+## WARNINGs needing an ADJUDICATIONS row or a fix (57)
 
-- none
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_0117UL6f45qWcGmYWLXvVHBf#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_0117UL6f45qWcGmYWLXvVHBf#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_011wdj8cc8kpVUXxKb3uQH86#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_011wdj8cc8kpVUXxKb3uQH86#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz54q9ekSz2V94xcb9Gd#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz54q9ekSz2V94xcb9Gd#10` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55AdgJ5pqic7uKvGfd#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55DCxB8QU1DhYXePpF#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55SPx4aS2ohrLCkq8v#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55SPx4aS2ohrLCkq8v#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55XNbcJ3cJXsSQydDr#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55fmsTYmBV72XwxqEo#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz55gRobzzUQRf8uFCNB#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56CFwGips6u7NLo28J#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56PWMWA8gKzbTFSWZo#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56PWMWA8gKzbTFSWZo#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56mHnh1fc3Y8S9vEyC#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56mHnh1fc3Y8S9vEyC#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56mct5SCa96onrsrVG#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56mct5SCa96onrsrVG#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56rMt5rSaXW9LgDMbA#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56rMt5rSaXW9LgDMbA#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56zFQHsJcJkFFMvvxG#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56zFQHsJcJkFFMvvxG#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56zn9UJVSQdKX8cvKH#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz576ZuZPbkrD3pw9M4Q#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz576ZuZPbkrD3pw9M4Q#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz579qMQ7UJL9zzxABx8#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz579qMQ7UJL9zzxABx8#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz57ao3LvqSfC9jAfwtW#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz57ao3LvqSfC9jAfwtW#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz57fvMUZXuHTD2fdXew#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz57fvMUZXuHTD2fdXew#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz57mhNi5ehCvgU2engN#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz57mhNi5ehCvgU2engN#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58225jQWJtFuVHSkEx#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58225jQWJtFuVHSkEx#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58KLsrygD7QuFsgtYE#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58TW1aDY1eYk97cVpR#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58TW1aDY1eYk97cVpR#9` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58XdZVLGHpToWgkuh4#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58a3v4o9PF7h1hSuTM#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58cSXsAD8LkJdSxGkZ#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58cSXsAD8LkJdSxGkZ#9` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58goxVD6GWuKzFSNmU#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58mWVKkC1Gmy9qJuLx#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58mWVKkC1Gmy9qJuLx#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58mz1eCrQC86FfJYBE#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58mz1eCrQC86FfJYBE#8` (owner-attested) (tool Grep: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz58t3eQToNCCHDuTrYy#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz594frUofWYYdf6mKxP#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz594frUofWYYdf6mKxP#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz59G4TXQVAbBygM2u7G#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz59G4TXQVAbBygM2u7G#4` (owner-attested) (tool ToolSearch: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_01NgnPZU2HxBRsNDJvGRmpyc#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_01NgnPZU2HxBRsNDJvGRmpyc#4` (owner-attested) (tool PushNotification: guard tool, harmless, denied)
+- `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_01U5CnNJcvxmm11dLL3q25Dt#1` (owner-attested) (tool Bash: guard bash_form, harmless, denied)
 
 ## Adjudicated WARNINGs (7)
 
@@ -40,23 +96,23 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - canary_terminals: 20
 - cc_version_records_checked: 33
 - contexts_rebuilt: 16
-- ga_runs_read: 88
-- head: d7b288e6e1c5d0f74313380dddf39424f6e779ca
-- inbox_activity_entries: 174
+- ga_runs_read: 60
+- head: 5b6ebee76a67d435f6cfb93e129a247b6385219d
+- inbox_activity_entries: 186
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-02T02:43:13Z
+- inbox_last_complete_read_utc: 2026-11-02T10:23:56Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 5
 - probe_creations_max_day: 18
 - probe_records: 20
 - routine_config_versions_checked: 5
-- run_log_calls_scanned: 0
-- run_logs_scanned: 0
+- run_log_calls_scanned: 292
+- run_logs_scanned: 37
 - settled_checked: 0
 - td_compared: 868
 - td_outside: 15
-- td_pending: 2
+- td_pending: 0
 - td_unchecked: 0
 - witness_comments: 56
 - witness_files: 56
