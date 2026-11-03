@@ -79,3 +79,5 @@ first_seen_utc,severity,check,key
 2026-11-03T11:13:42Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_W1b.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69
 2026-11-03T11:13:42Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0830_1.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69
 2026-11-03T17:10:47Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_W2.json|5b1e296386b35972cf35f59c57a777da68576c3f
+2026-11-03T22:17:38Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_W2b.json|985c6a90adaa1012568d0afba6c4d545fca100ea
+2026-11-03T22:17:38Z,WARNING,A12,A12|probe_incomplete|analyst/canary/calls/2026-11-03_W2b.json|985c6a90adaa1012568d0afba6c4d545fca100ea
