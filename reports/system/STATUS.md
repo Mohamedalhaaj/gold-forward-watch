@@ -1,23 +1,32 @@
 # Gold support system v1: status
 
-Updated 2026-10-31T15:21:25Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
+Updated 2026-11-03T10:53:20Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
 
 ## Data and forecasts
 
-- Raw Dukascopy days stored: 60 (missing sides: 0); complete through 2026-10-31 00:00 UTC (exclusive); lag 0 trading day(s)
+- Raw Dukascopy days stored: 63 (missing sides: 0); complete through 2026-11-03 00:00 UTC (exclusive); lag 0 trading day(s)
 - Revisions logged (never used): 0
-- Forecast store: 1012 slots (755 defined); 0 new this run
+- Forecast store: 1036 slots (779 defined); 24 new this run
 - START: 2026-11-02
 - Event calendars cover through 2027-12-03 (the earliest of the last NFP, CPI and FOMC dates); extension lines accepted 0, rejected 0
 
 ## L1 green suppression (D1)
 
-- l1_green_ok = 1 (as of 2026-10-31)
+- l1_green_ok = 1 (as of 2026-11-03)
+- Block 1 2026-11-02 .. 2027-02-01: complete 0, green origins 22, hit rate 9.1%
+
+Descriptive (D2-D4 deferred, §8): base state counts and pooled mid k10 hit rates
+
+| state | origins | hit rate |
+|---|---|---|
+| GREEN | 22 | 0.091 |
+| YELLOW | 1 | 0.000 |
+| RED | 1 | 0.500 |
 
 ## L3 calibration
 
 - z* = 7.75 (reports/system/L3_ZSTAR.json); last update: none yet (first in 2027-01)
-- Observations since START: 0
+- Observations since START: 24
 
 | bucket | n | m in force |
 |---|---|---|
@@ -31,7 +40,7 @@ Updated 2026-10-31T15:21:25Z. Binding spec: xauusd-quant `research/system/SYSTEM
 
 ## L2 lab
 
-- State: RUNNING; lab_days 0; lab_n_paper 1; LIVE: 0; best progress E/E* over PAPER rules: 0.012
+- State: RUNNING; lab_days 1; lab_n_paper 1; LIVE: 0; best progress E/E* over PAPER rules: 0.012
 - INTERPRETER_NEEDED: no
 
 What the status-file counts mean:
@@ -46,4 +55,4 @@ A promoted rule (LIVE, SUSPENDED, DEMOTED) shows its post-promotion record and i
 |---|---|---|---|---|---|---|
 | S1 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 of E* 83.3 |
 | S1R | REF | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 (REF) |
-| C1 | REF | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 (REF) |
+| C1 | REF | 2026-11-02 | since first_day | 1 | -20.50 | E 0.844 (REF) |
