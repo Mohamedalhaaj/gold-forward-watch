@@ -1,0 +1,3 @@
+id,day,bar_start,T,signal,outcome,entry_model,F_RAW_S,recorded_utc
+S2,2026-11-02,01:05,01:10,1,abstain_window,01:11,117.55090484145063,2026-11-03T10:58:24Z
+S4,2026-11-02,16:30,16:35,1,trade,16:36,144.8672736151789,2026-11-03T10:58:24Z

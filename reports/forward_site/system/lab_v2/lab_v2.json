@@ -1,11 +1,11 @@
 {
  "version": 2,
- "asof_utc": "2026-10-31T15:23:51Z",
+ "asof_utc": "2026-11-03T10:58:24Z",
  "state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
  "first_day": "2026-11-02",
- "days": 0,
+ "days": 1,
  "n_paper": 4,
  "n_live": 0,
  "best_progress": 0.0015,
@@ -54,7 +54,7 @@
    "net_avg": null,
    "mean_R": null,
    "mu_bar": null,
-   "flow_values_before_today": 155,
+   "flow_values_before_today": 156,
    "warmup": true,
    "waits_for_lookback": false
   },
@@ -71,14 +71,14 @@
    "E_star": 1000.0,
    "E_star_exact": "1000",
    "record": "since first_day",
-   "E": 1.0,
-   "progress": 0.001,
+   "E": 1.0017082880584103,
+   "progress": 0.0010017082880584103,
    "K": null,
-   "n": 0,
-   "net_sum": 0.0,
-   "net_avg": null,
-   "mean_R": null,
-   "mu_bar": null
+   "n": 1,
+   "net_sum": 0.6609999999999673,
+   "net_avg": 0.6609999999999673,
+   "mean_R": 0.011021213280066746,
+   "mu_bar": 0.019941559883456174
   },
   {
    "id": "S5",
@@ -104,10 +104,10 @@
   }
  ],
  "c1": {
-  "n": 0,
-  "net_sum": 0.0,
-  "mean_R": null,
-  "E": 1.0
+  "n": 1,
+  "net_sum": -20.50257336210789,
+  "mean_R": -1.0049013425034767,
+  "E": 0.8442402919119611
  },
  "halt_reasons": []
 }
