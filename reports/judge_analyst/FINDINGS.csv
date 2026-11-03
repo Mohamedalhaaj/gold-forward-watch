@@ -74,3 +74,7 @@ first_seen_utc,severity,check,key
 2026-11-02T23:52:09Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-02_T1500_1.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6
 2026-11-03T08:37:56Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_T0400.json|ee5bbb5557be0da2c0ddd95a273e6fa5cb692d03
 2026-11-03T08:37:56Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0400_1.json|ee5bbb5557be0da2c0ddd95a273e6fa5cb692d03
+2026-11-03T11:13:42Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_W1.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69
+2026-11-03T11:13:42Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_T0830.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69
+2026-11-03T11:13:42Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_W1b.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69
+2026-11-03T11:13:42Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0830_1.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69
