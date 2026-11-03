@@ -69,3 +69,6 @@ first_seen_utc,severity,check,key
 2026-11-02T10:23:56Z,WARNING,A13,A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz56PWMWA8gKzbTFSWZo#4
 2026-11-02T10:23:56Z,WARNING,A13,A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz54q9ekSz2V94xcb9Gd#1
 2026-11-02T10:23:56Z,WARNING,A13,A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_018qMz54q9ekSz2V94xcb9Gd#10
+2026-11-02T23:52:09Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-02_T1500.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6
+2026-11-02T23:52:09Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-02_W2b.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6
+2026-11-02T23:52:09Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-02_T1500_1.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6
