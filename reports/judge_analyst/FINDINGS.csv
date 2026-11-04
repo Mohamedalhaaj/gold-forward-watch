@@ -82,3 +82,8 @@ first_seen_utc,severity,check,key
 2026-11-03T22:17:38Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-03_W2b.json|985c6a90adaa1012568d0afba6c4d545fca100ea
 2026-11-03T22:17:38Z,WARNING,A12,A12|probe_incomplete|analyst/canary/calls/2026-11-03_W2b.json|985c6a90adaa1012568d0afba6c4d545fca100ea
 2026-11-04T03:11:23Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-04_T0130.json|2bc7394210d682bcad0993caea7f65bbd67162e3
+2026-11-04T11:02:25Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-04_T0600.json|bbcdf88435fd170fe16582de03eab6c60aadc6aa
+2026-11-04T11:02:25Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-04_W1.json|bbcdf88435fd170fe16582de03eab6c60aadc6aa
+2026-11-04T11:02:25Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-04_T0830.json|bbcdf88435fd170fe16582de03eab6c60aadc6aa
+2026-11-04T11:02:25Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-04_W1b.json|bbcdf88435fd170fe16582de03eab6c60aadc6aa
+2026-11-04T11:02:25Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-04_T0830_1.json|bbcdf88435fd170fe16582de03eab6c60aadc6aa
