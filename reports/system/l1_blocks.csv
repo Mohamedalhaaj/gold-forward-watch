@@ -1,2 +1,2 @@
 block,start,end,complete,n_origins,expected,n_green,hits,trials,hit_rate,green_ok_after
-1,2026-11-02,2027-02-01,0,24,1403,22,4,44,0.09090909090909091,1
+1,2026-11-02,2027-02-01,0,47,1403,44,9,88,0.10227272727272728,1
