@@ -1,11 +1,11 @@
 {
  "version": 2,
- "asof_utc": "2026-11-03T17:09:44Z",
+ "asof_utc": "2026-11-04T10:59:43Z",
  "state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
  "first_day": "2026-11-02",
- "days": 1,
+ "days": 2,
  "n_paper": 4,
  "n_live": 0,
  "best_progress": 0.0015,
@@ -24,14 +24,14 @@
    "E_star": 666.6666666666666,
    "E_star_exact": "2000/3",
    "record": "since first_day",
-   "E": 1.0,
-   "progress": 0.0015,
+   "E": 0.9621260446074285,
+   "progress": 0.0014431890669111427,
    "K": null,
-   "n": 0,
-   "net_sum": 0.0,
-   "net_avg": null,
-   "mean_R": null,
-   "mu_bar": null
+   "n": 1,
+   "net_sum": -7.762000000000262,
+   "net_avg": -7.762000000000262,
+   "mean_R": -0.24434809930691323,
+   "mu_bar": 0.22401199106775735
   },
   {
    "id": "S3",
@@ -54,7 +54,7 @@
    "net_avg": null,
    "mean_R": null,
    "mu_bar": null,
-   "flow_values_before_today": 156,
+   "flow_values_before_today": 157,
    "warmup": true,
    "waits_for_lookback": false
   },
@@ -71,14 +71,14 @@
    "E_star": 1000.0,
    "E_star_exact": "1000",
    "record": "since first_day",
-   "E": 1.0017082880584103,
-   "progress": 0.0010017082880584103,
+   "E": 0.9975778807221293,
+   "progress": 0.0009975778807221293,
    "K": null,
-   "n": 1,
-   "net_sum": 0.6609999999999673,
-   "net_avg": 0.6609999999999673,
-   "mean_R": 0.011021213280066746,
-   "mu_bar": 0.019941559883456174
+   "n": 2,
+   "net_sum": -0.5589999999999237,
+   "net_avg": -0.27949999999996183,
+   "mean_R": -0.007773027507735657,
+   "mu_bar": 0.016541823554991654
   },
   {
    "id": "S5",
@@ -104,10 +104,10 @@
   }
  ],
  "c1": {
-  "n": 1,
-  "net_sum": -20.50257336210789,
-  "mean_R": -1.0049013425034767,
-  "E": 0.8442402919119611
+  "n": 2,
+  "net_sum": -6.093573362108328,
+  "mean_R": -0.2739993102910595,
+  "E": 0.8954892792972187
  },
  "halt_reasons": []
 }
