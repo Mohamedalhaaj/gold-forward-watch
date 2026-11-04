@@ -4,7 +4,7 @@
 
 **الحكم: سليم** · السبب: كل الفحوص سليمة
 
-- وقت الفحص: 2026-11-04T11:00:42Z
+- وقت الفحص: 2026-11-04T17:41:47Z
 - الفحوص السليمة 8 من 9، ولم يُتحقق من 1
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **SOUND** (reason code `sound`), checks ok 9 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `9a1f5e94e35964f21a73d3b45f8afb51f62ac249`
+- HEAD checked: `2f25cfa5016078e93cfd42ca0bef557f25c75637`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-04T11:00:42Z; data root repo
+- judge run 2026-11-04T17:41:47Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 1 (checked now: 1); older days sampled: 20; sides compared equal: 32; revised: 0; known revisions: 0; unverified downloads: 10
-- unverified: 10 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 22; revised: 0; known revisions: 0; unverified downloads: 18
+- unverified: 18 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -56,9 +56,9 @@
 - v1 raw files checked against their days.csv rows: 128 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
 - raw folders: 19 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 31 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- v1 append-only files: 15 files, 32 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 6 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 33 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 34 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,8 +68,8 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1059, 'compared': 1059}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 47}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 2, 'trades': 2}, 'v2': {'days': 2, 'checked_days': ['2026-11-02', '2026-11-03'], 'trades': 3}, 'summary': {'asof': '2026-11-04T10:59:43Z'}, 'status': {'asof': '2026-11-04T10:55:57Z', 'lines': 28}}
-- lab v2 days recomputed this run: 2 (new 1, rotating sample 1); new adjudication rows: 0
+- recomputed: {'forecasts': {'store_rows': 1059, 'compared': 1059}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 47}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 2, 'trades': 2}, 'v2': {'days': 2, 'checked_days': ['2026-11-02', '2026-11-03'], 'trades': 3}, 'summary': {'asof': '2026-11-04T17:23:59Z'}, 'status': {'asof': '2026-11-04T17:17:33Z', 'lines': 28}}
+- lab v2 days recomputed this run: 2 (new 0, rotating sample 2); new adjudication rows: 0
 
 ### J6: OK
 
@@ -82,16 +82,16 @@
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: dbf66c0fb0d7 at 2026-11-04T10:59:35Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: beb833c746f1 at 2026-11-04T17:23:57Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head db2f8ead1a1a is an ancestor of HEAD 9a1f5e94e359
-- the published VolMapJudge.csv head db2f8ead1a1a is an ancestor of HEAD 9a1f5e94e359
-- the deployed VolMapJudge.csv head db2f8ead1a1a is an ancestor of HEAD 9a1f5e94e359
+- the previous VERDICTS.csv row head 9a1f5e94e359 is an ancestor of HEAD 2f25cfa50160
+- the published VolMapJudge.csv head 9a1f5e94e359 is an ancestor of HEAD 2f25cfa50160
+- the deployed VolMapJudge.csv head 9a1f5e94e359 is an ancestor of HEAD 2f25cfa50160
 
 ### J9: OK
 
-- 2026-11-03: ok; credits 1
+- 2026-11-03 already checked (ok); no request sent
