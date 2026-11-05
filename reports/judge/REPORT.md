@@ -4,7 +4,7 @@
 
 **الحكم: سليم** · السبب: كل الفحوص سليمة
 
-- وقت الفحص: 2026-11-05T11:04:52Z
+- وقت الفحص: 2026-11-05T17:30:12Z
 - الفحوص السليمة 8 من 9، ولم يُتحقق من 1
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **SOUND** (reason code `sound`), checks ok 9 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `0bdcb210dd1457125f4885660380254bc079d44a`
+- HEAD checked: `e233a744ee9ca032c4b6c205497d5457db3a1cb5`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-05T11:04:52Z; data root repo
+- judge run 2026-11-05T17:30:12Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 1 (checked now: 1); older days sampled: 20; sides compared equal: 35; revised: 0; known revisions: 0; unverified downloads: 7
-- unverified: 7 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 28; revised: 0; known revisions: 0; unverified downloads: 12
+- unverified: 12 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -56,9 +56,9 @@
 - v1 raw files checked against their days.csv rows: 130 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
 - raw folders: 20 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 33 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- v1 append-only files: 15 files, 34 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 7 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 36 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 37 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,8 +68,8 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1082, 'compared': 1082}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 70}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 3, 'trades': 3}, 'v2': {'days': 3, 'checked_days': ['2026-11-02', '2026-11-03', '2026-11-04'], 'trades': 4}, 'summary': {'asof': '2026-11-05T11:04:15Z'}, 'status': {'asof': '2026-11-05T10:56:56Z', 'lines': 28}}
-- lab v2 days recomputed this run: 3 (new 1, rotating sample 2); new adjudication rows: 0
+- recomputed: {'forecasts': {'store_rows': 1082, 'compared': 1082}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 70}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 3, 'trades': 3}, 'v2': {'days': 3, 'checked_days': ['2026-11-02', '2026-11-03', '2026-11-04'], 'trades': 4}, 'summary': {'asof': '2026-11-05T17:29:47Z'}, 'status': {'asof': '2026-11-05T17:26:12Z', 'lines': 28}}
+- lab v2 days recomputed this run: 3 (new 0, rotating sample 3); new adjudication rows: 0
 
 ### J6: OK
 
@@ -82,16 +82,16 @@
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: 9e1810071d07 at 2026-11-05T11:04:12Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: bdf3bb675d07 at 2026-11-05T17:29:44Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 9383c71f1262 is an ancestor of HEAD 0bdcb210dd14
-- the published VolMapJudge.csv head 9383c71f1262 is an ancestor of HEAD 0bdcb210dd14
-- the deployed VolMapJudge.csv head 9383c71f1262 is an ancestor of HEAD 0bdcb210dd14
+- the previous VERDICTS.csv row head 0bdcb210dd14 is an ancestor of HEAD e233a744ee9c
+- the published VolMapJudge.csv head 0bdcb210dd14 is an ancestor of HEAD e233a744ee9c
+- the deployed VolMapJudge.csv head 0bdcb210dd14 is an ancestor of HEAD e233a744ee9c
 
 ### J9: OK
 
-- 2026-11-04: exceeds; credits 1
+- 2026-11-04 already checked (exceeds); no request sent
