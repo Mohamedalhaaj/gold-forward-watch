@@ -1,8 +1,8 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-05T11:38:04Z
+- asof_utc: 2026-11-05T13:06:02Z
 - head_sha (gold-analyst main checked): 0d773ca669638f219bd5bd7e9d0a602f20757330
-- judge code_sha8: 166ed4de
+- judge code_sha8: 65916de1
 - **analyst_verdict: SOUND**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
@@ -124,7 +124,7 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - head: 0d773ca669638f219bd5bd7e9d0a602f20757330
 - inbox_activity_entries: 306
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-05T11:38:04Z
+- inbox_last_complete_read_utc: 2026-11-05T13:06:02Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 12
@@ -135,9 +135,9 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - run_log_calls_scanned: 292
 - run_logs_scanned: 37
 - settled_checked: 5
-- td_compared: 2286
+- td_compared: 2289
 - td_outside: 60
-- td_pending: 4
+- td_pending: 1
 - td_unchecked: 0
 - witness_comments: 126
 - witness_files: 126
