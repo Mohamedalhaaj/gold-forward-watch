@@ -1,9 +1,9 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-05T17:30:29Z
-- head_sha (gold-analyst main checked): af8657617cf581ff72d2c0ebfaef5072215f4772
+- asof_utc: 2026-11-05T22:40:13Z
+- head_sha (gold-analyst main checked): ce22bf8b9740e7db82243bbe32dec424e2fe58f0
 - judge code_sha8: 65916de1
-- **analyst_verdict: SOUND**
+- **analyst_verdict: WARNING**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
 
@@ -19,9 +19,9 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 - `A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 
-## WARNINGs needing an ADJUDICATIONS row or a fix (0)
+## WARNINGs needing an ADJUDICATIONS row or a fix (1)
 
-- none
+- `A12|probe_incomplete|analyst/canary/calls/2026-11-05_W2b.json|ce22bf8b9740e7db82243bbe32dec424e2fe58f0` (verdict; incomplete)
 
 ## Adjudicated WARNINGs (87)
 
@@ -116,28 +116,28 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 ## Run summary
 
 - accepted_push_diffs_unverified: 0
-- canary_expected_windows: 32
-- canary_terminals: 43
-- cc_version_records_checked: 80
-- contexts_rebuilt: 38
-- ga_runs_read: 86
-- head: af8657617cf581ff72d2c0ebfaef5072215f4772
-- inbox_activity_entries: 319
+- canary_expected_windows: 36
+- canary_terminals: 44
+- cc_version_records_checked: 84
+- contexts_rebuilt: 39
+- ga_runs_read: 96
+- head: ce22bf8b9740e7db82243bbe32dec424e2fe58f0
+- inbox_activity_entries: 320
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-05T17:30:29Z
+- inbox_last_complete_read_utc: 2026-11-05T22:40:13Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 12
 - m30r_compared: 6
 - probe_creations_max_day: 21
-- probe_records: 42
+- probe_records: 43
 - routine_config_versions_checked: 5
 - run_log_calls_scanned: 292
 - run_logs_scanned: 37
 - settled_checked: 5
-- td_compared: 2323
+- td_compared: 2361
 - td_outside: 60
-- td_pending: 5
+- td_pending: 9
 - td_unchecked: 0
-- witness_comments: 129
-- witness_files: 129
+- witness_comments: 136
+- witness_files: 136

@@ -92,3 +92,4 @@ first_seen_utc,severity,check,key
 2026-11-05T03:42:11Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-05_T0100.json|3805ef85b7947c89318077d13c7415765c68f7bb
 2026-11-05T11:15:43Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-05_W1.json|0d773ca669638f219bd5bd7e9d0a602f20757330
 2026-11-05T11:15:43Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-05_W1b.json|0d773ca669638f219bd5bd7e9d0a602f20757330
+2026-11-05T22:40:13Z,WARNING,A12,A12|probe_incomplete|analyst/canary/calls/2026-11-05_W2b.json|ce22bf8b9740e7db82243bbe32dec424e2fe58f0
