@@ -1,6 +1,6 @@
 # Gold support system v2: lab v2 status
 
-Updated 2026-11-05T11:04:15Z. Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` with SYSTEM_V1_PREREG.md and Amendment A1.
+Updated 2026-11-05T17:29:47Z. Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` with SYSTEM_V1_PREREG.md and Amendment A1.
 
 ## Data
 
