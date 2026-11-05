@@ -1,18 +1,18 @@
 {
  "l1_green_ok": 1,
- "l1_asof": "2026-11-04",
+ "l1_asof": "2026-11-05",
  "blocks": [
   {
    "block": 1,
    "start": "2026-11-02",
    "end": "2027-02-01",
    "complete": 0,
-   "n_origins": 47,
+   "n_origins": 70,
    "expected": 1403,
-   "n_green": 44,
-   "hits": 9,
-   "trials": 88,
-   "hit_rate": 0.10227272727272728,
+   "n_green": 66,
+   "hits": 14,
+   "trials": 132,
+   "hit_rate": 0.10606060606060606,
    "green_ok_after": 1
   }
  ]
