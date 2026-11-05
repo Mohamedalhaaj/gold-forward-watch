@@ -170,6 +170,10 @@ jobs:
           if ! git diff --quiet HEAD -- . ':(exclude)reports/judge_analyst' ':(exclude)reports/forward_site/judge_analyst'; then
             echo "the judge changed tracked files outside the judge folders; nothing is committed"; git diff --stat HEAD; exit 1
           fi
+          # ADJUDICATIONS.csv is the owner's (append-only), never the judge's: keep the checked-out main copy, so owner
+          # rows pushed while this run was judging are not replaced by the older copy in the artifact (2026-11-05).
+          adj=reports/judge_analyst/ADJUDICATIONS.csv
+          if git cat-file -e "HEAD:$adj" 2>/dev/null; then git checkout -q HEAD -- "$adj"; fi
           for p in reports/judge_analyst reports/forward_site/judge_analyst; do
             if [ -e "$p" ]; then git add -- "$p"; fi
           done

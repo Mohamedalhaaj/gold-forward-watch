@@ -201,6 +201,26 @@ def test_commit_step_commits_only_the_judge_folders(clone, tmp_path):
     assert _git(origin, "log", "-1", "--format=%s", "main").startswith("analyst-judge run ")
 
 
+def test_commit_step_keeps_the_owners_adjudications(clone):
+    """An owner row pushed while the judge ran is in the publish checkout but not in the artifact's older copy of
+    ADJUDICATIONS.csv: the commit step keeps main's copy, so the row survives and the bot commit never touches it."""
+    origin, work = clone
+    adj = work / "reports/judge_analyst/ADJUDICATIONS.csv"
+    adj.parent.mkdir(parents=True)
+    old = "utc,ref,check,subject,decision,note\n2026-11-04T00:00:00Z,warning,A11,k1,accepted,n\n"
+    adj.write_text(old + "2026-11-05T00:00:00Z,warning,A11,k2,accepted,n\n")
+    _git(work, "add", "reports/judge_analyst/ADJUDICATIONS.csv")
+    _git(work, "commit", "-q", "-m", "owner row")
+    _git(work, "push", "-q", "origin", "main")
+    adj.write_text(old)                                                  # the artifact's copy, from before the push
+    (work / "reports/judge_analyst/VERDICTS.csv").write_text("judge_utc\nx\n")
+    r = run_commit_step(work)
+    assert r.returncode == 0, r.stdout + r.stderr
+    files = _git(origin, "diff-tree", "--no-commit-id", "--name-only", "-r", "main").split("\n")
+    assert files == ["reports/judge_analyst/VERDICTS.csv"]
+    assert "k2" in _git(origin, "show", "main:reports/judge_analyst/ADJUDICATIONS.csv")
+
+
 @pytest.mark.parametrize("outside", ["data/x.csv", "reports/judge/VERDICTS.csv"])
 def test_commit_step_refuses_a_change_outside_its_folders(clone, outside):
     origin, work = clone
