@@ -129,7 +129,9 @@ OPERATIONAL_A13 = {"guard_not_enforced", "guard_config", "routine_project", "cc_
 OPERATIONAL_A14 = {"skipped_wrong", "a14_from"}
 # §16.18 A15 (R-AN-55, R-AN-67): check A15's operational VIOLATION keys
 OPERATIONAL_A15 = {"review_open", "open_cap", "a15_from", "lesson_source"}
-OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13, "A14": OPERATIONAL_A14, "A15": OPERATIONAL_A15}
+OPERATIONAL_A16 = {"a16_from"}                 # §16.18 A16: the day cap's start day (R-AN-55, R-AN-67)
+OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13, "A14": OPERATIONAL_A14, "A15": OPERATIONAL_A15,
+               "A16": OPERATIONAL_A16}
 WAKE_ROUTINES = ("analyst-wake", "analyst-w1", "analyst-w2")   # A14-D12: any of them can reach a new window
 C20_PATH = "analyst/canary/checks/C20.json"     # R-AN-74 C20: the probe session's root, when a run log has none
 SECURITY_LOG_FILTER = "repo:{} action:hook"     # R-AN-60 (A7, detection 2), with PINS.inbox_repo
@@ -273,7 +275,7 @@ class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
                  prev_judge_utc=None, judge_adjudications=None, judge_findings=None, a12_commit="config",
-                 a14_commit="config", m30=None, halves=None, a15_commit="config"):
+                 a14_commit="config", m30=None, halves=None, a15_commit="config", a16_commit="config"):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
         judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
@@ -283,11 +285,14 @@ class Judge:
         config.A12_BUILD_COMMIT. (§16.18 A14) a14_commit: the pinned A14 build commit (config.A14_BUILD_COMMIT);
         m30: the judge's own Twelve Data 30-minute fetch (watch.M30Source, R-AN-66), or None; halves: the Dukascopy
         half-hour view (sources.HalfSource) for the cross-check of a trigger's bars (R-AN-68), or None. (§16.18 A15)
-        a15_commit: the pinned A15 build commit (config.A15_BUILD_COMMIT, None until the build is on main)."""
+        a15_commit: the pinned A15 build commit (config.A15_BUILD_COMMIT, None until the build is on main).
+        (§16.18 A16) a16_commit: the pinned A16 build commit (config.A16_BUILD_COMMIT, None until the build is on
+        main)."""
         self.git = git
         self.a12_commit = config.A12_BUILD_COMMIT if a12_commit == "config" else a12_commit
         self.a14_commit = config.A14_BUILD_COMMIT if a14_commit == "config" else a14_commit
         self.a15_commit = config.A15_BUILD_COMMIT if a15_commit == "config" else a15_commit
+        self.a16_commit = config.A16_BUILD_COMMIT if a16_commit == "config" else a16_commit
         self.open_info = {}
         self.m30 = m30
         self.halves = halves
@@ -369,6 +374,7 @@ class Judge:
         self.holidays = Holidays(self.bytes_at_head("analyst/tables/holidays.csv"))
         self.a14_day = self.a14_from_value()
         self.a15_day = self.a14_from_value("a15_from")
+        self.a16_day = self.a14_from_value("a16_from")
         self.load_api()
         self.safe("inbox_reads", self.load_inbox)
         self.wit = []
@@ -387,6 +393,7 @@ class Judge:
         self.safe("watching", self.check_watching)
         self.safe("a14_from", self.check_a14_from)
         self.safe("a15_from", self.check_a15_from)
+        self.safe("a16_from", self.check_a16_from)
         self.safe("lesson_source", self.check_lesson_source)
         self.safe("start", self.check_start)
         self.safe("runs_exports", self.check_runs_exports)
@@ -1540,6 +1547,11 @@ class Judge:
         """Model day d is on or after MODE.json `a15_from` (§16.18 A15)."""
         return self.a15_day is not None and d >= self.a15_day
 
+    def day_cap(self, d) -> int:
+        """R-AN-89 step 2's cap of model day d: 10 on or after MODE.json `a16_from` (§16.18 A16), else 6."""
+        a16 = getattr(self, "a16_day", None)
+        return watch.DAY_CAP_A16 if a16 is not None and d >= a16 else watch.DAY_CAP
+
     def watch_day(self, mode, d):
         """[(win, accepted attempt witnesses in seq order, terminal status at main or None)] of the mode's expected
         windows of model day d, in window order (R-AN-89's E(T) and O(T) for the judge and the closer)."""
@@ -1582,15 +1594,15 @@ class Judge:
     def closer_gates(self, mode, win):
         """R-AN-39 step 2 (§16.18 A14) for a W1, W2, W1b or W2b window of a model day >= a14_from without an accepted
         attempt: {"skipped:trade_open": [open call_ids]} when an earlier window of d has terminal `called` and an
-        exit_utc later than this entry; {"skipped:day_cap": n} when n >= 6 earlier windows of d have an accepted
-        attempt. {} otherwise."""
+        exit_utc later than this entry; {"skipped:day_cap": n} when n >= 6 (10 from a16_from on, §16.18 A16) earlier
+        windows of d have an accepted attempt. {} otherwise."""
         if self.a14_day is None or win.day < self.a14_day or win.kind == "trigger":
             return {}
         E, O = self.e_o(mode, win.day, win.check)
         out = {}
         if O and not self.is_a15(win.day):       # §16.18 A15 (R-AN-39): never `skipped:trade_open` from a15_from
             out["skipped:trade_open"] = O
-        if len(E) >= watch.DAY_CAP:
+        if len(E) >= self.day_cap(win.day):
             out["skipped:day_cap"] = len(E)
         return out
 
@@ -1654,7 +1666,7 @@ class Judge:
         if win.kind != "trigger":
             if O:
                 self.F.v("A14", "trade_open", p0, c0, safe_detail("open", *O))
-            if len(E) >= watch.DAY_CAP:
+            if len(E) >= self.day_cap(win.day):
                 self.F.v("A14", "day_cap", p0, c0, safe_detail("earlier wakes", len(E)))
             return
         wk = (rec0 or {}).get("wake")
@@ -1663,7 +1675,8 @@ class Judge:
         cond = None
         if bars is not None:
             cond = watch.conditions(watch.values_at(bars, win.day, win.check), win.day, win.check)
-        got = watch.rule(win.day, win.check, E, len(O), self.holidays.any_exchange(win.day), cond)
+        got = watch.rule(win.day, win.check, E, len(O), self.holidays.any_exchange(win.day), cond,
+                         self.day_cap(win.day))
         if bars is None or got != ("window", win.wid, "trigger", wk.get("reason")):
             self.F.v("A14", "not_triggered", p0, c0,
                      safe_detail("rule gives", got[0], got[1], got[3], "recorded", wk.get("reason"),
@@ -1775,7 +1788,7 @@ class Judge:
                 continue
             E, O = self.e_o(mode, d, t)
             cond = watch.conditions(watch.values_at(bars, d, t), d, t)
-            got = watch.rule(d, t, E, 0 if self.is_a15(d) else len(O), False, cond)
+            got = watch.rule(d, t, E, 0 if self.is_a15(d) else len(O), False, cond, self.day_cap(d))
             if got[0] == "window" and got[2] == "trigger":
                 self.F.w("A14", "wake_missed", d.isoformat(), got[1], safe_detail(mode, "reason", got[3]))
 
@@ -1890,6 +1903,15 @@ class Judge:
                 cid = p.rsplit("/", 1)[-1][:-5]
                 if before(cid) or parse_call_id(cid) is None:
                     self.F.v("A15", "a15_from", path, self.commit_of(p), safe_detail(folder.split("/")[2], cid))
+
+    def check_a16_from(self):
+        """A16 `a16_from` (R-AN-5, R-AN-67): R-AN-5's rule as for a15_from, with the pinned A16 build commit, plus
+        a15_from set and a16_from >= a15_from. The cap itself is judged per day (A14 `day_cap`, the closer's gates,
+        `wake_missed`, `not_triggered`): 6 before a16_from, 10 from it (§16.18 A16)."""
+        set_sha = self.check_from_value("A16", "a16_from", self.a16_day, self.a16_commit, "a16_unpinned")
+        if self.a16_day is not None and (self.a15_day is None or self.a16_day < self.a15_day):
+            self.F.v("A16", "a16_from", "analyst/MODE.json", set_sha or "-",
+                     safe_detail("a15_from", self.mode_cfg.get("a15_from")))
 
     FIXTURE = "analyst/tests/fixtures/canary_settled.json"
 

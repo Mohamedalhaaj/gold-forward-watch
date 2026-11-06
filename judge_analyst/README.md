@@ -669,6 +669,11 @@ aged out); a cleared key never clears another (R-JV-4).
   days >= a15_from only. STATE's `n` is the weighted count; `n_trades` and `n_clusters` are checked when its schema is
   `analyst-state/2`. The canary has no ledger or state; its settled records and twins are checked as live ones, with
   mode and class `canary`.
+- J-D66 (§16.18 A16; R-AN-5, R-AN-39, R-AN-67, R-AN-89) R-AN-89 step 2's cap is per model day: 10 on or after MODE.json
+  `a16_from`, 6 before it or while it is null (`Judge.day_cap`). It applies wherever the judge rebuilds the rule: A14
+  `day_cap` at an accepted attempt's check, the closer's `skipped:day_cap` gate, a trigger's `not_triggered` rule and
+  `wake_missed`. A16 `a16_from` (operational) is R-AN-5's rule with `A16_BUILD_COMMIT`, plus a15_from set and
+  a16_from >= a15_from; an a16_from set while the build is unpinned is the A0 WARNING `a16_unpinned`.
 
 ## Open points
 
