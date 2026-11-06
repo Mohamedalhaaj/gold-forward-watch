@@ -41,10 +41,11 @@ import struct
 import subprocess
 
 from jlib import derive, review, settle, stats, td, ticks, watch
-from jlib.clock import (HALF, Holidays, Window, check_grid, model_to_utc, register_holiday_rows, scheduled_checks,
-                        windows_between)
+from jlib.clock import (HALF, Holidays, Window, check_grid, check_grid_x, day_end, model_to_utc, register_holiday_rows,
+                        scheduled_checks, windows_between)
 from jlib.common import UTC, ZERO64, compact_form, fmt_utc, record_form, sha256_bytes, sha256_compact
-from jlib.context import SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, context_keys, is_trading_hour, rebuild_context
+from jlib.context import (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, context_keys, is_trading_hour,
+                          rebuild_context)
 from jlib.clock import Events
 from jlib.judge import Judge
 from jlib.m1 import DAYS_HEADER, DaysTable, Store
@@ -216,6 +217,8 @@ PLAN_REVERSE = {"action": "reverse", "stop_mult": 1.0, "target_mult": 1.5, "conf
                 "reason_ar": "انعكس الاتجاه", "key_risks_ar": "تذبذب"}
 PLAN_ADD = {"action": "add", "stop_mult": 1.5, "target_mult": 2.0, "confidence": "high", "reason_ar": "زخم مستمر",
             "key_risks_ar": ""}
+# §16.18 A17-R6 (analyst-plan/4): the time decision's `extend` (close is PLAN_CLOSE)
+PLAN_EXTEND = {"action": "extend", "confidence": "medium", "reason_ar": "سبب الصفقة ما زال قائما", "key_risks_ar": ""}
 SRC_DATES = dict(GIT_AUTHOR_NAME="world", GIT_AUTHOR_EMAIL="world@example.invalid", GIT_COMMITTER_NAME="world",
                  GIT_COMMITTER_EMAIL="world@example.invalid")
 
@@ -270,10 +273,12 @@ class World:
 
     def __init__(self, root, canary_days=("2026-11-19", "2026-11-20"), live_from="2026-11-23",
                  live_to="2026-12-04", now="2026-12-07T12:00:00Z", plans=None, hooks=None, seed=7,
-                 store_first=None, a12_from=None, a14_from=None, a15_from=None):
+                 store_first=None, a12_from=None, a14_from=None, a15_from=None, a16_from=None, a17_from=None):
         """store_first: the first store day (default 2026-11-01); a12_from (§16.18 A12): the model day on whose
         early morning the owner pushes the A12 build commit, so that contexts at a repo_head_sha descending from it
-        are `analyst-context/3` (default: none, every context `analyst-context/2`)."""
+        are `analyst-context/3` (default: none, every context `analyst-context/2`). (§16.18 A16, A17) a16_from and
+        a17_from: the owner pushes each build and sets MODE.json the evening before (the cap of 10; the time
+        decision, `analyst-context/6`, settlement to day_end(d))."""
         self.root = root
         self.store_first_opt = dt.date.fromisoformat(store_first) if store_first else dt.date(2026, 11, 1)
         self.a12_from = dt.date.fromisoformat(a12_from) if a12_from else None
@@ -288,6 +293,12 @@ class World:
         self.a15_sha = None
         self.a15_settled = set()
         self.a15_twins = set()
+        # §16.18 A16 (the cap of 10) and A17 (the time decision: time windows `<d>_X<hhmm>`, R-AN-89's step 4b)
+        self.a16_from = dt.date.fromisoformat(a16_from) if a16_from else None
+        self.a16_sha = None
+        self.a17_from = dt.date.fromisoformat(a17_from) if a17_from else None
+        self.a17_sha = None
+        self.time_wins = []
         self.trigger_wins = []
         self.wakes = {}
         self.m30_cache = {}
@@ -382,6 +393,10 @@ class World:
                         self.window(mode, win, wake)
             if self.a15_from is not None and day == self.a15_from - dt.timedelta(days=1):
                 self.make_a15_commits(T(f"{day.isoformat()}T20:30:00Z"))     # after the day's last window
+            if self.a16_from is not None and day == self.a16_from - dt.timedelta(days=1):
+                self.make_a16_commits(T(f"{day.isoformat()}T21:12:00Z"))     # after A15's, before 22:00Z
+            if self.a17_from is not None and day == self.a17_from - dt.timedelta(days=1):
+                self.make_a17_commits(T(f"{day.isoformat()}T21:14:00Z"))
             day += dt.timedelta(days=1)
         self.write_runs_exports()
         if "final" in self.hooks:
@@ -462,13 +477,70 @@ class World:
     def is_a15(self, d):
         return self.a15_from is not None and d >= self.a15_from
 
+    # ------------------------------------------------------------------ §16.18 A16 and A17
+    def make_a16_commits(self, when):
+        """The A16 build commit (the cap of 10; a stand-in that leaves `watcher/` as it is, so one WATCHER_CONFIG.json
+        serves a15_from and a16_from on the same evening) and, 30 minutes later, the owner's WATCHER_CONFIG.json
+        naming it and MODE.json `a16_from`, before 22:00Z."""
+        self.a16_sha = self.owner_commit({"analyst/ga/A16_BUILD.txt": b"the cap of 10 from a16_from\n"}, when,
+                                         "analyst A16 build")
+        m = _json(self.repo.path, "analyst/MODE.json")
+        m["a16_from"] = self.a16_from.isoformat()
+        wc = _json(self.repo.path, "analyst/WATCHER_CONFIG.json")
+        wc.update({"exported_utc": fmt_utc(when + dt.timedelta(minutes=25)), "source_commit": self.a16_sha,
+                   "deployed_utc": fmt_utc(when + dt.timedelta(minutes=10))})
+        self.owner_commit({"analyst/WATCHER_CONFIG.json": record_form(wc), "analyst/MODE.json": record_form(m)},
+                          when + dt.timedelta(minutes=30), "owner: WATCHER_CONFIG.json and a16_from")
+
+    def make_a17_commits(self, when):
+        """The A17 build commit (a stand-in watcher with the time step) and, 30 minutes later, the owner's
+        WATCHER_CONFIG.json naming it and MODE.json `a17_from`, before 22:00Z of the day before (A17-D5)."""
+        worker = b"// the watcher (R-AN-91), a stand-in: A17 adds the time step on G_X(d)\nexport default {};\n"
+        self.a17_sha = self.owner_commit({"watcher/worker.js": worker}, when, "analyst A17 build")
+        m = _json(self.repo.path, "analyst/MODE.json")
+        m["a17_from"] = self.a17_from.isoformat()
+        wc = _json(self.repo.path, "analyst/WATCHER_CONFIG.json")
+        wc.update({"exported_utc": fmt_utc(when + dt.timedelta(minutes=25)), "source_commit": self.a17_sha,
+                   "script_sha256": sha256_bytes(worker), "deployed_utc": fmt_utc(when + dt.timedelta(minutes=10))})
+        if "watcher_config_a17" in self.hooks:
+            self.hooks["watcher_config_a17"](self, wc)
+        self.owner_commit({"analyst/WATCHER_CONFIG.json": record_form(wc), "analyst/MODE.json": record_form(m)},
+                          when + dt.timedelta(minutes=30), "owner: WATCHER_CONFIG.json and a17_from")
+
+    def is_a17(self, d):
+        return self.a17_from is not None and d >= self.a17_from
+
+    def day_cap(self, d):
+        return watch.DAY_CAP_A16 if self.a16_from is not None and d >= self.a16_from else watch.DAY_CAP
+
+    def subject(self, mode, d, t):
+        """A17-R2's subject at check t of d from the world's records (as `start` reads them), or None."""
+        if not self.is_a17(d):
+            return None
+        return review.subject_at(self.day_view(mode, d), t + HALF, day_end(d))
+
+    def trade_fields(self, mode, cid):
+        c = self.calls[(mode, cid)]
+        return {"call_id": cid, "action": c["plan"]["action"], "side": c["side"], "entry_utc": c["entry_utc"],
+                "exit_utc": c["exit_utc"], "S": c["S"], "T": c["T"], "stop_mult": c["stop_mult"],
+                "target_mult": c["target_mult"]}
+
+    def review_inputs(self, mode, win):
+        """(trades, extended flags) of `analyst-context/6`'s block (A17-R5): a time window's subject (not extended),
+        or O(R) of the open set with extensions (A17-R7) with each trade's flag at R."""
+        if win.w == "X":
+            s = self.subject(mode, win.day, win.check)
+            return ([self.trade_fields(mode, s)], [False]) if s else ([], [])
+        r = review.open_sets(self.day_view(mode, win.day, win), day_end(win.day))
+        return [self.trade_fields(mode, c) for c in r.open[win.call_id]], r.flags[win.call_id]
+
     def mode_windows(self, mode):
         if mode == "live":
             return self.world_windows()
         wins = []
         for d in self.canary_days:
             wins += windows_between(d, d, self.a14_from)
-        wins += [w for w in self.trigger_wins if self.mode_of(w.day) == "canary"]
+        wins += [w for w in self.trigger_wins + self.time_wins if self.mode_of(w.day) == "canary"]
         return sorted(wins, key=lambda w: w.order)
 
     def day_view(self, mode, d, extra=None):
@@ -513,9 +585,10 @@ class World:
                 "values_n": len(bars), "bars": bars, "fetched_utc": fetched, "tries": 1}
 
     def world_windows(self):
-        """The live period's windows in window order (§16.18 A14: W1b, W2b and the trigger windows that ran)."""
+        """The live period's windows in window order (§16.18 A14: W1b, W2b and the trigger windows that ran; §16.18
+        A17: and the time windows)."""
         wins = windows_between(self.live_from, self.live_to, self.a14_from) + \
-            [w for w in self.trigger_wins if self.mode_of(w.day) == "live"]
+            [w for w in self.trigger_wins + self.time_wins if self.mode_of(w.day) == "live"]
         return sorted(wins, key=lambda w: w.order)
 
     def watch_day(self, mode, d):
@@ -528,15 +601,21 @@ class World:
         hol = self.holidays.any_exchange(d)
         force = self.hooks.get("force", set())
         drop = self.hooks.get("drop_trigger", set())
+        # §16.18 A17: `drop_time` (time windows the watcher never fired) and `force_time` ({call_id: subject}: a time
+        # window run although R(T) does not give it, a start fault)
+        drop_x = self.hooks.get("drop_time", set())
+        force_x = self.hooks.get("force_time", {})
+        a17 = self.is_a17(d)
+        cap = self.day_cap(d)
         done = []
-        for t in check_grid(d):
+        for t in (check_grid_x(d) if a17 else check_grid(d)):
             E = [(w.check, w.kind, (self.wakes.get((mode, w.call_id)) or {}).get("reason")) for w, a, _s in done if a]
             O = [w.call_id for w, _a, st in done if st == "called" and w.exit > t + HALF]
             if self.is_a15(d):
                 O = []                                  # §16.18 A15 (R-AN-89): R(T) without step 1
             if t in sched:
                 win = Window(d, sched[t])
-                if self.holidays.window_holiday(win) or (win.call_id not in force and (O or len(E) >= 6)):
+                if self.holidays.window_holiday(win) or (win.call_id not in force and (O or len(E) >= cap)):
                     if self.holidays.window_holiday(win):
                         st, det = "skipped:holiday", None
                     else:
@@ -556,9 +635,31 @@ class World:
             else:
                 if hol:
                     continue
+                subj = self.subject(mode, d, t) if a17 else None
+                xid = f"{d.isoformat()}_X{t.hour:02d}{t.minute:02d}"
+                if xid in force_x:
+                    subj = force_x[xid]
+                if subj:                                # §16.18 A17-R3 step 4b: the time window, no request
+                    got = watch.rule(d, t, E, 0, False, None, cap, subject=subj, a17=True)
+                    if xid in force_x:
+                        got = ("window", xid.split("_")[1], "time", subj)
+                    if got[0] == "window" and got[2] == "time":
+                        win = Window(d, got[1])
+                        if win.call_id in drop_x:
+                            continue
+                        self.time_wins.append(win)
+                        self.window(mode, win, {"kind": "time", "reason": got[3], "check_utc": fmt_utc(t),
+                                                "td": None})
+                        att = os.path.exists(os.path.join(self.repo.path, f"{pre}attempts/{win.call_id}_1.json"))
+                        done.append((win, att, (self.terminals.get((mode, win.call_id)) or {}).get("status")))
+                        continue
+                    if got[0] == "day_cap":
+                        continue
+                if t not in check_grid(d):              # beyond L_d: the time step only
+                    continue
                 bars = self.m30_bars(d, t)
                 cond = watch.conditions(watch.values_at(bars, d, t), d, t)
-                got = watch.rule(d, t, E, len(O), False, cond)
+                got = watch.rule(d, t, E, len(O), False, cond, cap)
                 if got[0] != "window" or got[2] != "trigger":
                     continue
                 win = Window(d, got[1])
@@ -973,8 +1074,8 @@ class World:
     def window(self, mode, win, wake=None):
         """One window. `wake` (§16.18 A14): the attempt record's `wake` (R-AN-90) for a model day >= a14_from; the
         attempts are then `analyst-attempt/2` and a W1b, W2b or trigger session starts 150 s after its check."""
-        scen = self.plans.get(win.call_id, ("call", PLAN_BUY))
-        if self.holidays.window_holiday(win):
+        scen = self.plans.get(win.call_id, ("call", PLAN_EXTEND if win.w == "X" else PLAN_BUY))
+        if self.holidays.window_holiday(win) and win.w != "X":
             scen = ("holiday",)
         pre = "analyst/" if mode == "live" else "analyst/canary/"
         w1 = win.w == "W1"
@@ -1027,9 +1128,13 @@ class World:
         n = len(times)
         asof = times[-1] + dt.timedelta(seconds=30)
         R = self.repo.head()
-        trades = self.review_trades(mode, win) if self.is_a15(win.day) else None
+        trades = flags = None
+        if self.is_a17(win.day):                       # §16.18 A17-R5: the /6 block's trades and their flags
+            trades, flags = self.review_inputs(mode, win)
+        elif self.is_a15(win.day):
+            trades = self.review_trades(mode, win)
         ctx = self.build_context(mode, win, asof, R, hour_absent=(kind == "data_absent"),
-                                 wake=self.wakes.get((mode, win.call_id)), review_trades=trades)
+                                 wake=self.wakes.get((mode, win.call_id)), review_trades=trades, review_extended=flags)
         if "context" in self.hooks:
             self.hooks["context"](self, win, ctx)
         plan = None
@@ -1039,14 +1144,16 @@ class World:
                 status = "no_call:refusal"
             else:
                 plan = copy.deepcopy(scen[1])
-                if ctx.get("schema") == SCHEMA_V5:     # A15: a plan the context allows (R-AN-26), else hold/stay_out
-                    opts = (ctx.get("review") or {}).get("options") or review.NORMAL_ACTIONS
+                if ctx.get("schema") in (SCHEMA_V5, SCHEMA_V6):   # A15: a plan the context allows (R-AN-26)
+                    rv = ctx.get("review") or {}
+                    opts = rv.get("options") or review.NORMAL_ACTIONS
                     if plan["action"] not in opts:
-                        plan = copy.deepcopy(PLAN_HOLD if ctx.get("review") else PLAN_STAY)
-                elif plan["action"] in review.REVIEW_ACTIONS:
+                        plan = copy.deepcopy(PLAN_CLOSE if rv.get("kind") == "time" else
+                                             PLAN_HOLD if ctx.get("review") else PLAN_STAY)
+                elif plan["action"] in review.REVIEW_ACTIONS + ("extend",):
                     plan = copy.deepcopy(PLAN_STAY)
                 status = derive.status_of_action(plan["action"])
-                if status == "stay_out" and ctx.get("schema") in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5):
+                if status == "stay_out" and ctx.get("schema") in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6):
                     plan.setdefault("stay_out_reason", "no_setup")     # analyst-plan/2 (R-AN-26, A12)
         call = self.make_call(mode, win, ctx, plan, status, n, session + f"-{n}", asof)
         if "call" in self.hooks:
@@ -1109,14 +1216,17 @@ class World:
         self.write_terminal(mode, win, status, detail, "closer", None, attempts, when, run)
         self.repo.commit(f"analyst-settle closer {win.call_id}", when + dt.timedelta(seconds=5))
 
-    def build_context(self, mode, win, asof, R, hour_absent=False, wake=None, review_trades=None):
+    def build_context(self, mode, win, asof, R, hour_absent=False, wake=None, review_trades=None,
+                      review_extended=None):
         """An `analyst-context/2` (§16.18 A9): the session's Twelve Data provenance objects in R-AN-87's order and
         form, their bars made from the world's Dukascopy hour files (o, c = first and last tick mid, h, l = the
-        extremes, at dp=5), which the judge downloads for the cross-check; `fresh` two minutes behind asof."""
-        schema = self.context_schema_for(R)
+        extremes, at dp=5), which the judge downloads for the cross-check; `fresh` two minutes behind asof.
+        (§16.18 A17-R5) `analyst-context/6` for every window of a model day >= a17_from."""
+        schema = SCHEMA_V6 if self.is_a17(win.day) else self.context_schema_for(R)
         rec0 = {"asof_utc": fmt_utc(asof), "repo_head_sha": R, "files": []}
         rb0 = rebuild_context(rec0, win.call_id, mode, self.gv, None, self.holidays, self.events, schema=schema,
-                              wake=wake, review_trades=review_trades, a15_from=self.a15_from)
+                              wake=wake, review_trades=review_trades, a15_from=self.a15_from,
+                              review_extended=review_extended)
         e0 = rb0.expected
         listed = e0["_listed"]
         files = []
@@ -1150,7 +1260,8 @@ class World:
             self.hooks["files"](self, win, files)
         rec = {"asof_utc": fmt_utc(asof), "repo_head_sha": R, "files": files}
         rb = rebuild_context(rec, win.call_id, mode, self.gv, None, self.holidays, self.events, schema=schema,
-                             wake=wake, review_trades=review_trades, a15_from=self.a15_from)
+                             wake=wake, review_trades=review_trades, a15_from=self.a15_from,
+                             review_extended=review_extended)
         e = rb.expected
         ctx = {k: (files if k == "files" else e[k]) for k in context_keys(schema) if k in e or k == "files"}
         if e["status"] == "no_call:data":
@@ -1213,9 +1324,9 @@ class World:
             if plan["action"] in ("reverse", "add"):     # A15 (R-AN-27): from the one trade of review.open
                 ws = derive.side_of(ctx["review"]["open"][0]["side"])
                 side = -ws if plan["action"] == "reverse" else ws
-        if status in ("stay_out", "review_hold", "review_close"):
+        if status in ("stay_out", "review_hold", "review_close", "review_extend"):
             side = 0
-        if status not in ("called", "stay_out", "review_hold", "review_close"):
+        if status not in ("called", "stay_out", "review_hold", "review_close", "review_extend"):
             side = None
         call = self._call(mode, win, ctx, plan, status, n, session, asof, dref, side, sm, tm, S, Tt, sd, td)
         if mode == "canary":                           # R-AN-71, R-AN-84: canary calls carry the probe record
@@ -1342,15 +1453,17 @@ class World:
             return True, False
         void = settle.is_void(days, d)
         ws = self.day_view(mode, d)
-        ro = review.open_sets(ws)
+        de = day_end(d) if self.is_a17(d) else None       # §16.18 A17-R7, R9: extensions to day_end(d)
+        ro = review.open_sets(ws, de)
         res = {}
         for w in dwins:
             cid = w.call_id
-            if self.terminals[(mode, cid)]["status"] != "called":
+            if self.terminals[(mode, cid)]["status"] != "called" or w.w == "X":
                 continue
             call = self.calls[(mode, cid)]
             m = int(ro.managed[cid].timestamp()) if cid in ro.managed else None
-            mins = settle.Minutes(store, w)
+            x_exit = int(de.timestamp()) if de is not None and cid in ro.extended else None
+            mins = settle.Minutes(store, w, x_exit)
             out = settle.settle_side(mins, call["side"], call["S_dimes"], call["T_dimes"], void, m)
             res[cid] = {"m": m, "mins": mins, "out": out, "x_end": settle.x_end(out, mins, m)}
         wts = review.overlap_weights([(c, int(Window(*_cid(c)).entry.timestamp()), x["x_end"]) for c, x in
@@ -1373,7 +1486,7 @@ class World:
                     if closer else None
                 revs = []
                 for v in ws:
-                    if cid in ro.open[v["cid"]]:
+                    if cid in ro.open[v["cid"]] and not (de is not None and review.is_time(v)):
                         vp = (self.calls.get((mode, v["cid"])) or {}).get("plan") or {}
                         revs.append({"call_id": v["cid"], "status": v["status"], "action": vp.get("action"),
                                      "confidence": vp.get("confidence"), "reason_ar": vp.get("reason_ar")})
@@ -1402,11 +1515,26 @@ class World:
                        "call_sha256": sha256_bytes(_read(r.path, f"{pre}calls/{cid}.json")),
                        "terminal_sha256": sha256_bytes(t["bytes"]), "context_sha256": call["context_sha256"],
                        "settled_utc": fmt_utc(when), "run_id": run["id"], "head_sha": r.head()}
+                if de is not None:                     # §16.18 A17-R9: analyst-settled/3 and its `time` block
+                    rec["schema"] = "analyst-settled/3"
+                    xw = ro.time_of.get(cid)
+                    a4 = tde = None
+                    if w.exit <= de - dt.timedelta(minutes=60):
+                        a4 = settle.public(settle.settle_side(settle.Minutes(store, w), s, call["S_dimes"],
+                                                              call["T_dimes"], void))
+                        tde = settle.public(settle.settle_side(settle.Minutes(store, w, int(de.timestamp())), s,
+                                                               call["S_dimes"], call["T_dimes"], void))
+                    rec["time"] = {"call_id": xw, "status": self.terminals[(mode, xw)]["status"] if xw else None,
+                                   "extended": cid in ro.extended,
+                                   "x_exit_utc": fmt_utc(dt.datetime.fromtimestamp(x["mins"].t1, UTC)),
+                                   "at_4h": a4, "to_day_end": tde}
                 if "settled" in self.hooks:
                     self.hooks["settled"](self, w, rec)
                 r.write(f"{pre}settled/{cid}.json", record_form(rec))
                 self.a15_settled.add((mode, cid))
                 changed = True
+            if w.w == "X" and cid not in self.hooks.get("time_twin", set()):
+                continue                               # §16.18 A17-R9: a time window has no twin
             if not t["status"].startswith("skipped:") and (mode, cid) not in self.a15_twins:
                 me, mes, mx, mxs, dW, st = settle.twin(settle.Minutes(store, w), void)
                 tw = {"schema": "analyst-twin/1", "call_id": cid, "mode": mode, "window": w.w,
@@ -1442,7 +1570,7 @@ class World:
                 o = s["outcome"]
                 row.update(o)
                 row["class"] = s["class"]
-                row["a15"] = s if s["schema"] == "analyst-settled/2" else None
+                row["a15"] = s if s["schema"] in ("analyst-settled/2", "analyst-settled/3") else None
                 if s["class"] == "counted":
                     trades.append({"call_id": win.call_id, "model_day": win.day, "w": win.w, "side": s["side"],
                                    "y": o["y"], "R": o["R"], "net": o["net_usd"], "stress": o["stress_net_usd"],
@@ -1457,7 +1585,7 @@ class World:
         processed = set()
         for d, wl in by_day.items():
             if len(wl) == sum(1 for x in self.world_windows() if x.day == d) and \
-                    all((self.terminals[("live", w.call_id)]["status"].startswith("skipped:") or
+                    all((self.terminals[("live", w.call_id)]["status"].startswith("skipped:") or w.w == "X" or
                                      w.call_id in self.twins_done or ("live", w.call_id) in self.a15_twins) and
                                     (self.terminals[("live", w.call_id)]["status"] != "called" or
                                      self.settled_rec(w.call_id) is not None) for w in wl):
@@ -1570,7 +1698,8 @@ class World:
 
     def judge(self, out_dir=None, api=None, hours=None, store=True, now=None, prev_anchor=None, evidence=None,
               fetch=None, fresh_main=None, prev_judge_utc=None, adjudications=None, findings=None,
-              a12_commit="world", a14_commit="world", m30="world", halves="world", a15_commit="world"):
+              a12_commit="world", a14_commit="world", m30="world", halves="world", a15_commit="world",
+              a16_commit="world", a17_commit="world"):
         """adjudications: the judge's own ADJUDICATIONS.csv rows (R-AN-70); default: that file in out_dir, if any.
         findings: its FINDINGS.csv rows before the run (sixth review of A6, R6-2); default: that file in out_dir."""
         from jlib import report
@@ -1591,6 +1720,9 @@ class World:
                   a12_commit=self.a12_sha if a12_commit == "world" else a12_commit,
                   a14_commit=self.a14_sha if a14_commit == "world" else a14_commit,
                   a15_commit=self.a15_sha if a15_commit == "world" else a15_commit,
+                  # §16.18 A16 and A17: the world's builds (a world without them keeps the judge's config pins)
+                  a16_commit=(self.a16_sha or "config") if a16_commit == "world" else a16_commit,
+                  a17_commit=(self.a17_sha or "config") if a17_commit == "world" else a17_commit,
                   m30=(watch.M30Source(watch.FakeM30Fetcher(self.m30_responses()), None, max_fetch=100,
                                        sleep=lambda _s: None) if m30 == "world" else m30),
                   halves=(HalfSource(FakeHourFetcher(self.hour_files), None, now or self.now)

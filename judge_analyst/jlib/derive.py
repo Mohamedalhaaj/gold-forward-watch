@@ -33,27 +33,28 @@ def _bad_control(s: str) -> bool:
 
 
 def status_of_action(action):
-    """R-AN-29 (§16.18 A15): the call status a plan action gives."""
+    """R-AN-29 (§16.18 A15; §16.18 A17-R6: extend → review_extend): the call status a plan action gives."""
     return {"buy": "called", "sell": "called", "reverse": "called", "add": "called", "stay_out": "stay_out",
-            "hold": "review_hold", "close": "review_close"}.get(action)
+            "hold": "review_hold", "close": "review_close", "extend": "review_extend"}.get(action)
 
 
-def plan_errors(plan, v3: bool = False, v5: bool = False) -> list:
+def plan_errors(plan, v3: bool = False, v5: bool = False, v6: bool = False) -> list:
     """Enum reasons why `plan` is not a valid R-AN-26 plan (empty list = valid). Never returns plan text.
     v3 (§16.18 A12): the plan of an `analyst-context/3` call, `analyst-plan/2`: a stay_out also has
     `stay_out_reason`, exactly one of STAY_REASONS (another value or type: `stay_out_reason`); a trade has none (the
     key sets differ: `keys`). An `analyst-context/2` call keeps the old key set. v5 (§16.18 A15): the plan of an
     `analyst-context/5` call, `analyst-plan/3`: also `hold` and `close` (the stay_out keys without
     `stay_out_reason`) and `reverse` and `add` (the keys and multiples of buy and sell). Whether the action is one
-    the context allows is the caller's check (R-AN-26 `action_not_allowed`)."""
+    the context allows is the caller's check (R-AN-26 `action_not_allowed`). v6 (§16.18 A17-R6): the plan of an
+    `analyst-context/6` call, `analyst-plan/4`: `/3` plus `extend`, with exactly the keys of hold and close."""
     if not isinstance(plan, dict):
         return ["not_object"]
     errs = []
     action = plan.get("action")
     trades = ("buy", "sell", "reverse", "add") if v5 else ("buy", "sell")
-    if action not in trades + ("stay_out",) + (("hold", "close") if v5 else ()):
+    if action not in trades + ("stay_out",) + (("hold", "close") if v5 else ()) + (("extend",) if v6 else ()):
         return ["action"]
-    if action in ("hold", "close"):
+    if action in ("hold", "close", "extend"):
         want = STAY_KEYS
     else:
         want = TRADE_KEYS if action in trades else (STAY_KEYS_V2 if v3 else STAY_KEYS)

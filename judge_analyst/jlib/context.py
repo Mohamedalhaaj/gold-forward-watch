@@ -17,7 +17,7 @@ import json
 import math
 
 from . import derive, levels, review, td, ticks, watch
-from .clock import MACRO_PATH, Window, model_to_utc, to_server, weekday_before
+from .clock import MACRO_PATH, Window, day_end, model_to_utc, to_server, weekday_before
 from .common import (UTC, fmt_server, fmt_utc, fmt_utc_ms, load_json_bytes, parse_utc, price_eq, rel_eq,
                      sha256_bytes, utc_ms)
 from .m1 import DaysTable, Store
@@ -26,8 +26,9 @@ SCHEMA_V2 = "analyst-context/2"
 SCHEMA_V3 = "analyst-context/3"          # §16.18 A12 (R-AN-23)
 SCHEMA_V4 = "analyst-context/4"          # §16.18 A14 (R-AN-23): /3 plus `wake` right after `levels`
 SCHEMA_V5 = "analyst-context/5"          # §16.18 A15 (R-AN-23): /4 plus `review` right after `wake`
+SCHEMA_V6 = "analyst-context/6"          # §16.18 A17-R5 (R-AN-23): /5 with the `review` block changed
 SCHEMA = SCHEMA_V2
-SCHEMAS = (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)
+SCHEMAS = (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6)
 KEY_ORDER_V2 = ("schema", "call_id", "mode", "window", "model_day", "entry_utc", "exit_utc", "deadline_utc",
                 "entry_server", "exit_server", "asof_utc", "repo_head_sha", "params", "store", "files", "bars_h1",
                 "bars_d1", "p_ref", "fx", "us2y", "fresh", "sources", "events", "d_ref", "memory", "status", "detail")
@@ -39,20 +40,24 @@ KEY_ORDER_V4 = KEY_ORDER_V3[:KEY_ORDER_V3.index("levels") + 1] + ("wake",) + \
     KEY_ORDER_V3[KEY_ORDER_V3.index("levels") + 1:]
 KEY_ORDER_V5 = KEY_ORDER_V4[:KEY_ORDER_V4.index("wake") + 1] + ("review",) + \
     KEY_ORDER_V4[KEY_ORDER_V4.index("wake") + 1:]
+KEY_ORDER_V6 = KEY_ORDER_V5                       # §16.18 A17-R5: the same keys; only `review`'s content changes
 CONTEXT_KEYS = set(KEY_ORDER_V2)
-HIST_WEEKDAYS = {SCHEMA_V2: 10, SCHEMA_V3: 25, SCHEMA_V4: 25, SCHEMA_V5: 25}     # bars_d1 (R-AN-17); /3: from start_lv (R-AN-14)
+HIST_WEEKDAYS = {SCHEMA_V2: 10, SCHEMA_V3: 25, SCHEMA_V4: 25, SCHEMA_V5: 25,
+                 SCHEMA_V6: 25}                   # bars_d1 (R-AN-17); /3: from start_lv (R-AN-14)
 RISK_KEYS = {"pair", "p0", "p1", "pct", "t0_hour_utc", "t1_hour_utc"}
+TIME_SUBJECT = "time_subject"                     # §16.18 A17-R5: a time window's `context` found no subject
 
 
 def context_keys(schema: str) -> tuple:
     """The context's keys in the register's order (R-AN-23) for `schema`."""
-    return {SCHEMA_V3: KEY_ORDER_V3, SCHEMA_V4: KEY_ORDER_V4, SCHEMA_V5: KEY_ORDER_V5}.get(schema, KEY_ORDER_V2)
+    return {SCHEMA_V3: KEY_ORDER_V3, SCHEMA_V4: KEY_ORDER_V4, SCHEMA_V5: KEY_ORDER_V5,
+            SCHEMA_V6: KEY_ORDER_V6}.get(schema, KEY_ORDER_V2)
 
 
 def sources_block(schema: str) -> dict:
     """R-AN-23's `sources`: /2, /3 (A12-D21), /4 (A14: the /3 note followed by the wake sentence) and /5 (A15: the
-    /4 note followed by the review sentence)."""
-    if schema == SCHEMA_V5:
+    /4 note followed by the review sentence); /6 (§16.18 A17-R5: every field but `review` as for /5) as /5."""
+    if schema in (SCHEMA_V5, SCHEMA_V6):
         return dict(td.SOURCES_V3, note=td.SOURCES_V3["note"] + watch.WAKE_NOTE + review.NOTE)
     if schema == SCHEMA_V4:
         return dict(td.SOURCES_V3, note=td.SOURCES_V3["note"] + watch.WAKE_NOTE)
@@ -221,7 +226,8 @@ def compare_memory(exp, rec, out, base="memory", side=False):
 
 
 def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, events,
-                    schema: str = SCHEMA_V2, wake=None, review_trades=None, a15_from=None) -> Rebuild:
+                    schema: str = SCHEMA_V2, wake=None, review_trades=None, a15_from=None,
+                    review_extended=None) -> Rebuild:
     """Build the judge's expected context for a recorded context `rec` (its asof_utc, repo_head_sha and files list are
     the inputs; everything else is recomputed). `hours` is unused since §16.18 A9 (the Dukascopy downloads serve
     td_cross_check only); the parameter is kept for the callers. `schema` is the schema the call's repo_head_sha
@@ -230,11 +236,16 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
     record's, R-AN-90), and reads D_ref's rows from `mirror/system/forecasts.csv` (every slot, R-AN-21).
     (§16.18 A15) `analyst-context/5` adds `review`, rebuilt from `review_trades` (the call files' fields of the trades
     the recorded `review.open` names, in its order; None or [] for a null block) and the recorded `XAUUSD_M30R`
-    bars, the request after `fresh`; a canary context of a model day >= a15_from has the canary memory."""
+    bars, the request after `fresh`; a canary context of a model day >= a15_from has the canary memory.
+    (§16.18 A17-R5) `analyst-context/6` is `/5` with the block of `review.review_block_v6`: kind `time` for a time
+    window, else `review`; `review_extended` the recorded `open[].extended` flags (judge decision J-D70: whether those
+    trades were extended is A15 `review_open`'s); a time window whose recorded block is null makes the detail
+    `time_subject` applicable (its context found no subject)."""
     rb = Rebuild()
-    v5 = schema == SCHEMA_V5
-    v4 = schema in (SCHEMA_V4, SCHEMA_V5)
-    v3 = schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)
+    v6 = schema == SCHEMA_V6
+    v5 = schema in (SCHEMA_V5, SCHEMA_V6)
+    v4 = schema in (SCHEMA_V4, SCHEMA_V5, SCHEMA_V6)
+    v3 = schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6)
     win = Window(*_parse(call_id))
     d = win.day
     asof_s = rec.get("asof_utc")
@@ -495,6 +506,8 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
         e["memory"] = None
 
     # ---- status
+    if v6 and win.w == "X" and not review_trades:
+        rb.data_details.add(TIME_SUBJECT)        # A17-R5: no subject found, `no_call:data` with detail time_subject
     if rb.data_details:
         e["status"] = "no_call:data"
         e["detail"] = sorted(rb.data_details)
@@ -516,7 +529,12 @@ def rebuild_context(rec: dict, call_id: str, mode: str, git, hours, holidays, ev
         e["wake"] = watch.wake_block(wake, win)
     if v5:                                       # A15 (R-AN-92): the review, whatever the status
         m30r = by_req.get(review.M30R_REQ) if review.M30R_REQ in e["_plan"] else None
-        e["review"] = review.review_block(review_trades or [], win.entry, review.ok_m30r_bars(m30r))
+        if v6:                                   # A17-R5: the kind, the current exits and extend_until_utc
+            kind = review.KIND_TIME if win.w == "X" else review.KIND_REVIEW
+            e["review"] = review.review_block_v6(review_trades or [], win.entry, review.ok_m30r_bars(m30r), kind,
+                                                 day_end(d), review_extended)
+        else:
+            e["review"] = review.review_block(review_trades or [], win.entry, review.ok_m30r_bars(m30r))
     return rb
 
 
@@ -545,9 +563,9 @@ def compare_context(rb: Rebuild, rec: dict) -> list:
     """Field paths where the recorded context differs from the rebuild beyond R-AN-68 (A4)."""
     out = list(rb.mismatches)
     e = rb.expected
-    v3 = e["schema"] in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)
-    v4 = e["schema"] in (SCHEMA_V4, SCHEMA_V5)
-    v5 = e["schema"] == SCHEMA_V5
+    v3 = e["schema"] in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6)
+    v4 = e["schema"] in (SCHEMA_V4, SCHEMA_V5, SCHEMA_V6)
+    v5 = e["schema"] in (SCHEMA_V5, SCHEMA_V6)
     if set(rec.keys()) != set(context_keys(e["schema"])):
         out.append("keys")
     for k in ("schema", "call_id", "mode", "window", "model_day", "entry_utc", "exit_utc", "deadline_utc",
@@ -564,7 +582,9 @@ def compare_context(rb: Rebuild, rec: dict) -> list:
         out.append("events")
     if v4:
         out += watch.compare_wake(e["wake"], rec.get("wake"))
-    if v5:
+    if e["schema"] == SCHEMA_V6:                 # §16.18 A17-R5
+        out += review.compare_review_v6(e["review"], rec.get("review"))
+    elif v5:
         out += review.compare_review(e["review"], rec.get("review"))
     status = rec.get("status")
     detail = rec.get("detail")

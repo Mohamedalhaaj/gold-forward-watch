@@ -1,5 +1,7 @@
 """§16.18 A15 (2026-10-29): reviews, as the judge rebuilds them from the register text. R-AN-92's open set, its options
 and the `review` block of `analyst-context/5`, with the `XAUUSD_M30R` request; R-AN-94's overlap weights and clusters.
+§16.18 A17 (2026-11-06): the open set with extensions (A17-R7), the subject of a time window (A17-R2) and the `review`
+block of `analyst-context/6` (A17-R5).
 Pure functions: the judge's own reading of the records feeds them (jlib/judge.py)."""
 from __future__ import annotations
 
@@ -22,6 +24,13 @@ OPEN_KEYS = ("call_id", "action", "side", "entry_utc", "exit_utc", "stop_usd", "
              "target_mult", "entry_px", "move_usd", "move_r", "high_since_entry", "low_since_entry", "stop_touched",
              "target_touched", "minutes_left")
 REL_KEYS = ("move_usd", "move_r")                 # R-AN-68 (A15): relative 1e-9; every other value exact
+# §16.18 A17-R5, R-AN-23 (analyst-context/6): the block's kind and extend_until_utc, open[].extended after exit_utc
+EXTEND = "review_extend"                          # A17-R6: the status of `extend`
+TIME_OPTIONS = ["extend", "close"]
+KIND_REVIEW, KIND_TIME = "review", "time"
+BLOCK_KEYS_V6 = ("kind", "open", "options", "ref_px", "ref_utc", "extend_until_utc")
+OPEN_KEYS_V6 = OPEN_KEYS[:OPEN_KEYS.index("exit_utc") + 1] + ("extended",) + OPEN_KEYS[OPEN_KEYS.index("exit_utc") + 1:]
+MIN_EXTENSION = dt.timedelta(minutes=60)          # A17-D3: exit_utc <= day_end(d) − 60 min
 
 
 def options(n: int):
@@ -40,27 +49,52 @@ class OpenSets:
     closed_by: dict = field(default_factory=dict)   # trade call_id -> the closing window's call_id
     eff_exit: dict = field(default_factory=dict)    # trade call_id -> eff_exit (datetime)
     managed: dict = field(default_factory=dict)     # trade call_id -> entry of its closing window (datetime)
+    extended: dict = field(default_factory=dict)    # §16.18 A17-R7: trade call_id -> the time window that extended it
+    flags: dict = field(default_factory=dict)       # A17-R5: call_id -> [extended at R, for each trade of O(R)]
+    time_of: dict = field(default_factory=dict)     # A17-R9: trade call_id -> the time window at its exit (X(w))
 
 
 def is_trade(status) -> bool:
     return status == "called"
 
 
+def is_time(w) -> bool:
+    """A time window `<d>_X<hhmm>` (§16.18 A17-R1)."""
+    return bool(w.get("time")) or str(w.get("cid", "")).rsplit("_", 1)[-1].startswith("X")
+
+
 def closes(status, action) -> bool:
     return status == "review_close" or (status == "called" and action == "reverse")
 
 
-def open_sets(wins) -> OpenSets:
+def open_sets(wins, day_end: dt.datetime | None = None) -> OpenSets:
     """R-AN-92 over one model day of one mode. `wins`: the day's windows in window order, each a dict with `cid`,
     `entry`, `exit` (datetimes), `status` (its call status: the terminal's for the judge), `action` (its plan's
     action or None) and `names` (the call_ids its context's `review.open` names, or None). A trade is a `called`
-    window; a `review_close` or `called` reverse window closes the trades of its O that its context names."""
+    window; a `review_close` or `called` reverse window closes the trades of its O that its context names.
+    (§16.18 A17-R7) day_end: day_end(d) for a model day >= a17_from (None before it: no extension). A time window
+    closes nothing, opens nothing and is a review of no trade; with status `review_extend` and its context's
+    `review.open` naming its subject (the trade whose exit is its entry, not closed before), that trade's eff_exit is
+    day_end(d) for the windows after it, and a later closing window may close it there. A trade is extended once."""
     out = OpenSets()
     trades = []
     for w in wins:
         e = w["entry"]
         O = [t["cid"] for t in trades if out.eff_exit[t["cid"]] > e]
         out.open[w["cid"]] = O
+        out.flags[w["cid"]] = [cid in out.extended for cid in O]
+        if is_time(w):
+            for t in trades:
+                if t["exit"] == e:
+                    out.time_of.setdefault(t["cid"], w["cid"])
+            if day_end is not None and w["status"] == EXTEND:
+                names = set(w.get("names") or [])
+                for t in trades:
+                    cid = t["cid"]
+                    if cid in names and t["exit"] == e and cid not in out.closed_by and cid not in out.extended:
+                        out.extended[cid] = w["cid"]
+                        out.eff_exit[cid] = day_end
+            continue
         if closes(w["status"], w.get("action")):
             names = set(w.get("names") or [])
             for cid in O:
@@ -76,6 +110,20 @@ def open_sets(wins) -> OpenSets:
 
 def max_open(r: OpenSets) -> int:
     return max((len(v) for v in r.open.values()), default=0)
+
+
+def subject_at(wins, e: dt.datetime, day_end: dt.datetime):
+    """§16.18 A17-R2: the subject of a time window entering at e (its check T = e − 30 min): the trade w of d with
+    exit_utc(w) = e whose eff_exit, by A17-R7 for a window entering at e, equals exit_utc(w) (no earlier window
+    closed it), if exit_utc(w) <= day_end(d) − 60 min; else None. `wins` as for `open_sets`."""
+    before = [w for w in wins if w["entry"] < e]
+    r = open_sets(before, day_end)
+    for w in before:
+        if is_time(w) or not is_trade(w["status"]):
+            continue
+        if w["exit"] == e and r.eff_exit.get(w["cid"]) == w["exit"] and w["exit"] <= day_end - MIN_EXTENSION:
+            return w["cid"]
+    return None
 
 
 # ---------------------------------------------------------------- the `review` block (R-AN-92)
@@ -169,8 +217,57 @@ def review_block(trades, e_r: dt.datetime, bars) -> dict | None:
             "ref_px": ref_px, "ref_utc": ref_utc}
 
 
+def review_block_v6(trades, e_r: dt.datetime, bars, kind: str, day_end: dt.datetime, extended) -> dict | None:
+    """The `analyst-context/6` `review` block (§16.18 A17-R5): `/5`'s block with `kind` first and `extend_until_utc`
+    last. kind `review` (R-AN-92's review; options as before, extend_until_utc null) or `time` (a time window: open =
+    [the subject], options ["extend", "close"], extend_until_utc = day_end(d)). Each `open` element gains `extended`
+    (`extended[i]`) right after `exit_utc`; its `exit_utc` and `minutes_left` use the trade's current exit: day_end(d)
+    when extended, else exit_utc. Every other value as for `/5`. None when `trades` is empty."""
+    if not trades:
+        return None
+    flags = [x is True for x in (extended or [])]                    # a recorded non-bool is no extension
+    flags += [False] * (len(trades) - len(flags))
+    cur = [dict(t, exit_utc=fmt_utc(day_end)) if x is True else t for t, x in zip(trades, flags)]
+    b = review_block(cur, e_r, bars)
+    opens = []
+    for o, x in zip(b["open"], flags):
+        opens.append({k: (x if k == "extended" else o[k]) for k in OPEN_KEYS_V6})
+    timed = kind == KIND_TIME
+    return {"kind": kind, "open": opens, "options": list(TIME_OPTIONS) if timed else b["options"],
+            "ref_px": b["ref_px"], "ref_utc": b["ref_utc"], "extend_until_utc": fmt_utc(day_end) if timed else None}
+
+
 def _same(a, b) -> bool:
     return a == b and type(a) is type(b)
+
+
+def compare_review_v6(exp, rec) -> list:
+    """R-AN-68 (A15, A17): `/6`'s block as `/5`'s, plus `kind`, `extend_until_utc` and each `open[].extended`, all
+    exact."""
+    if exp is None or rec is None:
+        return [] if exp is None and rec is None else ["review"]
+    if not isinstance(rec, dict) or set(rec) != set(BLOCK_KEYS_V6):
+        return ["review.keys"]
+    out = [f"review.{k}" for k in ("kind", "options", "ref_utc", "extend_until_utc") if not _same(rec[k], exp[k])]
+    if not _same(rec["ref_px"], exp["ref_px"]):
+        out.append("review.ref_px")
+    ro, eo = rec["open"], exp["open"]
+    if not isinstance(ro, list) or len(ro) != len(eo):
+        return sorted(out) + ["review.open"]
+    for i, (a, b) in enumerate(zip(eo, ro)):
+        if not isinstance(b, dict) or set(b) != set(OPEN_KEYS_V6):
+            out.append(f"review.open[{i}].keys")
+            continue
+        for k in OPEN_KEYS_V6:
+            if k in REL_KEYS:
+                ok = (a[k] is None and b[k] is None) or (a[k] is not None and rel_eq(b[k], a[k]))
+            elif isinstance(a[k], (int, float)) and not isinstance(a[k], bool):
+                ok = isinstance(b[k], (int, float)) and not isinstance(b[k], bool) and b[k] == a[k]
+            else:
+                ok = _same(b[k], a[k])
+            if not ok:
+                out.append(f"review.open[{i}].{k}")
+    return sorted(out)
 
 
 def compare_review(exp, rec) -> list:

@@ -24,11 +24,11 @@ import urllib.error
 import urllib.request
 
 from . import td
-from .clock import HALF, check_grid, scheduled_checks, tday, trigger_wid
+from .clock import HALF, Window, check_grid, check_grid_x, parse_call_id, scheduled_checks, tday, time_wid, trigger_wid
 from .common import UTC, fmt_utc, is_utc, parse_utc, rel_eq, sha256_bytes
 
 CONDITIONS = ("asia_up", "asia_dn", "y_high", "y_low", "move")
-KINDS = ("fixed", "second_look", "trigger")
+KINDS = ("fixed", "second_look", "trigger", "time")       # §16.18 A17-R4: `time`
 M30_REQ = "XAUUSD_M30"
 DAY_CAP = 6                           # R-AN-89 step 2: |E(T)| >= 6
 DAY_CAP_A16 = 10                      # §16.18 A16: from MODE.json a16_from on
@@ -116,12 +116,15 @@ def conditions(v: dict, d: dt.date, t_check: dt.datetime) -> dict:
 
 
 def rule(d: dt.date, t_check: dt.datetime, earlier, n_open: int, holiday: bool, cond: dict | None,
-         cap: int = DAY_CAP):
+         cap: int = DAY_CAP, subject: str | None = None, a17: bool = False):
     """R(T), in R-AN-89's order. `earlier` = E(T) as [(check, kind, reason)], `n_open` = |O(T)|, `holiday` = a row of
     either exchange on d, `cond` = the conditions at T (None: no bars; only steps 1-5 can then decide), `cap` = step
-    2's cap of d (10 from a16_from on, §16.18 A16).
-    Returns (outcome, wid, kind, reason): outcome `trade_open` | `day_cap` | `window` | `none` | `outside`."""
-    if t_check not in check_grid(d):
+    2's cap of d (10 from a16_from on, §16.18 A16). (§16.18 A17-R3) a17: d >= a17_from, so T runs over G_X(d) and
+    the time step 4b follows step 4: `subject` (A17-R2, the trade of d whose exit is T + 30 min, or None) gives the
+    time window `<d>_X<hhmm>`; steps 5 and 6 then apply to T in G(d) only, and a T beyond L_d gives none.
+    Returns (outcome, wid, kind, reason): outcome `trade_open` | `day_cap` | `window` | `none` | `outside`; for a
+    time window the reason slot carries its subject's call_id (the `wake.reason` of A17-R4)."""
+    if t_check not in (check_grid_x(d) if a17 else check_grid(d)):
         return ("outside", None, None, None)
     if n_open:
         return ("trade_open", None, None, None)
@@ -132,6 +135,10 @@ def rule(d: dt.date, t_check: dt.datetime, earlier, n_open: int, holiday: bool, 
         w = sched[t_check]
         return ("window", w, "fixed" if w in ("W1", "W2") else "second_look", None)
     if holiday:
+        return ("none", None, None, None)
+    if a17 and subject:                                      # §16.18 A17-R3 step 4b: before the gaps and conditions
+        return ("window", time_wid(t_check), "time", subject)
+    if a17 and t_check not in check_grid(d):                 # beyond L_d: none
         return ("none", None, None, None)
     g = math.inf if not earlier else (t_check - max(c for c, _k, _r in earlier)).total_seconds() / 60
     if g < 60:
@@ -196,6 +203,16 @@ def wake_problems(rec, win) -> list:
         out.append("wake.kind")
     if wk["check_utc"] != fmt_utc(win.check):
         out.append("wake.check_utc")
+    if win.kind == "time":
+        # §16.18 A17-R4: {kind `time`, reason = the subject's call_id, check_utc T}, no XAUUSD_M30 request. The
+        # subject is a trade of d whose exit is this window's entry (A17-R2): a call_id of d whose window exits there
+        # (whether it is the subject the rule gives is A17 `not_due`)
+        p = parse_call_id(wk["reason"]) if isinstance(wk["reason"], str) else None
+        if p is None or p[0] != win.day or p[1].startswith("X") or Window(*p).exit != win.entry:
+            out.append("wake.reason")
+        if wk["td"] is not None:
+            out.append("wake.td")
+        return out
     if win.kind != "trigger":
         if wk["reason"] is not None:
             out.append("wake.reason")
