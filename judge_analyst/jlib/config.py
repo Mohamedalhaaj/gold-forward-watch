@@ -16,7 +16,12 @@ A15. A call whose `repo_head_sha` is that commit or descends from it must carry 
 from A14's build but not from A15's, `analyst-context/4`. It also anchors MODE.json `a15_from` (A15 `a15_from`). None
 until the A15 build is on gold-analyst main: no call may then have `/5`, and an `a15_from` that is set gives the A0
 WARNING `a15_unpinned`.
+
+A16_BUILD_COMMIT (§16.18 A16; R-AN-5, R-AN-67 A16): the gold-analyst main commit that builds A16 (the day cap of 10
+from MODE.json `a16_from`). It anchors `a16_from` (A16 `a16_from`). None until the A16 build is on gold-analyst main:
+an `a16_from` that is set then gives the A0 WARNING `a16_unpinned`.
 """
 A12_BUILD_COMMIT = "c45383a877848ee7616ac9d81efd51b7114f1a7e"   # gold-analyst A12 build (client approval 2026-10-26)
 A14_BUILD_COMMIT = "a6158a3bf37a82d1c2bdcb7a6a00465a5ea2c69f"   # gold-analyst A14 build (client approval 2026-10-27)
 A15_BUILD_COMMIT = "ced2ab9c27f6e587843bfe0ccb548b4b344b302b"   # gold-analyst A15 build (client approval 2026-10-29)
+A16_BUILD_COMMIT = "d29a41b546aaa31429a2bd85053b2df0aca2d96f"   # gold-analyst A16 build (client approval 2026-11-05)

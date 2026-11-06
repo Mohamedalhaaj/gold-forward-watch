@@ -31,6 +31,7 @@ CONDITIONS = ("asia_up", "asia_dn", "y_high", "y_low", "move")
 KINDS = ("fixed", "second_look", "trigger")
 M30_REQ = "XAUUSD_M30"
 DAY_CAP = 6                           # R-AN-89 step 2: |E(T)| >= 6
+DAY_CAP_A16 = 10                      # §16.18 A16: from MODE.json a16_from on
 R20_DAYS = 20
 WAKE_KEYS = ("kind", "reason", "check_utc", "td")
 CTX_WAKE_KEYS = ("kind", "reason", "check_utc", "values", "r20_days", "bars_m30")
@@ -114,15 +115,17 @@ def conditions(v: dict, d: dt.date, t_check: dt.datetime) -> dict:
     return out
 
 
-def rule(d: dt.date, t_check: dt.datetime, earlier, n_open: int, holiday: bool, cond: dict | None):
+def rule(d: dt.date, t_check: dt.datetime, earlier, n_open: int, holiday: bool, cond: dict | None,
+         cap: int = DAY_CAP):
     """R(T), in R-AN-89's order. `earlier` = E(T) as [(check, kind, reason)], `n_open` = |O(T)|, `holiday` = a row of
-    either exchange on d, `cond` = the conditions at T (None: no bars; only steps 1-5 can then decide).
+    either exchange on d, `cond` = the conditions at T (None: no bars; only steps 1-5 can then decide), `cap` = step
+    2's cap of d (10 from a16_from on, §16.18 A16).
     Returns (outcome, wid, kind, reason): outcome `trade_open` | `day_cap` | `window` | `none` | `outside`."""
     if t_check not in check_grid(d):
         return ("outside", None, None, None)
     if n_open:
         return ("trade_open", None, None, None)
-    if len(earlier) >= DAY_CAP:
+    if len(earlier) >= cap:
         return ("day_cap", None, None, None)
     sched = scheduled_checks(d)
     if t_check in sched:
