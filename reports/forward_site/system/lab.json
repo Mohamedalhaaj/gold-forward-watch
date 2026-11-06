@@ -1,9 +1,9 @@
 {
- "generated_utc": "2026-11-05T17:26:12Z",
+ "generated_utc": "2026-11-06T10:53:26Z",
  "lab_state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
- "lab_days": 3,
+ "lab_days": 4,
  "n_paper": 1,
  "n_live": 0,
  "interpreter_needed": false,
@@ -61,13 +61,13 @@
    "registered_utc": "2026-10-17T18:55:29Z",
    "n_post": 0,
    "record": "since first_day",
-   "E": 0.923299,
+   "E": 0.87402,
    "E_star": null,
    "progress": null,
    "K": null,
-   "n": 3,
-   "net_sum": 1.456427,
-   "net_avg": 0.485476,
+   "n": 4,
+   "net_sum": -10.866573,
+   "net_avg": -2.716643,
    "T": "1500",
    "hold": 8
   }
@@ -109,13 +109,13 @@
   }
  },
  "data": {
-  "ok_days": 65,
+  "ok_days": 66,
   "missing": [],
-  "complete_through_utc": "2026-11-05 00:00",
+  "complete_through_utc": "2026-11-06 00:00",
   "lag_trading_days": 0,
   "revisions": 0,
-  "store_rows": 1082,
-  "store_defined": 825,
-  "store_new": 0
+  "store_rows": 1105,
+  "store_defined": 848,
+  "store_new": 23
  }
 }
