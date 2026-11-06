@@ -1,6 +1,6 @@
 key,value
 version,1
-asof_utc,2026-11-06T10:53:26Z
+asof_utc,2026-11-06T16:47:16Z
 l1_green_ok,1
 l1_asof,2026-11-06
 l3_asof,-
@@ -24,7 +24,7 @@ lab_n_paper,1
 lab_n_live,0
 lab_best_progress,0.012
 lab2_state,RUNNING
-lab2_days,3
+lab2_days,4
 lab2_n_paper,4
 lab2_best_progress,0.002
 end,29
