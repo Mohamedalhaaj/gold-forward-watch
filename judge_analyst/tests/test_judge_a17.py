@@ -75,8 +75,10 @@ def test_statuses_keys_and_the_unpinned_build():
     assert not operational("A17|not_due|analyst/attempts/x_1.json|c")         # an integrity key, as not_triggered
     assert hasattr(config, "A17_BUILD_COMMIT")
     pin = config.A17_BUILD_COMMIT
-    assert pin is None or isinstance(pin, str)
+    assert isinstance(pin, str) and len(pin) == 40 and int(pin, 16) >= 0    # pinned (the A17 build commit)
     j = Judge.__new__(Judge)
+    Judge.__init__(j, None, "2026-12-07T12:00:00Z")
+    assert j.a17_commit == pin                                          # the judge's default is the pin
     Judge.__init__(j, None, "2026-12-07T12:00:00Z", a17_commit="PLACEHOLDER-A17-BUILD-COMMIT")
     assert j.a17_commit is None                                         # a placeholder is no pin
     Judge.__init__(j, None, "2026-12-07T12:00:00Z", a17_commit="ab" * 20)
@@ -157,6 +159,8 @@ def test_a_time_window_closes_and_opens_nothing():
         assert r.closed_by == {} and r.extended == {}, st
         assert r.eff_exit["2026-12-02_W1"] == T("2026-12-02T12:00:00Z"), st
         assert r.open["2026-12-02_T1230"] == ["2026-12-02_W1b"], st      # the X window is never a trade
+        # A17-R7 (amended): O(X) is empty by definition, though W1b is open at its entry (no review, no open_cap)
+        assert r.open["2026-12-02_X1130"] == [] and r.flags["2026-12-02_X1130"] == [], st
     # an extension names only its own subject (the trade whose exit is its entry), once
     wins = base + [W("2026-12-02_X1130", "12:00", "review_extend", "extend", ["2026-12-02_W1b"])]
     assert review.open_sets(wins, DE).extended == {}
@@ -299,13 +303,21 @@ def test_an_extended_trade_settles_to_day_end():
     out = settle.settle_side(ext, 1, 50, 100, False)
     assert out["reason"] == "target" and out["exit_minute_utc"] == "2026-12-02T19:25:00Z"
     assert settle.x_end(out, ext) == T0 + (685 + 1) * 60
-    ps = settle.path_summary(ext, 1, out)
-    assert len(ps["buckets"]) == 56 and len(settle.path_summary(four, 1, at_4h)["buckets"]) == 16
+    # A17-R9 (amended): R-AN-46's 16 buckets (the first 4 hours), range_mid_usd over [t0, x_exit), mfe, mae and
+    # exit_after_min on the trade's own minutes
+    ps, p4 = settle.path_summary(ext, 1, out), settle.path_summary(four, 1, at_4h)
+    assert len(ps["buckets"]) == 16 and ps["buckets"] == p4["buckets"]
+    assert ps["range_mid_usd"] == pytest.approx(12.78) and p4["range_mid_usd"] == pytest.approx(0.8)
+    assert (ps["mfe_usd"], ps["mae_usd"], ps["exit_after_min"]) == (pytest.approx(10.0), pytest.approx(0.9), 685)
+    assert (p4["mfe_usd"], p4["exit_after_min"]) == (pytest.approx(1.1), 239)
     # a review after exit_utc closes the extended trade: the managed minute lies after it
     m = int(T("2026-12-02T14:30:00Z").timestamp())
     man = settle.settle_side(ext, 1, 50, 100, False, m)
     assert (man["reason"], man["fill"], man["exit_minute_utc"]) == ("managed", "open", "2026-12-02T14:30:00Z")
     assert settle.x_end(man, ext, m) == m
+    pm = settle.path_summary(ext, 1, man, m)
+    assert (len(pm["buckets"]), pm["range_mid_usd"], pm["exit_after_min"]) == (16, pytest.approx(12.78), 390)
+    assert pm["mfe_usd"] == pytest.approx(4.08)                            # t0 .. m − 1 (R-AN-93)
     flat_ext = settle.Minutes(long_store(lambda k: (4_001_000, 4_001_100, 4_000_900, 4_001_000)), WIN, t1=end)
     tim = settle.settle_side(flat_ext, 1, 50, 100, False)
     assert tim["reason"] == "time" and tim["exit_minute_utc"] == "2026-12-02T21:59:00Z"
@@ -471,14 +483,16 @@ from world import (PLAN_ADD, PLAN_BUY, PLAN_CLOSE, PLAN_EXTEND, PLAN_HOLD, PLAN_
 import json  # noqa: E402
 import os  # noqa: E402
 
-# canary 12-01 (A14), 12-02 (A15 and A16: the day before a17_from keeps A16's rules), 12-03 (A17); live 12-04 (A17).
+# Canary 11-30 (A14), 12-01 (A15), 12-02 (A16: the day before a17_from keeps A16's rules), 12-03 (A17); live 12-04
+# (A17). As A16-D3 and A17-D5 (amended) plan them, a16_from and a17_from are consecutive days, each with its own build,
+# Worker and WATCHER_CONFIG.json the evening before; the A17 build is a --no-ff merge after 12-02's last lock.
 # Canary 12-03: T2330 buy; T0130 adds; X0330 closes T2330 at its exit; X0530 extends T0130; W1 holds; W1b closes the
 # extended T0130 at 10:00 (after its exit, 06:00); W2 buy; W2b holds; T1730 adds (exit 22:00, too late for a time
 # window); X1800 extends W2 to 22:00. Live 12-04: T0030 buy; X0430 extends it; T0630 reverses it at 07:00 (after its
 # exit, 05:00); W1 and W1b hold; X1030 closes T0630 at its exit; W2 sell; T1530 and W2b hold; X1800 closes W2.
-A17_WORLD = dict(canary_days=("2026-12-01", "2026-12-02", "2026-12-03"), live_from="2026-12-04",
-                 live_to="2026-12-04", now="2026-12-07T12:00:00Z", store_first="2026-10-19", a12_from="2026-11-30",
-                 a14_from="2026-12-01", a15_from="2026-12-02", a16_from="2026-12-02", a17_from="2026-12-03")
+A17_WORLD = dict(canary_days=("2026-11-30", "2026-12-01", "2026-12-02", "2026-12-03"), live_from="2026-12-04",
+                 live_to="2026-12-04", now="2026-12-07T12:00:00Z", store_first="2026-10-19", a12_from="2026-11-29",
+                 a14_from="2026-11-30", a15_from="2026-12-01", a16_from="2026-12-02", a17_from="2026-12-03")
 PLANS = {"2026-12-03_T0130": ("call", PLAN_ADD), "2026-12-03_X0330": ("call", PLAN_CLOSE),
          "2026-12-03_X0530": ("call", PLAN_EXTEND), "2026-12-03_W1": ("call", PLAN_HOLD),
          "2026-12-03_W1b": ("call", PLAN_CLOSE), "2026-12-03_W2": ("call", PLAN_BUY),
@@ -548,7 +562,7 @@ def test_a17_world_runs_time_decisions(a17):
         "call_id": None, "status": None, "extended": False, "x_exit_utc": "2026-12-03T22:00:00Z", "at_4h": None,
         "to_day_end": None}
     w2 = rec(a17, "analyst/canary/settled/2026-12-03_W2.json")
-    assert w2["time"]["extended"] is True and len(w2["path_summary"]["buckets"]) > 16
+    assert w2["time"]["extended"] is True and len(w2["path_summary"]["buckets"]) == 16     # A17-R9: the first 4 h
     t0030 = rec(a17, "analyst/settled/2026-12-04_T0030.json")
     assert (t0030["closed_by"], t0030["managed_utc"], t0030["exit_utc"]) == \
         ("2026-12-04_T0630", "2026-12-04T07:00:00Z", "2026-12-04T05:00:00Z")
@@ -600,8 +614,25 @@ def test_A17_a17_from_moved_and_records_before_it(a17, tmp_path):
     assert "accepted push before a17_from; 2026-12-03_X0530" in det             # time windows of 12-03
     # (their review_extend terminals share the call's commit, hence its key; the settle run's commit is its own)
     assert "analyst-settled/3; 2026-12-03_T0130" in det
+    assert "A17 build before a17_from; 2026-12-03_W1" in det                  # A17-D5's order: 12-03 ran on it
     # 12-03 is a day before a17_from now: its calls are expected as /5 (A4)
     assert any("analyst/canary/calls/2026-12-03_W1.json" in k for k in rkeys(res, "A4", VIOLATION, "context_schema"))
+
+
+def test_A17_build_merged_before_the_last_lock_of_the_day_before(tmp_path):
+    """A17-D5 (amended): the A17 build reaches main after the last lock of the day before a17_from, so no window of
+    an A16-only day runs on it. Merged on that morning instead (R-AN-5's rule still holds at 22:00Z), every window of
+    12-02 runs on it: A17 `a17_from` on those records, and nothing else."""
+    def day(world, d):
+        if d == dt.date(2026, 12, 2):                  # after the day's 02:10 mirror run, before its windows
+            world.make_a17_commits(T("2026-12-02T02:30:00Z"))
+    w = a17_world(str(tmp_path / "w"), hooks={"day": day})
+    res = w.judge()
+    det = sorted(f.detail for f in res.findings.items if f.code == "a17_from")
+    assert det and all(x.startswith("A17 build before a17_from; 2026-12-02_") for x in det)
+    assert "A17 build before a17_from; 2026-12-02_W1" in det
+    assert all(operational(k) for k in rkeys(res, "A17", VIOLATION, "a17_from"))
+    assert [k for k in rkeys(res, severity=VIOLATION) if not k.startswith("A17|a17_from|")] == []
 
 
 def _bad_hooks():

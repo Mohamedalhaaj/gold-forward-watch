@@ -2058,7 +2058,7 @@ class Judge:
         a16_from, with the pinned A17 build commit (A0 `a17_unpinned` while it is a placeholder), plus a16_from set and
         a17_from >= a16_from; and, for a model day before it (or at all while it is null), no accepted push of a time
         window, no `review_extend` terminal and no `analyst-settled/3` record, in either mode (A17-R8, A17-R9: days
-        before a17_from keep A16's rules)."""
+        before a17_from keep A16's rules), and no attempt record or call file on the A17 build (A17-D5's order)."""
         path = "analyst/MODE.json"
         set_sha = self.check_from_value("A17", "a17_from", self.a17_day, self.a17_commit, "a17_unpinned")
         if self.a17_day is not None and (self.a16_day is None or self.a17_day < self.a16_day):
@@ -2085,6 +2085,33 @@ class Judge:
                     rec = self.json_at_head(p)
                     if isinstance(rec, dict) and rec.get(field_) == bad:
                         self.F.v("A17", "a17_from", path, self.commit_of(p), safe_detail(bad, cid))
+        # A17-D5 (amended 2026-11-06): the A17 build reaches main after the last lock of the day before a17_from, so
+        # no window of an earlier model day runs on it: no attempt record or call file of such a day names a
+        # repo_head_sha that is the A17 build commit or descends from it (judge decision J-D67)
+        b = _pinned(self.a17_commit)
+        if not b or not self.git.commit_exists(b):
+            return
+        seen = {}
+
+        def on_build(R):
+            if R not in seen:
+                seen[R] = isinstance(R, str) and _SHA40.fullmatch(R) is not None and \
+                    (R == b or (self.git.commit_exists(R) and self.git.is_ancestor(b, R)))
+            return seen[R]
+        for (_mode, cid), info in sorted(self.terminal_info.items()):
+            call, call_r = info.get("call"), info.get("call_raw")
+            if call_r is None or not isinstance(call, dict) or not before(cid):
+                continue
+            ctx = call.get("context") if isinstance(call.get("context"), dict) else {}
+            if on_build(ctx.get("repo_head_sha", call.get("repo_head_sha"))):
+                self.F.v("A17", "a17_from", path, call_r.commit, safe_detail("A17 build before a17_from", cid))
+        for r in self.wits(None, "attempt", None, "accepted"):
+            aid = r.rec.get("id")
+            if parse_call_id(str(aid or "")) is None or not before(aid):
+                continue
+            rec = self.json_at_head(r.rec.get("path") or "")
+            if isinstance(rec, dict) and on_build(rec.get("repo_head_sha")):
+                self.F.v("A17", "a17_from", path, r.commit, safe_detail("A17 build before a17_from", aid))
 
     FIXTURE = "analyst/tests/fixtures/canary_settled.json"
 
@@ -3035,7 +3062,7 @@ class Judge:
     def settled_extras(self, cid, x, ws, r, win=None, store=None, void=False, de=None):
         """R-AN-93's new fields of trade cid: managed_utc, closed_by, x_end_utc, weight, cluster, unmanaged, reviews.
         (§16.18 A17-R9, judge decision J-D73) de: day_end(d) for a model day >= a17_from (`analyst-settled/3`):
-        `unmanaged` over [t0, x_exit), `reviews` without time windows (a time window is a review of no trade), and
+        `unmanaged` over [t0, x_exit), `reviews` as before (O(X) is empty, so no time window is listed, A17-R7), and
         the `time` block: X(w)'s call_id and terminal status (null without one), extended, x_exit_utc, and, for a
         trade with exit_utc <= day_end(d) − 60 min, the descriptive `at_4h` over [t0, exit_utc) and `to_day_end`
         over [t0, day_end(d)), both without a managed exit (null for a later trade)."""
@@ -3048,7 +3075,7 @@ class Judge:
                                                   x["out"]["status"] == "void"))
         revs = []
         for w in ws:
-            if cid in r.open.get(w["cid"], []) and not (de is not None and w.get("time")):
+            if cid in r.open.get(w["cid"], []):
                 plan = (w["info"].get("call") or {}).get("plan")
                 plan = plan if isinstance(plan, dict) else {}
                 revs.append({"call_id": w["cid"], "status": w["info"].get("status"), "action": plan.get("action"),

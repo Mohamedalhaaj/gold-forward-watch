@@ -73,14 +73,15 @@ def open_sets(wins, day_end: dt.datetime | None = None) -> OpenSets:
     action or None) and `names` (the call_ids its context's `review.open` names, or None). A trade is a `called`
     window; a `review_close` or `called` reverse window closes the trades of its O that its context names.
     (§16.18 A17-R7) day_end: day_end(d) for a model day >= a17_from (None before it: no extension). A time window
-    closes nothing, opens nothing and is a review of no trade; with status `review_extend` and its context's
-    `review.open` naming its subject (the trade whose exit is its entry, not closed before), that trade's eff_exit is
-    day_end(d) for the windows after it, and a later closing window may close it there. A trade is extended once."""
+    closes nothing, opens nothing and is a review of no trade: O(X) is empty by definition, so it is in no trade's
+    `reviews` and counts for nothing in `open_cap`. With status `review_extend` and its context's `review.open`
+    naming its subject (the trade whose exit is its entry, not closed before), that trade's eff_exit is day_end(d) for
+    the windows after it, and a later closing window may close it there. A trade is extended once."""
     out = OpenSets()
     trades = []
     for w in wins:
         e = w["entry"]
-        O = [t["cid"] for t in trades if out.eff_exit[t["cid"]] > e]
+        O = [] if is_time(w) else [t["cid"] for t in trades if out.eff_exit[t["cid"]] > e]
         out.open[w["cid"]] = O
         out.flags[w["cid"]] = [cid in out.extended for cid in O]
         if is_time(w):

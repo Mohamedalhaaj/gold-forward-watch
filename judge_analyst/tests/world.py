@@ -395,8 +395,8 @@ class World:
                 self.make_a15_commits(T(f"{day.isoformat()}T20:30:00Z"))     # after the day's last window
             if self.a16_from is not None and day == self.a16_from - dt.timedelta(days=1):
                 self.make_a16_commits(T(f"{day.isoformat()}T21:12:00Z"))     # after A15's, before 22:00Z
-            if self.a17_from is not None and day == self.a17_from - dt.timedelta(days=1):
-                self.make_a17_commits(T(f"{day.isoformat()}T21:14:00Z"))
+            if self.a17_from is not None and day == self.a17_from - dt.timedelta(days=1) and self.a17_sha is None:
+                self.make_a17_commits(T(f"{day.isoformat()}T21:14:00Z"))   # after the day's last lock (A17-D5)
             day += dt.timedelta(days=1)
         self.write_runs_exports()
         if "final" in self.hooks:
@@ -479,28 +479,41 @@ class World:
 
     # ------------------------------------------------------------------ §16.18 A16 and A17
     def make_a16_commits(self, when):
-        """The A16 build commit (the cap of 10; a stand-in that leaves `watcher/` as it is, so one WATCHER_CONFIG.json
-        serves a15_from and a16_from on the same evening) and, 30 minutes later, the owner's WATCHER_CONFIG.json
-        naming it and MODE.json `a16_from`, before 22:00Z."""
-        self.a16_sha = self.owner_commit({"analyst/ga/A16_BUILD.txt": b"the cap of 10 from a16_from\n"}, when,
-                                         "analyst A16 build")
+        """The A16 build commit (a stand-in watcher with the cap of 10, as the real build changed `watcher/`, so
+        a16_from needs its own evening: R-AN-5's rule wants this tree at 22:00Z of the day before) and, 30 minutes
+        later, the owner's WATCHER_CONFIG.json naming it and MODE.json `a16_from`, before 22:00Z."""
+        worker = b"// the watcher (R-AN-91), a stand-in: A16's cap and fire guard of 10\nexport default {};\n"
+        self.a16_sha = self.owner_commit({"watcher/worker.js": worker}, when, "analyst A16 build")
         m = _json(self.repo.path, "analyst/MODE.json")
         m["a16_from"] = self.a16_from.isoformat()
         wc = _json(self.repo.path, "analyst/WATCHER_CONFIG.json")
         wc.update({"exported_utc": fmt_utc(when + dt.timedelta(minutes=25)), "source_commit": self.a16_sha,
-                   "deployed_utc": fmt_utc(when + dt.timedelta(minutes=10))})
+                   "script_sha256": sha256_bytes(worker), "deployed_utc": fmt_utc(when + dt.timedelta(minutes=10))})
         self.owner_commit({"analyst/WATCHER_CONFIG.json": record_form(wc), "analyst/MODE.json": record_form(m)},
                           when + dt.timedelta(minutes=30), "owner: WATCHER_CONFIG.json and a16_from")
 
     def make_a17_commits(self, when):
-        """The A17 build commit (a stand-in watcher with the time step) and, 30 minutes later, the owner's
-        WATCHER_CONFIG.json naming it and MODE.json `a17_from`, before 22:00Z of the day before (A17-D5)."""
+        """A17-D5 (amended): on the day before a17_from, after its last lock and before 22:00Z, the A17 build (a
+        stand-in watcher with the time step, the head of a side branch) reaches main through a --no-ff merge, the
+        Worker is deployed from the merge commit (the same `watcher/` tree) and, 30 minutes later, the owner commits
+        WATCHER_CONFIG.json naming the merge commit and MODE.json `a17_from`. `a17_sha` (the judge's pin) is the side
+        branch's commit, an ancestor of main off its first-parent line; the branch is deleted (only main is pushed)."""
         worker = b"// the watcher (R-AN-91), a stand-in: A17 adds the time step on G_X(d)\nexport default {};\n"
-        self.a17_sha = self.owner_commit({"watcher/worker.js": worker}, when, "analyst A17 build")
+        r = self.repo
+        r("switch", "-q", "-c", "a17-time-decision", r.head())
+        r.write("watcher/worker.js", worker)
+        self.a17_sha = r.commit("analyst A17 build", when)
+        r("switch", "-q", "main")
+        merged = when + dt.timedelta(minutes=1)
+        r("merge", "--no-ff", "-q", "-m", "Merge the A17 build", "a17-time-decision", when=merged)
+        r("branch", "-q", "-D", "a17-time-decision")
+        merge = r.head()
+        self.activity("refs/heads/main", merge, merged, OWNER, "push")
+        self.inbox_activity("refs/heads/main", merge, merged + dt.timedelta(minutes=1), OWNER, "push")
         m = _json(self.repo.path, "analyst/MODE.json")
         m["a17_from"] = self.a17_from.isoformat()
         wc = _json(self.repo.path, "analyst/WATCHER_CONFIG.json")
-        wc.update({"exported_utc": fmt_utc(when + dt.timedelta(minutes=25)), "source_commit": self.a17_sha,
+        wc.update({"exported_utc": fmt_utc(when + dt.timedelta(minutes=25)), "source_commit": merge,
                    "script_sha256": sha256_bytes(worker), "deployed_utc": fmt_utc(when + dt.timedelta(minutes=10))})
         if "watcher_config_a17" in self.hooks:
             self.hooks["watcher_config_a17"](self, wc)
@@ -1486,7 +1499,7 @@ class World:
                     if closer else None
                 revs = []
                 for v in ws:
-                    if cid in ro.open[v["cid"]] and not (de is not None and review.is_time(v)):
+                    if cid in ro.open[v["cid"]]:              # (A17-R7: O(X) is empty, no time window here)
                         vp = (self.calls.get((mode, v["cid"])) or {}).get("plan") or {}
                         revs.append({"call_id": v["cid"], "status": v["status"], "action": vp.get("action"),
                                      "confidence": vp.get("confidence"), "reason_ar": vp.get("reason_ar")})

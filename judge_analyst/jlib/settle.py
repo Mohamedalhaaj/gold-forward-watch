@@ -169,15 +169,15 @@ def x_end(outcome: dict, mins: Minutes, m: int | None = None) -> int:
 
 def path_summary(mins: Minutes, s: int, outcome: dict, m: int | None = None):
     """(§16.18 A15, R-AN-93) for reason `managed`, mfe_usd and mae_usd run from t0 through minute m − 1; the buckets
-    and range_mid_usd keep the full [t0, t1). (§16.18 A17-R9, judge decision J-D73) [t0, t1) is [t0, x_exit): the
-    15-minute buckets cover it, 16 for a 4-hour trade and (x_exit − t0) / 15 min for an extended one."""
+    and range_mid_usd keep the full [t0, t1). (§16.18 A17-R9) the 16 buckets are R-AN-46's, the first 4 hours;
+    range_mid_usd runs over [t0, x_exit) (mins.t1); mfe_usd, mae_usd and exit_after_min follow the trade's own exit."""
     if outcome["status"] != "final":
         return None
     st = mins.store
     t0, t1 = mins.t0, mins.t1
     buckets = []
     hi_all = lo_all = None
-    for k in range((t1 - t0) // (15 * MIN)):
+    for k in range(16):
         ms = []
         for t in range(t0 + 15 * MIN * k, t0 + 15 * MIN * (k + 1), MIN):
             mb = st.mid_bar(t)
@@ -191,6 +191,11 @@ def path_summary(mins: Minutes, s: int, outcome: dict, m: int | None = None):
         else:
             b = {"k": k, "o": None, "h": None, "l": None, "c": None, "n": 0}
         buckets.append(b)
+    for t in range(t0 + 240 * MIN, t1, MIN):          # §16.18 A17-R9: an extended trade's range runs to x_exit
+        mb = st.mid_bar(t)
+        if mb is not None:
+            hi_all = mb[1] if hi_all is None else max(hi_all, mb[1])
+            lo_all = mb[2] if lo_all is None else min(lo_all, mb[2])
     exit_side = "BID" if s == 1 else "ASK"
     pe = outcome["_pe_pts"]
     hs, ls = [], []
