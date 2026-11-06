@@ -14,9 +14,9 @@
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, "Segoe UI", Tahoma, sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
 h1 { font-size: 1.5rem; margin: 0 0 12px; }
-.verdict { background: var(--card); border: 1px solid var(--line); border-inline-start: 6px solid #2e7d4f;
+.verdict { background: var(--card); border: 1px solid var(--line); border-inline-start: 6px solid #a8780a;
   border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-.verdict b { color: #2e7d4f; font-size: 1.25rem; }
+.verdict b { color: #a8780a; font-size: 1.25rem; }
 table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); }
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; }
 td:first-child { font-variant-numeric: tabular-nums; direction: ltr; text-align: right; width: 3.5em; }
@@ -28,8 +28,8 @@ p.note { color: var(--muted); font-size: .9rem; }
 <body>
 <main>
 <h1>الحَكَم المستقل</h1>
-<div class="verdict"><b>سليم</b><br>كل الفحوص سليمة<br>
-<span class="note">الفحوص السليمة 8 من 9، ولم يُتحقق من 1 · وقت الفحص <span dir="ltr">2026-11-05T20:38:25Z</span></span></div>
+<div class="verdict"><b>تحذير</b><br>سعر مصدر مستقل يخالف البيانات<br>
+<span class="note">الفحوص السليمة 7 من 9، ولم يُتحقق من 1 · وقت الفحص <span dir="ltr">2026-11-06T10:56:19Z</span></span></div>
 <table>
 <thead><tr><th>الفحص</th><th>ما يتحقق منه</th><th>النتيجة</th></tr></thead>
 <tbody>
@@ -41,7 +41,7 @@ p.note { color: var(--muted); font-size: .9rem; }
 <tr><td>J6</td><td>أداء التوقع ونسبة لمس الوقف على البيانات الجديدة</td><td class="s-unverified">لا بيانات بعد</td></tr>
 <tr><td>J7</td><td>حداثة ملف الحالة وخلو آخر تشغيل من الأعطال</td><td class="s-ok">سليم</td></tr>
 <tr><td>J8</td><td>عدم إعادة كتابة تاريخ المستودع</td><td class="s-ok">سليم</td></tr>
-<tr><td>J9</td><td>مقارنة السعر بمصدر مستقل</td><td class="s-ok">سليم</td></tr>
+<tr><td>J9</td><td>مقارنة السعر بمصدر مستقل</td><td class="s-warning">تحذير</td></tr>
 </tbody>
 </table>
 <p class="note">برنامج منفصل كُتب من القواعد المكتوبة وحدها ويعمل بعد كل تشغيل للمنظومة. يكشف الأخطاء والتعديلات

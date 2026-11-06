@@ -1,9 +1,9 @@
 key,value
 version,1
-asof_utc,2026-11-05T20:38:25Z
-head_sha,b6d5e14705b705e8326ed15ffccf4c95dc332610
-verdict,SOUND
-reason_ar,كل الفحوص سليمة
-checks_ok,9
+asof_utc,2026-11-06T10:56:19Z
+head_sha,c5e85ea70817c5fb02a340a5db35960f3991b572
+verdict,WARNING
+reason_ar,سعر مصدر مستقل يخالف البيانات
+checks_ok,8
 checks_total,9
 end,8
