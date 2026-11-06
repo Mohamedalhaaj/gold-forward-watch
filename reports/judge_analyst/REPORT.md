@@ -1,9 +1,9 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-06T00:48:17Z
+- asof_utc: 2026-11-06T01:00:28Z
 - head_sha (gold-analyst main checked): 1d5abc7e33531e4e3338805a2e83b97d6ebc96cd
 - judge code_sha8: ec8d88bf
-- **analyst_verdict: WARNING**
+- **analyst_verdict: SOUND**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
 
@@ -19,11 +19,11 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 - `A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 
-## WARNINGs needing an ADJUDICATIONS row or a fix (1)
+## WARNINGs needing an ADJUDICATIONS row or a fix (0)
 
-- `A12|probe_incomplete|analyst/canary/calls/2026-11-05_W2b.json|ce22bf8b9740e7db82243bbe32dec424e2fe58f0` (verdict; incomplete)
+- none
 
-## Adjudicated WARNINGs (87)
+## Adjudicated WARNINGs (88)
 
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-02_T1500_1.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6`
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0400_1.json|ee5bbb5557be0da2c0ddd95a273e6fa5cb692d03`
@@ -55,6 +55,7 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A11|td_mismatch|analyst/canary/calls/2026-11-05_W1.json|0d773ca669638f219bd5bd7e9d0a602f20757330`
 - `A11|td_mismatch|analyst/canary/calls/2026-11-05_W1b.json|0d773ca669638f219bd5bd7e9d0a602f20757330`
 - `A12|probe_incomplete|analyst/canary/calls/2026-11-03_W2b.json|985c6a90adaa1012568d0afba6c4d545fca100ea`
+- `A12|probe_incomplete|analyst/canary/calls/2026-11-05_W2b.json|ce22bf8b9740e7db82243bbe32dec424e2fe58f0`
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_0117UL6f45qWcGmYWLXvVHBf#1`
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_0117UL6f45qWcGmYWLXvVHBf#8`
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_011wdj8cc8kpVUXxKb3uQH86#1`
@@ -124,7 +125,7 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - head: 1d5abc7e33531e4e3338805a2e83b97d6ebc96cd
 - inbox_activity_entries: 322
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-06T00:48:17Z
+- inbox_last_complete_read_utc: 2026-11-06T01:00:28Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 14
