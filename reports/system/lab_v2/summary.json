@@ -1,15 +1,15 @@
 {
  "version": 2,
- "asof_utc": "2026-11-05T17:29:47Z",
+ "asof_utc": "2026-11-06T10:55:49Z",
  "state": "RUNNING",
  "halted": false,
  "halt_reasons": [],
  "start": "2026-11-02",
  "first_day": "2026-11-02",
- "days": 3,
+ "days": 4,
  "n_paper": 4,
  "n_live": 0,
- "best_progress": 0.0015771902018277724,
+ "best_progress": 0.0016274597791392294,
  "interpreter_needed": false,
  "rules": [
   {
@@ -25,14 +25,14 @@
    "E_star": 666.6666666666666,
    "E_star_exact": "2000/3",
    "record": "since first_day",
-   "E": 1.0514601345518482,
-   "progress": 0.0015771902018277724,
+   "E": 1.0849731860928196,
+   "progress": 0.0016274597791392294,
    "K": null,
-   "n": 2,
-   "net_sum": 9.977999999999428,
-   "net_avg": 4.988999999999714,
-   "mean_R": 0.18675944489461238,
-   "mu_bar": 0.4318322691597313
+   "n": 4,
+   "net_sum": 19.458999999999918,
+   "net_avg": 4.8647499999999795,
+   "mean_R": 0.15783388966056278,
+   "mu_bar": 0.455352270531506
   },
   {
    "id": "S3",
@@ -47,15 +47,15 @@
    "E_star": 666.6666666666666,
    "E_star_exact": "2000/3",
    "record": "since first_day",
-   "E": 1.0,
-   "progress": 0.0015,
+   "E": 0.9641513215390795,
+   "progress": 0.0014462269823086193,
    "K": null,
-   "n": 0,
-   "net_sum": 0.0,
-   "net_avg": null,
-   "mean_R": null,
-   "mu_bar": null,
-   "flow_values_before_today": 158,
+   "n": 1,
+   "net_sum": -4.490000000000327,
+   "net_avg": -4.490000000000327,
+   "mean_R": -0.2312817965220681,
+   "mu_bar": -0.19816059492656435,
+   "flow_values_before_today": 159,
    "warmup": true,
    "waits_for_lookback": false
   },
@@ -105,9 +105,9 @@
   }
  ],
  "c1": {
-  "n": 3,
-  "net_sum": 1.4564266378913082,
-  "mean_R": -0.10846337334931418,
-  "E": 0.9232986840494497
+  "n": 4,
+  "net_sum": -10.866573362108648,
+  "mean_R": -0.17462751947802038,
+  "E": 0.8740202879137755
  }
 }
