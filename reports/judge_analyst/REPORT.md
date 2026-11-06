@@ -1,7 +1,7 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-06T00:44:29Z
-- head_sha (gold-analyst main checked): d29a41b546aaa31429a2bd85053b2df0aca2d96f
+- asof_utc: 2026-11-06T00:48:17Z
+- head_sha (gold-analyst main checked): 1d5abc7e33531e4e3338805a2e83b97d6ebc96cd
 - judge code_sha8: ec8d88bf
 - **analyst_verdict: WARNING**
 
@@ -120,11 +120,11 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - canary_terminals: 44
 - cc_version_records_checked: 84
 - contexts_rebuilt: 39
-- ga_runs_read: 98
-- head: d29a41b546aaa31429a2bd85053b2df0aca2d96f
-- inbox_activity_entries: 321
+- ga_runs_read: 66
+- head: 1d5abc7e33531e4e3338805a2e83b97d6ebc96cd
+- inbox_activity_entries: 322
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-06T00:44:29Z
+- inbox_last_complete_read_utc: 2026-11-06T00:48:17Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 14
