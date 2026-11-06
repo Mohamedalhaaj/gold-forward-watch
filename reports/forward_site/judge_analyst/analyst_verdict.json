@@ -1,6 +1,6 @@
 {
  "analyst_verdict": "SOUND",
- "asof_utc": "2026-11-06T12:54:31Z",
+ "asof_utc": "2026-11-06T16:52:17Z",
  "cleared_keys": [
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T024852Z.json|68c078cb5d0d52e5d53d2c2d9b9d711530add464",
   "A12|probe_failed|analyst/canary/checks/PROBE_p20261024T110641Z.json|e6a5b2dd02e8e7e27b6abe68c3a88de578d7c040",
@@ -8,7 +8,7 @@
   "A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f",
   "A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f"
  ],
- "head_sha": "4e27d551f8294293612a386ce5bae285933c5ef9",
+ "head_sha": "15bfb23f5e9100a55ee40282e2f76e5b2b7fa0bd",
  "schema": "analyst-verdict/1",
  "violation_first_seen": {},
  "violation_keys": []
