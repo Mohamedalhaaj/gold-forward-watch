@@ -1,8 +1,8 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-05T22:40:13Z
-- head_sha (gold-analyst main checked): ce22bf8b9740e7db82243bbe32dec424e2fe58f0
-- judge code_sha8: 65916de1
+- asof_utc: 2026-11-06T00:44:29Z
+- head_sha (gold-analyst main checked): d29a41b546aaa31429a2bd85053b2df0aca2d96f
+- judge code_sha8: ec8d88bf
 - **analyst_verdict: WARNING**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
@@ -120,14 +120,14 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - canary_terminals: 44
 - cc_version_records_checked: 84
 - contexts_rebuilt: 39
-- ga_runs_read: 96
-- head: ce22bf8b9740e7db82243bbe32dec424e2fe58f0
-- inbox_activity_entries: 320
+- ga_runs_read: 98
+- head: d29a41b546aaa31429a2bd85053b2df0aca2d96f
+- inbox_activity_entries: 321
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-05T22:40:13Z
+- inbox_last_complete_read_utc: 2026-11-06T00:44:29Z
 - live_expected_windows: 0
 - live_terminals: 0
-- m30_compared: 12
+- m30_compared: 14
 - m30r_compared: 6
 - probe_creations_max_day: 21
 - probe_records: 43
@@ -135,9 +135,9 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - run_log_calls_scanned: 292
 - run_logs_scanned: 37
 - settled_checked: 5
-- td_compared: 2361
+- td_compared: 2370
 - td_outside: 60
-- td_pending: 9
+- td_pending: 0
 - td_unchecked: 0
 - witness_comments: 136
 - witness_files: 136
