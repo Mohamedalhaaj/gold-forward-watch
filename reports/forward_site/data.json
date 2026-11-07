@@ -1,12 +1,12 @@
 {
- "updated_utc": "2026-11-06T21:27Z",
+ "updated_utc": "2026-11-07T03:11Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-11-06 23:17",
- "last_price": 4074.2,
- "days_done": 14,
+ "last_price_time_server": "2026-11-06 23:59",
+ "last_price": 4079.5,
+ "days_done": 15,
  "in_sample": {
   "causal_M15": {
    "avg_day": 0.48,
@@ -113,6 +113,11 @@
      "day": "2026-11-05",
      "net": 35.34,
      "trades": 7
+    },
+    {
+     "day": "2026-11-06",
+     "net": -7.12,
+     "trades": 4
     }
    ],
    "trades": [
@@ -1291,19 +1296,75 @@
      "reason": "target",
      "net": "16.43",
      "recorded_at": "2026-11-05T21:58Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-06",
+     "fill_time": "2026-11-06 17:00",
+     "fill": 4062.22,
+     "stop": 4075.24,
+     "target": 4050.37,
+     "exit_time": "2026-11-06 18:15",
+     "exit": 4075.24,
+     "reason": "stop",
+     "net": -13.28,
+     "recorded_at": "2026-11-07T03:11Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-06",
+     "fill_time": "2026-11-06 18:45",
+     "fill": 4075.73,
+     "stop": 4086.44,
+     "target": 4065.99,
+     "exit_time": "2026-11-06 19:15",
+     "exit": 4065.99,
+     "reason": "target",
+     "net": 9.49,
+     "recorded_at": "2026-11-07T03:11Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-06",
+     "fill_time": "2026-11-06 20:30",
+     "fill": 4076.77,
+     "stop": 4085.91,
+     "target": 4068.45,
+     "exit_time": "2026-11-06 20:45",
+     "exit": 4085.91,
+     "reason": "stop",
+     "net": -9.4,
+     "recorded_at": "2026-11-07T03:11Z"
+    },
+    {
+     "mode": "causal",
+     "tf": "M15",
+     "day": "2026-11-06",
+     "fill_time": "2026-11-06 21:00",
+     "fill": 4086.9,
+     "stop": 4089.02,
+     "target": 4080.58,
+     "exit_time": "2026-11-06 21:15",
+     "exit": 4080.58,
+     "reason": "target",
+     "net": 6.07,
+     "recorded_at": "2026-11-07T03:11Z"
     }
    ],
    "stats": {
-    "days": 14,
-    "total": 162.07,
-    "avg_day": 11.58,
-    "days_pos": 0.714,
+    "days": 15,
+    "total": 154.95,
+    "avg_day": 10.33,
+    "days_pos": 0.667,
     "best_day": 44.57,
     "worst_day": -19.03,
-    "t": 2.18,
-    "p": 0.0145,
-    "trades": 84,
-    "win": 0.631
+    "t": 2.03,
+    "p": 0.0212,
+    "trades": 88,
+    "win": 0.625
    }
   },
   "causal_M30": {
@@ -1377,6 +1438,11 @@
      "day": "2026-11-05",
      "net": 6.62,
      "trades": 2
+    },
+    {
+     "day": "2026-11-06",
+     "net": 0,
+     "trades": 0
     }
    ],
    "trades": [
@@ -1914,14 +1980,14 @@
     }
    ],
    "stats": {
-    "days": 14,
+    "days": 15,
     "total": 84.44,
-    "avg_day": 6.03,
+    "avg_day": 5.63,
     "days_pos": 0.615,
     "best_day": 33.53,
     "worst_day": -23.13,
-    "t": 1.42,
-    "p": 0.078,
+    "t": 1.41,
+    "p": 0.0785,
     "trades": 38,
     "win": 0.605
    }
@@ -1997,6 +2063,11 @@
      "day": "2026-11-05",
      "net": 35.34,
      "trades": 7
+    },
+    {
+     "day": "2026-11-06",
+     "net": 8.85,
+     "trades": 2
     }
    ],
    "trades": [
@@ -2783,19 +2854,47 @@
      "reason": "target",
      "net": "16.43",
      "recorded_at": "2026-11-05T21:58Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-06",
+     "fill_time": "2026-11-06 20:45",
+     "fill": 4082.07,
+     "stop": 4089.02,
+     "target": 4075.75,
+     "exit_time": "2026-11-06 21:15",
+     "exit": 4075.75,
+     "reason": "target",
+     "net": 6.07,
+     "recorded_at": "2026-11-07T03:11Z"
+    },
+    {
+     "mode": "strict",
+     "tf": "M15",
+     "day": "2026-11-06",
+     "fill_time": "2026-11-06 22:30",
+     "fill": 4075.73,
+     "stop": 4086.44,
+     "target": 4065.99,
+     "exit_time": "2026-11-06 23:15",
+     "exit": 4072.7,
+     "reason": "close 23:30",
+     "net": 2.78,
+     "recorded_at": "2026-11-07T03:11Z"
     }
    ],
    "stats": {
-    "days": 14,
-    "total": 81.67,
-    "avg_day": 5.83,
-    "days_pos": 0.643,
+    "days": 15,
+    "total": 90.52,
+    "avg_day": 6.03,
+    "days_pos": 0.667,
     "best_day": 35.34,
     "worst_day": -23.48,
-    "t": 1.43,
-    "p": 0.0766,
-    "trades": 56,
-    "win": 0.571
+    "t": 1.59,
+    "p": 0.0565,
+    "trades": 58,
+    "win": 0.586
    }
   },
   "strict_M30": {
@@ -2869,6 +2968,11 @@
      "day": "2026-11-05",
      "net": 6.62,
      "trades": 2
+    },
+    {
+     "day": "2026-11-06",
+     "net": 0,
+     "trades": 0
     }
    ],
    "trades": [
@@ -3238,9 +3342,9 @@
     }
    ],
    "stats": {
-    "days": 14,
+    "days": 15,
     "total": 36.96,
-    "avg_day": 2.64,
+    "avg_day": 2.46,
     "days_pos": 0.545,
     "best_day": 19.42,
     "worst_day": -13.87,
@@ -3251,26 +3355,11 @@
    }
   }
  },
- "open_trades": [
-  {
-   "tf": "M15",
-   "day": "2026-11-06",
-   "fill_time": "2026-11-06 22:30",
-   "fill": 4075.73,
-   "stop": 4086.44,
-   "target": 4065.99,
-   "exit_time": "2026-11-06 23:17",
-   "exit": 4074.2,
-   "reason": "open",
-   "net": 1.28,
-   "final": false,
-   "mode": "strict"
-  }
- ],
+ "open_trades": [],
  "wick": {
-  "days": 15,
-  "triggers": 3,
-  "up": 2,
+  "days": 16,
+  "triggers": 4,
+  "up": 3,
   "rows": [
    {
     "day": "2026-10-16",
@@ -3346,6 +3435,11 @@
     "day": "2026-11-05",
     "trigger": 1,
     "B_pts": -37.3
+   },
+   {
+    "day": "2026-11-06",
+    "trigger": 1,
+    "B_pts": 25.0
    }
   ]
  },
