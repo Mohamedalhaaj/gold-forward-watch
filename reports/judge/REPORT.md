@@ -4,7 +4,7 @@
 
 **الحكم: تحذير** · السبب: سعر مصدر مستقل يخالف البيانات
 
-- وقت الفحص: 2026-11-07T15:44:37Z
+- وقت الفحص: 2026-11-07T18:00:35Z
 - الفحوص السليمة 8 من 9
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9
-- HEAD checked: `d36b90887c04f60a28f72e334ce90c782533bf82`
+- HEAD checked: `21b95dee0e1255b63d6c6fc61e8ab2394955bb84`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-07T15:44:37Z; data root repo
+- judge run 2026-11-07T18:00:35Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 36; revised: 0; known revisions: 0; unverified downloads: 4
-- unverified: 4 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 23; revised: 0; known revisions: 0; unverified downloads: 17
+- unverified: 17 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -58,7 +58,7 @@
 - raw folders: 22 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
 - v1 append-only files: 15 files, 38 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 9 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 43 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 44 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,7 +68,7 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1127, 'compared': 1127}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 115}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 5, 'trades': 5}, 'v2': {'days': 5, 'checked_days': ['2026-11-02', '2026-11-03', '2026-11-05'], 'trades': 6}, 'summary': {'asof': '2026-11-07T15:44:18Z'}, 'status': {'asof': '2026-11-07T15:40:48Z', 'lines': 28}}
+- recomputed: {'forecasts': {'store_rows': 1127, 'compared': 1127}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 115}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 5, 'trades': 5}, 'v2': {'days': 5, 'checked_days': ['2026-11-02', '2026-11-04', '2026-11-06'], 'trades': 2}, 'summary': {'asof': '2026-11-07T15:44:18Z'}, 'status': {'asof': '2026-11-07T15:40:48Z', 'lines': 28}}
 - lab v2 days recomputed this run: 3 (new 0, rotating sample 3); new adjudication rows: 0
 
 ### J6: OK
@@ -89,9 +89,9 @@
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 7e935cee6eb3 is an ancestor of HEAD d36b90887c04
-- the published VolMapJudge.csv head 7e935cee6eb3 is an ancestor of HEAD d36b90887c04
-- the deployed VolMapJudge.csv head 7e935cee6eb3 is an ancestor of HEAD d36b90887c04
+- the previous VERDICTS.csv row head d36b90887c04 is an ancestor of HEAD 21b95dee0e12
+- the published VolMapJudge.csv head d36b90887c04 is an ancestor of HEAD 21b95dee0e12
+- the deployed VolMapJudge.csv head d36b90887c04 is an ancestor of HEAD 21b95dee0e12
 
 ### J9: WARNING
 
