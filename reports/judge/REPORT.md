@@ -4,8 +4,8 @@
 
 **الحكم: تحذير** · السبب: سعر مصدر مستقل يخالف البيانات
 
-- وقت الفحص: 2026-11-06T19:56:21Z
-- الفحوص السليمة 7 من 9، ولم يُتحقق من 1
+- وقت الفحص: 2026-11-07T10:20:16Z
+- الفحوص السليمة 8 من 9
 
 | الفحص | ما يتحقق منه | النتيجة |
 |---|---|---|
@@ -14,7 +14,7 @@
 | J3 | عدم تعديل السجلات والبيانات الخام بعد كتابتها | سليم |
 | J4 | ثبات الملفات المجمدة وكود الحكم | سليم |
 | J5 | إعادة حساب التوقعات والإشارة والمعايرة والصفقات وملف الحالة | سليم |
-| J6 | أداء التوقع ونسبة لمس الوقف على البيانات الجديدة | لا بيانات بعد |
+| J6 | أداء التوقع ونسبة لمس الوقف على البيانات الجديدة | سليم |
 | J7 | حداثة ملف الحالة وخلو آخر تشغيل من الأعطال | سليم |
 | J8 | عدم إعادة كتابة تاريخ المستودع | سليم |
 | J9 | مقارنة السعر بمصدر مستقل | تحذير |
@@ -25,17 +25,17 @@
 
 ## Evidence
 
-- Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9; of these, nothing was verified in this run by: J6
-- HEAD checked: `de99d72514e28583cf266819acc764242a20853b`
+- Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9
+- HEAD checked: `7e935cee6eb35320ebf73fa2a69671c0cc23250b`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-06T19:56:21Z; data root repo
+- judge run 2026-11-07T10:20:16Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 31; revised: 0; known revisions: 0; unverified downloads: 9
-- unverified: 9 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 1 (checked now: 1); older days sampled: 20; sides compared equal: 22; revised: 0; known revisions: 0; unverified downloads: 20
+- unverified: 20 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -53,12 +53,12 @@
 
 ### J3: OK
 
-- v1 raw files checked against their days.csv rows: 132 (0 problems)
+- v1 raw files checked against their days.csv rows: 134 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
-- raw folders: 21 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 36 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
-- v2 append-only files: 11 files, 8 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 41 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- raw folders: 22 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
+- v1 append-only files: 15 files, 37 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- v2 append-only files: 11 files, 9 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
+- judge records: 9 append-only files, 42 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,32 +68,32 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1105, 'compared': 1105}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 93}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 4, 'trades': 4}, 'v2': {'days': 4, 'checked_days': ['2026-11-02', '2026-11-03', '2026-11-05'], 'trades': 6}, 'summary': {'asof': '2026-11-06T16:51:33Z'}, 'status': {'asof': '2026-11-06T16:47:16Z', 'lines': 28}}
-- lab v2 days recomputed this run: 3 (new 0, rotating sample 3); new adjudication rows: 0
+- recomputed: {'forecasts': {'store_rows': 1127, 'compared': 1127}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 115}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 5, 'trades': 5}, 'v2': {'days': 5, 'checked_days': ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-06'], 'trades': 4}, 'summary': {'asof': '2026-11-07T10:19:43Z'}, 'status': {'asof': '2026-11-07T10:10:36Z', 'lines': 28}}
+- lab v2 days recomputed this run: 4 (new 1, rotating sample 3); new adjudication rows: 0
 
 ### J6: OK
 
-- (a) no complete forward week yet (weeks 0)
-- (b) QLIKE hours 93; DM stat 1.712; one-sided p (forecast worse) 0.9565
-- (c) hit rate green 0.1364, red 0.5000
-- (d) v1 C1: 4 trades, net -10.87 $/oz, mean -2.717
+- (a) complete weeks 1, hour trials 115, pooled hit rate 0.1261 (95% CI nan .. nan)
+- (b) QLIKE hours 115; DM stat 1.641; one-sided p (forecast worse) 0.9496
+- (c) hit rate green 0.1262, red 0.5000
+- (d) v1 C1: 5 trades, net -28.68 $/oz, mean -5.737
 - (d) v2 S2: 4 trades, net 19.46 $/oz, mean 4.865
 - (d) v2 S3: 1 trades, net -4.49 $/oz, mean -4.490
 - (d) v2 S4: 2 trades, net -0.56 $/oz, mean -0.279
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: af4782c5e2a8 at 2026-11-06T16:51:31Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: cb4ee0ad87be at 2026-11-07T10:19:41Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 213d546a8512 is an ancestor of HEAD de99d72514e2
-- the published VolMapJudge.csv head 213d546a8512 is an ancestor of HEAD de99d72514e2
-- the deployed VolMapJudge.csv head 213d546a8512 is an ancestor of HEAD de99d72514e2
+- the previous VERDICTS.csv row head de99d72514e2 is an ancestor of HEAD 7e935cee6eb3
+- the published VolMapJudge.csv head de99d72514e2 is an ancestor of HEAD 7e935cee6eb3
+- the deployed VolMapJudge.csv head de99d72514e2 is an ancestor of HEAD 7e935cee6eb3
 
 ### J9: WARNING
 
-- 2026-11-05 already checked (exceeds); no request sent
-- the two most recent checked days 2026-11-04 and 2026-11-05 both exceed the limits (median > $0.50 or max > $5)
+- 2026-11-06: exceeds; credits 1
+- the two most recent checked days 2026-11-05 and 2026-11-06 both exceed the limits (median > $0.50 or max > $5)
