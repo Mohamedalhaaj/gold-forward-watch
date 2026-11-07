@@ -1,16 +1,16 @@
 # Gold support system v2: lab v2 status
 
-Updated 2026-11-06T16:51:33Z. Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` with SYSTEM_V1_PREREG.md and Amendment A1.
+Updated 2026-11-07T10:19:43Z. Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` with SYSTEM_V1_PREREG.md and Amendment A1.
 
 ## Data
 
 - Lookback store (UTC 2026-01-01 .. 2026-08-31): 486 ok sides, 0 missing, complete: True
-- v1 raw days read (from 2026-09-01, read-only): complete through 2026-11-06 00:00 UTC
+- v1 raw days read (from 2026-09-01, read-only): complete through 2026-11-07 00:00 UTC
 - v2 START: 2026-11-02
 
 ## Seeds
 
-- State: RUNNING; lab2_days 4; lab2_n_paper 4; LIVE 0; best progress E/E* 0.002
+- State: RUNNING; lab2_days 5; lab2_n_paper 4; LIVE 0; best progress E/E* 0.002
 - INTERPRETER_NEEDED: no
 
 | id | state | first_day | record | trades | sum net $/oz | mean R | evidence |
@@ -20,5 +20,5 @@ Updated 2026-11-06T16:51:33Z. Binding spec: xauusd-quant `research/system/SYSTEM
 | S4 | PAPER | 2026-11-02 | since first_day | 2 | -0.56 | -0.008 | E 0.998 of E* 1000 |
 | S5 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | - | E 1.000 of E* 1000 |
 
-- C1 (v1 coin control) over the same days: 4 trades, sum net -10.87 $/oz, mean R -0.175, E 0.874
-- S3 trend-flip flow values before today: 159 of 250 (warm-up)
+- C1 (v1 coin control) over the same days: 5 trades, sum net -28.68 $/oz, mean R -0.185, E 0.847
+- S3 trend-flip flow values before today: 160 of 250 (warm-up)

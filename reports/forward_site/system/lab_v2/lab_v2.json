@@ -1,11 +1,11 @@
 {
  "version": 2,
- "asof_utc": "2026-11-06T16:51:33Z",
+ "asof_utc": "2026-11-07T10:19:43Z",
  "state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
  "first_day": "2026-11-02",
- "days": 4,
+ "days": 5,
  "n_paper": 4,
  "n_live": 0,
  "best_progress": 0.0016274597791392294,
@@ -54,7 +54,7 @@
    "net_avg": -4.490000000000327,
    "mean_R": -0.2312817965220681,
    "mu_bar": -0.19816059492656435,
-   "flow_values_before_today": 159,
+   "flow_values_before_today": 160,
    "warmup": true,
    "waits_for_lookback": false
   },
@@ -104,10 +104,10 @@
   }
  ],
  "c1": {
-  "n": 4,
-  "net_sum": -10.866573362108648,
-  "mean_R": -0.17462751947802038,
-  "E": 0.8740202879137755
+  "n": 5,
+  "net_sum": -28.684573362108495,
+  "mean_R": -0.18538077854539203,
+  "E": 0.8467939739214014
  },
  "halt_reasons": []
 }
