@@ -1,10 +1,10 @@
 {
- "updated_utc": "2026-11-08T02:41Z",
+ "updated_utc": "2026-11-08T16:39Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-11-06 23:45",
+ "last_price_time_server": "2026-11-06 23:59",
  "last_price": 4074.9,
  "days_done": 15,
  "in_sample": {
