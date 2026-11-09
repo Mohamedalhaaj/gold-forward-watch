@@ -1,8 +1,8 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-09T13:50:28Z
-- head_sha (gold-analyst main checked): 1f62be9868bfd7be72c283c5e4f288568ba43cff
-- judge code_sha8: ec8d88bf
+- asof_utc: 2026-11-09T19:02:12Z
+- head_sha (gold-analyst main checked): 1eaa3bd0e7d089caa415d87de91652838d0c373f
+- judge code_sha8: 7789ee85
 - **analyst_verdict: SOUND**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
@@ -118,27 +118,27 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 
 - accepted_push_diffs_unverified: 0
 - canary_expected_windows: 50
-- canary_terminals: 51
-- cc_version_records_checked: 103
-- contexts_rebuilt: 46
-- ga_runs_read: 57
-- head: 1f62be9868bfd7be72c283c5e4f288568ba43cff
-- inbox_activity_entries: 392
+- canary_terminals: 55
+- cc_version_records_checked: 111
+- contexts_rebuilt: 50
+- ga_runs_read: 66
+- head: 1eaa3bd0e7d089caa415d87de91652838d0c373f
+- inbox_activity_entries: 406
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-09T13:50:28Z
+- inbox_last_complete_read_utc: 2026-11-09T19:02:12Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 16
 - m30r_compared: 7
 - probe_creations_max_day: 21
-- probe_records: 50
+- probe_records: 54
 - routine_config_versions_checked: 5
 - run_log_calls_scanned: 292
 - run_logs_scanned: 37
 - settled_checked: 9
-- td_compared: 2761
+- td_compared: 2881
 - td_outside: 60
-- td_pending: 3
+- td_pending: 35
 - td_unchecked: 0
-- witness_comments: 167
-- witness_files: 167
+- witness_comments: 179
+- witness_files: 179
