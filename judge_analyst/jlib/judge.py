@@ -32,29 +32,35 @@ import re
 from dataclasses import dataclass, field
 
 from . import derive, review, sessionguard, settle, stats, td, ticks, watch
-from .clock import (HALF, MACRO_PATH, OPS_PATH, Events, Holidays, Window, add_months_12, check_grid, iso_week,
-                    macro_problems, model_to_utc, parse_call_id, scheduled_checks, tday, to_server, windows_between)
+from .clock import (HALF, MACRO_PATH, OPS_PATH, Events, Holidays, Window, add_months_12, check_grid, check_grid_x,
+                    day_end, iso_week, macro_problems, model_to_utc, parse_call_id, scheduled_checks, tday, to_server,
+                    windows_between)
 from .common import (UTC, VIOLATION, ZERO64, Findings, compact_form, fmt_utc, is_day, is_utc, load_json_bytes,
                      norm_api_time, num_exact, parse_utc, price_eq, record_form, rel_eq, safe_detail, sha256_bytes,
                      sha256_compact)
 from . import config
-from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMAS as CONTEXT_SCHEMAS, compare_context,
-                      cross_detail, is_trading_hour, rebuild_context, td_cross_check)
+from .context import (SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMAS as CONTEXT_SCHEMAS,
+                      compare_context, cross_detail, is_trading_hour, rebuild_context, td_cross_check)
 from .m1 import DaysTable, Store
 
 EPROC_SHA256 = "ee8d456ae3b5ddd1112bad92d12fffa95d2b12e0559335233c6a9b3a68067973"
 BOT_LOGIN = "github-actions[bot]"
 PREFIX = {"live": "analyst/", "canary": "analyst/canary/"}
-# §16.18 A14 (R-AN-33): W1b, W2b and the trigger windows T<hhmm> too
-CALL_ID_RE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}_(?:W[12]b?|T(?:[01][0-9]|2[0-3])(?:00|30))"
+# §16.18 A14 (R-AN-33): W1b, W2b and the trigger windows T<hhmm> too; §16.18 A17-R1: the time windows X<hhmm>
+CALL_ID_RE = (r"[0-9]{4}-[0-9]{2}-[0-9]{2}_(?:W[12]b?|T(?:[01][0-9]|2[0-3])(?:00|30)"
+              r"|X(?:[01][0-9]|2[0-3])(?:00|30))")
 TERMINAL_STATUSES = {"called", "stay_out", "no_call:refusal", "no_call:invalid", "no_call:data", "no_call:d_ref",
                      "no_call:late", "no_call:run", "missed:trigger", "missed:push", "skipped:holiday",
                      "skipped:trade_open", "skipped:day_cap",          # §16.18 A14 (R-AN-36): the closer's two
-                     "review_hold", "review_close"}                    # §16.18 A15 (R-AN-36): from the call
+                     "review_hold", "review_close",                    # §16.18 A15 (R-AN-36): from the call
+                     "review_extend"}                                  # §16.18 A17-R6: from the call
 GATED = ("skipped:trade_open", "skipped:day_cap")
 CALL_STATUSES = {"called", "stay_out", "no_call:data", "no_call:d_ref", "no_call:invalid", "no_call:refusal",
-                 "review_hold", "review_close"}                        # §16.18 A15 (R-AN-29)
-ANSWERS = ("called", "stay_out", "review_hold", "review_close")       # A1's answers in time (R-AN-36, A15)
+                 "review_hold", "review_close",                        # §16.18 A15 (R-AN-29)
+                 "review_extend"}                                      # §16.18 A17-R6 (R-AN-29)
+# A1's answers in time (R-AN-36, A15; judge decision J-D71: A17's `review_extend` too)
+ANSWERS = ("called", "stay_out", "review_hold", "review_close", "review_extend")
+TIME_STATUSES = ("review_extend", "review_close")   # §16.18 A17-R8: a time window's call, besides `no_call:*`
 WITNESS_VIOLATION = {"agent_scope", "rewrite", "invalid_content", "attempt_cap"}
 WITNESS_WARNING = {"mode", "attempt_n", "window_closed", "no_settled", "lesson_cap", "not_saturday", "incomplete_week",
                    "version", "week_done", "window_order"}     # §16.18 A14 (R-AN-33): window_order
@@ -69,6 +75,9 @@ SETTLED2_KEYS = {"schema", "call_id", "mode", "window", "model_day", "class", "a
                  "closed_by", "x_end_utc", "weight", "cluster", "outcome", "opposite", "unmanaged", "reviews",
                  "path_summary", "call", "context", "inputs", "call_sha256", "terminal_sha256", "context_sha256",
                  "settled_utc", "run_id", "head_sha"}
+# §16.18 A17-R9 (R-AN-46, R-AN-93): `analyst-settled/3` = `/2` plus `time` right after `reviews`
+SETTLED3_KEYS = SETTLED2_KEYS | {"time"}
+TIME_BLOCK_KEYS = ("call_id", "status", "extended", "x_exit_utc", "at_4h", "to_day_end")
 
 # Path classes (R-AN-2, R-AN-59).
 _CREATE_ONLY = re.compile(
@@ -130,8 +139,11 @@ OPERATIONAL_A14 = {"skipped_wrong", "a14_from"}
 # §16.18 A15 (R-AN-55, R-AN-67): check A15's operational VIOLATION keys
 OPERATIONAL_A15 = {"review_open", "open_cap", "a15_from", "lesson_source"}
 OPERATIONAL_A16 = {"a16_from"}                 # §16.18 A16: the day cap's start day (R-AN-55, R-AN-67)
+# §16.18 A17-D6 (R-AN-55): `a17_from` is check A17's one operational key; `not_due` is an integrity key, as A14's
+# `not_triggered`; `time_missed` is a WARNING
+OPERATIONAL_A17 = {"a17_from"}
 OPERATIONAL = {"A12": OPERATIONAL_A12, "A13": OPERATIONAL_A13, "A14": OPERATIONAL_A14, "A15": OPERATIONAL_A15,
-               "A16": OPERATIONAL_A16}
+               "A16": OPERATIONAL_A16, "A17": OPERATIONAL_A17}
 WAKE_ROUTINES = ("analyst-wake", "analyst-w1", "analyst-w2")   # A14-D12: any of them can reach a new window
 C20_PATH = "analyst/canary/checks/C20.json"     # R-AN-74 C20: the probe session's root, when a run log has none
 SECURITY_LOG_FILTER = "repo:{} action:hook"     # R-AN-60 (A7, detection 2), with PINS.inbox_repo
@@ -147,6 +159,11 @@ def _int(x) -> bool:
 
 def _zero(sha) -> bool:
     return not sha or set(sha) == {"0"}
+
+
+def _pinned(sha):
+    """A build pin (§16.18 A17, config.A17_BUILD_COMMIT): a full 40-hex sha, else None (unset or a placeholder)."""
+    return sha if isinstance(sha, str) and _SHA40.fullmatch(sha) else None
 
 
 def _id_key(aid: str):
@@ -275,7 +292,8 @@ class Judge:
     def __init__(self, git, now_utc: str, api=None, hours=None, store_git=None, fetch_commit=None,
                  evidence_rows=None, prev_anchor=None, judge_manifest_ok=True, events=None, fresh_main=None,
                  prev_judge_utc=None, judge_adjudications=None, judge_findings=None, a12_commit="config",
-                 a14_commit="config", m30=None, halves=None, a15_commit="config", a16_commit="config"):
+                 a14_commit="config", m30=None, halves=None, a15_commit="config", a16_commit="config",
+                 a17_commit="config"):
         """fetch_commit(sha, ref) brings a pushed commit from the inbox into the clone (data only; --fetch-pushes);
         fresh_main() fetches gold-analyst main once more and returns its sha (or None); prev_judge_utc is the newest
         judge_utc of VERDICTS.csv (the runs day range, R-AN-66); judge_adjudications are the rows of the judge's own
@@ -287,12 +305,14 @@ class Judge:
         half-hour view (sources.HalfSource) for the cross-check of a trigger's bars (R-AN-68), or None. (§16.18 A15)
         a15_commit: the pinned A15 build commit (config.A15_BUILD_COMMIT, None until the build is on main).
         (§16.18 A16) a16_commit: the pinned A16 build commit (config.A16_BUILD_COMMIT, None until the build is on
-        main)."""
+        main). (§16.18 A17) a17_commit: the pinned A17 build commit (config.A17_BUILD_COMMIT); anything but a full
+        40-hex sha (None, the placeholder) is no pin."""
         self.git = git
         self.a12_commit = config.A12_BUILD_COMMIT if a12_commit == "config" else a12_commit
         self.a14_commit = config.A14_BUILD_COMMIT if a14_commit == "config" else a14_commit
         self.a15_commit = config.A15_BUILD_COMMIT if a15_commit == "config" else a15_commit
         self.a16_commit = config.A16_BUILD_COMMIT if a16_commit == "config" else a16_commit
+        self.a17_commit = _pinned(config.A17_BUILD_COMMIT if a17_commit == "config" else a17_commit)
         self.open_info = {}
         self.m30 = m30
         self.halves = halves
@@ -375,6 +395,7 @@ class Judge:
         self.a14_day = self.a14_from_value()
         self.a15_day = self.a14_from_value("a15_from")
         self.a16_day = self.a14_from_value("a16_from")
+        self.a17_day = self.a14_from_value("a17_from")
         self.load_api()
         self.safe("inbox_reads", self.load_inbox)
         self.wit = []
@@ -394,6 +415,7 @@ class Judge:
         self.safe("a14_from", self.check_a14_from)
         self.safe("a15_from", self.check_a15_from)
         self.safe("a16_from", self.check_a16_from)
+        self.safe("a17_from", self.check_a17_from)
         self.safe("lesson_source", self.check_lesson_source)
         self.safe("start", self.check_start)
         self.safe("runs_exports", self.check_runs_exports)
@@ -660,11 +682,15 @@ class Judge:
                     self._fresh = None
         return self._fresh
 
-    def expected_context_schema(self, sha) -> str:
+    def expected_context_schema(self, sha, day=None) -> str:
         """R-AN-23 (§16.18 A12): `analyst-context/3` for a repo_head_sha that is the pinned A12 build commit or has it
         as an ancestor, `analyst-context/2` for an earlier one (and for every one while nothing is pinned).
         (§16.18 A14) `analyst-context/4` for one that is the pinned A14 build commit or descends from it;
-        (§16.18 A15) `analyst-context/5` for the pinned A15 build commit or a descendant (never while it is None)."""
+        (§16.18 A15) `analyst-context/5` for the pinned A15 build commit or a descendant (never while it is None).
+        (§16.18 A17-R5, judge decision J-D68) `analyst-context/6` for every call of a model day >= a17_from, whatever
+        its repo_head_sha; a day before a17_from keeps the pairing above."""
+        if day is not None and self.is_a17(day):
+            return SCHEMA_V6
         c = self.a15_commit
         if c and self.git.commit_exists(c) and (sha == c or self.git.is_ancestor(c, sha)):
             return SCHEMA_V5
@@ -1036,13 +1062,16 @@ class Judge:
         d1 = dt.date.fromisoformat(t) if t else (self.now.date() + dt.timedelta(days=1))
         wins = windows_between(d0, d1, self.a14_day)
         if self.a14_day is not None:
-            # R-AN-11 (§16.18 A14): a trigger window is expected once it has an accepted attempt witness
+            # R-AN-11 (§16.18 A14): a trigger window is expected once it has an accepted attempt witness;
+            # (§16.18 A17-R8) a time window likewise, for model days >= a17_from
             seen = set()
             for r in self.wits(mode, "attempt", None, "accepted"):
                 p = parse_call_id(str(r.rec.get("id") or ""))
-                if p is None or not p[1].startswith("T") or p in seen:
+                if p is None or not p[1].startswith(("T", "X")) or p in seen:
                     continue
                 seen.add(p)
+                if p[1].startswith("X") and not self.is_a17(p[0]):
+                    continue                     # before a17_from: A17 `a17_from` reports the accepted push
                 if d0 <= p[0] <= d1 and p[0] >= self.a14_day:
                     wins.append(Window(*p))
             wins.sort(key=lambda w: w.order)
@@ -1171,10 +1200,12 @@ class Judge:
                     exp = ("no_call:invalid", "no_attempt")
                 elif a[0]["void"]:
                     exp = ("no_call:invalid", "void_attempt")
-                elif not derivable:
-                    exp = ("no_call:invalid", "underivable")
+                elif not derivable and (call or {}).get("status") != review.EXTEND:
+                    exp = ("no_call:invalid", "underivable")    # (§16.18 A17-R8: never for review_extend)
                 else:
                     exp = ((call or {}).get("status"), (call or {}).get("detail"))
+        elif win.w == "X":
+            exp = ("no_call:run", None)          # §16.18 A17-R8: the closer, never skipped:* or missed:trigger
         elif self.holidays.window_holiday(win):
             exp = ("skipped:holiday", None)
         elif att:
@@ -1297,9 +1328,18 @@ class Judge:
             if call.get(k) != v:
                 self.F.v("A5", "call_times", p, c, f"field {k}")
         status = call.get("status")
+        cschema = (ctx or {}).get("schema") if isinstance(ctx, dict) else None
+        crv = (ctx or {}).get("review") if isinstance(ctx, dict) else None
+        time_ctx = cschema == SCHEMA_V6 and isinstance(crv, dict) and crv.get("kind") == review.KIND_TIME
         if status not in CALL_STATUSES or (status in review.REVIEW_STATUSES and
-                                           (ctx or {}).get("schema") != SCHEMA_V5):
+                                           cschema not in (SCHEMA_V5, SCHEMA_V6)):
             self.F.v("A5", "call_status", p, c, safe_detail(status))
+        elif status == review.EXTEND and not time_ctx:
+            # §16.18 A17-R6: `review_extend` only with an `analyst-context/6` context whose review.kind is `time`
+            self.F.v("A5", "call_status", p, c, safe_detail(status, "without a time block"))
+        elif win.w == "X" and status not in TIME_STATUSES and not str(status).startswith("no_call:"):
+            # §16.18 A17-R8 (R-AN-33): a time window's call has status review_extend, review_close or no_call:*
+            self.F.v("A5", "call_status", p, c, safe_detail(status, "in a time window"))
         if not isinstance(ctx, dict):
             self.F.v("A4", "context_missing", p, c, "")
             return False
@@ -1321,20 +1361,23 @@ class Judge:
             self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema))
         elif not self.on_main(R):
             self.F.v("A4", "repo_head_foreign", p, c, "repo_head_sha is not gold-analyst main's head or an ancestor")
-        elif schema != self.expected_context_schema(R):
-            # §16.18 A12 (R-AN-23): /3 iff repo_head_sha has the pinned A12 build commit as an ancestor (or is it)
+        elif schema != self.expected_context_schema(R, win.day):
+            # §16.18 A12 (R-AN-23): /3 iff repo_head_sha has the pinned A12 build commit as an ancestor (or is it);
+            # (§16.18 A17-R5) /6 iff the model day is on or after a17_from
             self.F.v("A4", "context_schema", p, c, safe_detail("schema", schema, "expected",
-                                                                self.expected_context_schema(R)))
+                                                                self.expected_context_schema(R, win.day)))
         else:
-            if schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5):
+            if schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6):
                 self.check_macro_calendar(R)
             wake = None
-            if schema in (SCHEMA_V4, SCHEMA_V5):     # A14 (R-AN-23): the wake of the call's attempt record
+            if schema in (SCHEMA_V4, SCHEMA_V5, SCHEMA_V6):   # A14 (R-AN-23): the wake of the call's attempt record
                 arec = self.json_at_head(f"{PREFIX[mode]}attempts/{win.call_id}_{call.get('attempt_n')}.json")
                 wake = arec.get("wake") if isinstance(arec, dict) else None
-            trades, bad_open = self.review_trades(mode, ctx) if schema == SCHEMA_V5 else (None, False)
+            trades, bad_open, flags = self.review_trades(mode, ctx) if schema in (SCHEMA_V5, SCHEMA_V6) \
+                else (None, False, None)
             rb = rebuild_context(ctx, win.call_id, mode, self.git, self.hours, self.holidays, self.events,
-                                 schema=schema, wake=wake, review_trades=trades, a15_from=self.a15_day)
+                                 schema=schema, wake=wake, review_trades=trades, a15_from=self.a15_day,
+                                 review_extended=flags)
             if bad_open:
                 rb.mismatches.append("review.open.call_id")
             if rb.error:
@@ -1347,8 +1390,9 @@ class Judge:
         if schema in CONTEXT_SCHEMAS:
             self.cross_check(p, c, win, ctx)
         # ---- A5: derivable from the plan and the context
-        v3 = schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5)                 # A12: analyst-plan/2 from /3
-        v5 = schema == SCHEMA_V5                                          # A15: analyst-plan/3 with /5
+        v3 = schema in (SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6)      # A12: analyst-plan/2 from /3
+        v5 = schema in (SCHEMA_V5, SCHEMA_V6)                             # A15: analyst-plan/3 with /5
+        v6 = schema == SCHEMA_V6                                          # A17-R6: analyst-plan/4 with /6
         ctx_status = ctx.get("status")
         plan = call.get("plan")
         rv = ctx.get("review") if v5 else None
@@ -1356,7 +1400,7 @@ class Judge:
             if status != ctx_status or plan is not None:
                 self.F.v("A5", "status_vs_context", p, c, "a no_call context must give that status and no plan")
         elif status in ANSWERS:
-            errs = derive.plan_errors(plan, v3=v3, v5=v5)
+            errs = derive.plan_errors(plan, v3=v3, v5=v5, v6=v6)
             if errs:
                 self.F.v("A5", "plan_invalid", p, c, safe_detail(*errs))
                 derivable = False
@@ -1389,7 +1433,7 @@ class Judge:
                 self.F.v("A5", "d_ref_underivable", p, c, "D_ref does not follow from the context")
                 derivable = False
         if status == "called" and derivable and isinstance(plan, dict) and \
-                not derive.plan_errors(plan, v3=v3, v5=v5):
+                not derive.plan_errors(plan, v3=v3, v5=v5, v6=v6):
             side = derive.side_of(plan["action"])
             if plan["action"] in ("reverse", "add"):      # A15 (R-AN-27): from the one trade of review.open
                 op = (rv or {}).get("open") if isinstance(rv, dict) else None
@@ -1404,7 +1448,7 @@ class Judge:
             if not all(checks):
                 self.F.v("A5", "st_underivable", p, c, "side, multiples, S or T do not follow from plan and D_ref")
                 derivable = False
-        elif status in ("stay_out", "review_hold", "review_close") and isinstance(plan, dict):
+        elif status in ("stay_out", "review_hold", "review_close", "review_extend") and isinstance(plan, dict):
             if call.get("side") not in (0, None) or any(call.get(k) is not None for k in
                                                          ("stop_mult", "target_mult", "S", "T", "S_dimes", "T_dimes")):
                 self.F.v("A5", "st_underivable", p, c, "stay_out carries trade fields")
@@ -1431,19 +1475,22 @@ class Judge:
                 "T": call.get("T"), "stop_mult": call.get("stop_mult"), "target_mult": call.get("target_mult")}
 
     def review_trades(self, mode, ctx):
-        """(trades, unresolved): the call-file fields of the trades a `/5` context's `review.open` names, in its
-        order (A4 rebuilds the block from them); [] for a null block."""
+        """(trades, unresolved, flags): the call-file fields of the trades a `/5` (or `/6`) context's `review.open`
+        names, in its order (A4 rebuilds the block from them); [] for a null block. (§16.18 A17-R5, judge decision
+        J-D70) flags: the recorded `open[].extended` of a `/6` block, which A4 takes as recorded (A15 `review_open`
+        compares them with main)."""
         rv = ctx.get("review")
         if not isinstance(rv, dict):
-            return [], False
+            return [], False, []
         op = rv.get("open")
-        out = []
+        out, flags = [], []
         for o in op if isinstance(op, list) else []:
             t = self.trade_fields(mode, o.get("call_id") if isinstance(o, dict) else None)
             if t is None:
-                return [], True
+                return [], True, []
             out.append(t)
-        return out, not isinstance(op, list)
+            flags.append(o.get("extended"))
+        return out, not isinstance(op, list), flags
 
     def check_m30r(self, p, c, win, ctx):
         """R-AN-68 (A15): an `ok` `XAUUSD_M30R` request's bars: their o and c against Dukascopy half hours (A11
@@ -1481,18 +1528,27 @@ class Judge:
                 if isinstance(rv, dict) and isinstance(rv.get("open"), list) else None
             out.append({"cid": win.call_id, "entry": win.entry, "exit": win.exit, "status": info.get("status"),
                         "action": (call.get("plan") or {}).get("action") if isinstance(call.get("plan"), dict)
-                        else None, "names": names, "win": win, "info": info})
+                        else None, "names": names, "win": win, "info": info, "time": win.w == "X"})
         return out
+
+    def day_end_of(self, d):
+        """day_end(d) for a model day >= a17_from (the open set's extensions, A17-R7), else None."""
+        return day_end(d) if self.is_a17(d) else None
 
     def check_reviews(self):
         """Check A15 `review_open` and `open_cap` (R-AN-67, R-AN-92): every open set of a model day >= a15_from,
-        recomputed from main's terminals and call files, in both modes."""
+        recomputed from main's terminals and call files, in both modes. (§16.18 A17, judge decision J-D70) For a
+        model day >= a17_from the open sets carry the extensions (A17-R7) and each `/6` block is compared with them:
+        a window's block is null where O(R) is empty, else of kind `review` naming O(R) with each trade's
+        `extended` and R-AN-92's options; a time window's block is of kind `time` naming its subject (A17-R2),
+        not extended, with options extend and close, and null without a subject."""
         if self.a15_day is None:
             return
         for mode in ("canary", "live"):
             for d in sorted({w.day for w in self.windows.get(mode, []) if self.is_a15(w.day)}):
                 ws = self.day_windows(mode, d)
-                r = review.open_sets(ws)
+                de = self.day_end_of(d)
+                r = review.open_sets(ws, de)
                 self.open_info[(mode, d)] = (ws, r)
                 big = [w["cid"] for w in ws if len(r.open[w["cid"]]) > 2]
                 if big:
@@ -1504,7 +1560,9 @@ class Judge:
                         continue
                     O = r.open[w["cid"]]
                     rv = call["context"].get("review")
-                    if not O:
+                    if de is not None:
+                        bad = self.review_open_v6(ws, w, r, rv, de)
+                    elif not O:
                         bad = [] if rv is None else ["review not null"]
                     elif not isinstance(rv, dict):
                         bad = ["review null"]
@@ -1514,6 +1572,30 @@ class Judge:
                             (["options"] if rv.get("options") != review.options(len(O)) else [])
                     if bad:
                         self.F.v("A15", "review_open", call_r.path, call_r.commit, safe_detail(*bad[:12]))
+
+    @staticmethod
+    def review_open_v6(ws, w, r, rv, de) -> list:
+        """A15 `review_open`'s differences for one `/6` block (§16.18 A17-R5, R-AN-92 with A17-R7)."""
+        if w["time"]:
+            subj = review.subject_at(ws, w["entry"], de)
+            kind, names, flags, opts = review.KIND_TIME, ([subj] if subj else []), [False], review.TIME_OPTIONS
+        else:
+            names = r.open[w["cid"]]
+            kind, flags, opts = review.KIND_REVIEW, r.flags[w["cid"]], review.options(len(r.open[w["cid"]]))
+        if not names:
+            return [] if rv is None else ["review not null"]
+        if not isinstance(rv, dict):
+            return ["review null", "main", *names]
+        op = [o for o in rv.get("open") or [] if isinstance(o, dict)] if isinstance(rv.get("open"), list) else []
+        got = [o.get("call_id") for o in op]
+        bad = ["kind", str(rv.get("kind"))] if rv.get("kind") != kind else []
+        if got != names:
+            bad += ["open", *got, "main", *names]
+        elif [o.get("extended") for o in op] != flags:
+            bad += ["extended", *[str(o.get("extended")) for o in op], "main", *[str(x) for x in flags]]
+        if rv.get("options") != opts:
+            bad.append("options")
+        return bad
 
     def check_frozen_selfreport(self, path, commit, call, R):
         fr = call.get("frozen") or {}
@@ -1596,7 +1678,7 @@ class Judge:
         attempt: {"skipped:trade_open": [open call_ids]} when an earlier window of d has terminal `called` and an
         exit_utc later than this entry; {"skipped:day_cap": n} when n >= 6 (10 from a16_from on, §16.18 A16) earlier
         windows of d have an accepted attempt. {} otherwise."""
-        if self.a14_day is None or win.day < self.a14_day or win.kind == "trigger":
+        if self.a14_day is None or win.day < self.a14_day or win.kind in ("trigger", "time"):
             return {}
         E, O = self.e_o(mode, win.day, win.check)
         out = {}
@@ -1622,11 +1704,13 @@ class Judge:
         for mode in ("canary", "live"):
             for d in sorted({w.day for w in self.windows.get(mode, []) if w.day >= a14}):
                 self.safe(f"wake_missed_{mode}_{d}", self.check_wake_missed, mode, d)
-        # §16.18 A15 (R-AN-68): each `/5` call's `XAUUSD_M30R` bars, after the judge's own fetch
+                if self.is_a17(d):                # §16.18 A17: a due time window with no window at its check
+                    self.safe(f"time_missed_{mode}_{d}", self.check_time_missed, mode, d)
+        # §16.18 A15 (R-AN-68): each `/5` (§16.18 A17: and `/6`) call's `XAUUSD_M30R` bars, after the judge's fetch
         for (mode, cid), info in sorted(self.terminal_info.items()):
             call, call_r = info.get("call"), info.get("call_raw")
             ctx = call.get("context") if isinstance(call, dict) else None
-            if call_r is not None and isinstance(ctx, dict) and ctx.get("schema") == SCHEMA_V5:
+            if call_r is not None and isinstance(ctx, dict) and ctx.get("schema") in (SCHEMA_V5, SCHEMA_V6):
                 self.safe(f"m30r_{mode}_{cid}", self.check_m30r, call_r.path, call_r.commit, info["win"], ctx)
 
     def check_wake_window(self, mode, win):
@@ -1663,6 +1747,9 @@ class Judge:
         E, O = self.e_o(mode, win.day, win.check)
         if self.is_a15(win.day):
             O = []                                # §16.18 A15 (R-AN-89): R(T) without step 1, no `trade_open` row
+        if win.kind == "time":
+            self.check_time_window(mode, win, E, rec0, p0, c0)
+            return
         if win.kind != "trigger":
             if O:
                 self.F.v("A14", "trade_open", p0, c0, safe_detail("open", *O))
@@ -1689,6 +1776,57 @@ class Judge:
                 self.summary["m30_compared"] = self.summary.get("m30_compared", 0) + 1
                 if diffs:
                     self.F.w("A14", "m30_mismatch", p0, c0, safe_detail(len(diffs), "differences", *diffs[:6]))
+
+    def is_a17(self, d) -> bool:
+        """Model day d is on or after MODE.json `a17_from` (§16.18 A17)."""
+        a17 = getattr(self, "a17_day", None)
+        return a17 is not None and d >= a17
+
+    def subject(self, mode, d, t_check):
+        """A17-R2's subject at check T of d from main (the judge's R-AN-92 input with A17-R7), or None (always None
+        for a model day before a17_from)."""
+        if not self.is_a17(d):
+            return None
+        return review.subject_at(self.day_windows(mode, d), t_check + HALF, day_end(d))
+
+    def check_time_window(self, mode, win, E, rec0, p0, c0):
+        """A17 `not_due` (§16.18 A17-R1..R4; judge decision J-D72): a time window's first accepted attempt whose
+        `wake` is not what R(T) gives at its check with the time step 4b, E(T) and the subject from main: no window,
+        another window (a scheduled one, a trigger), a gate (day_cap, with the cap of the day), a holiday-table day, a
+        check outside G_X(d), no subject or another subject. An integrity VIOLATION, as A14 `not_triggered`."""
+        wk = (rec0 or {}).get("wake")
+        wk = wk if isinstance(wk, dict) else {}
+        subj = self.subject(mode, win.day, win.check)
+        got = watch.rule(win.day, win.check, E, 0, self.holidays.any_exchange(win.day), None,
+                         self.day_cap(win.day), subject=subj, a17=self.is_a17(win.day))
+        if got != ("window", win.wid, "time", wk.get("reason")):
+            self.F.v("A17", "not_due", p0, c0, safe_detail("rule gives", got[0], got[1], got[3], "recorded",
+                                                            wk.get("reason")))
+
+    def check_time_missed(self, mode, d):
+        """A17 `time_missed` (WARNING + ADJUDICATIONS row; judge decision J-D72): R(T) with the time step 4b, E(T)
+        and the subject from main, gives a time window at a check T of G_X(d) where d has no window with that check,
+        once now >= day_end(d) + 60 min; checks inside A10's pause intervals or while the mode is `off` are left out
+        (as A14 `wake_missed`). No bars are needed: step 4b comes before the conditions."""
+        if self.now < day_end(d) + dt.timedelta(minutes=60):
+            return
+        have = {w.check for w, _a, _s in self.watch_day(mode, d)}
+        sched = scheduled_checks(d)
+        if getattr(self, "_pauses", None) is None:
+            self._pauses = self.pause_intervals()
+        hol = self.holidays.any_exchange(d)
+        for t in check_grid_x(d):
+            if t in sched or t in have:
+                continue
+            if any(a <= t < b for a, b in self._pauses) or self.mode_off_at(t):
+                continue
+            subj = self.subject(mode, d, t)
+            if subj is None:
+                continue
+            E, _O = self.e_o(mode, d, t)
+            got = watch.rule(d, t, E, 0, hol, None, self.day_cap(d), subject=subj, a17=True)
+            if got[0] == "window" and got[2] == "time":
+                self.F.w("A17", "time_missed", d.isoformat(), got[1], safe_detail(mode, "subject", subj))
 
     def cross_check_m30(self, p, c, win, bars):
         """R-AN-68 (A14): the o and the c of every bar of model day d in a trigger attempt's `wake.td.bars` against the
@@ -1788,7 +1926,9 @@ class Judge:
                 continue
             E, O = self.e_o(mode, d, t)
             cond = watch.conditions(watch.values_at(bars, d, t), d, t)
-            got = watch.rule(d, t, E, 0 if self.is_a15(d) else len(O), False, cond, self.day_cap(d))
+            # §16.18 A17-R3: from a17_from a subject's time window beats a trigger at the same check
+            got = watch.rule(d, t, E, 0 if self.is_a15(d) else len(O), False, cond, self.day_cap(d),
+                             subject=self.subject(mode, d, t), a17=self.is_a17(d))
             if got[0] == "window" and got[2] == "trigger":
                 self.F.w("A14", "wake_missed", d.isoformat(), got[1], safe_detail(mode, "reason", got[3]))
 
@@ -1912,6 +2052,66 @@ class Judge:
         if self.a16_day is not None and (self.a15_day is None or self.a16_day < self.a15_day):
             self.F.v("A16", "a16_from", "analyst/MODE.json", set_sha or "-",
                      safe_detail("a15_from", self.mode_cfg.get("a15_from")))
+
+    def check_a17_from(self):
+        """A17 `a17_from` (R-AN-5, R-AN-55, R-AN-67, A17-D5, A17-D6; judge decision J-D67): R-AN-5's rule as for
+        a16_from, with the pinned A17 build commit (A0 `a17_unpinned` while it is a placeholder), plus a16_from set and
+        a17_from >= a16_from; and, for a model day before it (or at all while it is null), no accepted push of a time
+        window, no `review_extend` terminal and no `analyst-settled/3` record, in either mode (A17-R8, A17-R9: days
+        before a17_from keep A16's rules), and no attempt record or call file on the A17 build (A17-D5's order)."""
+        path = "analyst/MODE.json"
+        set_sha = self.check_from_value("A17", "a17_from", self.a17_day, self.a17_commit, "a17_unpinned")
+        if self.a17_day is not None and (self.a16_day is None or self.a17_day < self.a16_day):
+            self.F.v("A17", "a17_from", path, set_sha or "-", safe_detail("a16_from", self.mode_cfg.get("a16_from")))
+
+        def before(cid):
+            pc = parse_call_id(str(cid))
+            return pc is not None and not self.is_a17(pc[0])
+        for r in self.wit:
+            w = r.rec
+            if w.get("status") != "accepted" or w.get("kind") not in ("attempt", "call"):
+                continue
+            pc = parse_call_id(str(w.get("id") or ""))
+            if pc is not None and pc[1].startswith("X") and before(w.get("id")):
+                self.F.v("A17", "a17_from", path, r.commit, safe_detail("accepted push before a17_from", w.get("id")))
+        # read from the folders, not from the expected windows: a time window before a17_from is not expected
+        for folder, field_, bad in (("terminal/", "status", review.EXTEND),
+                                    ("settled/", "schema", "analyst-settled/3")):
+            for pre in ("analyst/", "analyst/canary/"):
+                for p in self.git.ls_tree(self.head, pre + folder):
+                    cid = p.rsplit("/", 1)[-1][:-5]
+                    if not before(cid):
+                        continue
+                    rec = self.json_at_head(p)
+                    if isinstance(rec, dict) and rec.get(field_) == bad:
+                        self.F.v("A17", "a17_from", path, self.commit_of(p), safe_detail(bad, cid))
+        # A17-D5 (amended 2026-11-06): the A17 build reaches main after the last lock of the day before a17_from, so
+        # no window of an earlier model day runs on it: no attempt record or call file of such a day names a
+        # repo_head_sha that is the A17 build commit or descends from it (judge decision J-D67)
+        b = _pinned(self.a17_commit)
+        if not b or not self.git.commit_exists(b):
+            return
+        seen = {}
+
+        def on_build(R):
+            if R not in seen:
+                seen[R] = isinstance(R, str) and _SHA40.fullmatch(R) is not None and \
+                    (R == b or (self.git.commit_exists(R) and self.git.is_ancestor(b, R)))
+            return seen[R]
+        for (_mode, cid), info in sorted(self.terminal_info.items()):
+            call, call_r = info.get("call"), info.get("call_raw")
+            if call_r is None or not isinstance(call, dict) or not before(cid):
+                continue
+            ctx = call.get("context") if isinstance(call.get("context"), dict) else {}
+            if on_build(ctx.get("repo_head_sha", call.get("repo_head_sha"))):
+                self.F.v("A17", "a17_from", path, call_r.commit, safe_detail("A17 build before a17_from", cid))
+        for r in self.wits(None, "attempt", None, "accepted"):
+            aid = r.rec.get("id")
+            if parse_call_id(str(aid or "")) is None or not before(aid):
+                continue
+            rec = self.json_at_head(r.rec.get("path") or "")
+            if isinstance(rec, dict) and on_build(rec.get("repo_head_sha")):
+                self.F.v("A17", "a17_from", path, r.commit, safe_detail("A17 build before a17_from", aid))
 
     FIXTURE = "analyst/tests/fixtures/canary_settled.json"
 
@@ -2774,9 +2974,10 @@ class Judge:
         end = model_to_utc(dt.datetime(d.year, d.month, d.day) + dt.timedelta(days=1))
         processable = final_inputs and not bad_store and all(infos.values()) and calls_ok and self.now >= end
         ws, r = self.open_info.get((mode, d)) or (None, None)
+        de = self.day_end_of(d)                  # §16.18 A17-R9: from a17_from on, extensions to day_end(d)
         if r is None:
             ws = self.day_windows(mode, d)
-            r = review.open_sets(ws)
+            r = review.open_sets(ws, de)
         void = settle.is_void(days, d)
         fa = self.final_at(days, d)
         late = fa is not None and td.weekdays_since(fa.date(), self.now.date()) > 2
@@ -2784,11 +2985,13 @@ class Judge:
         if processable:
             for win in dwins:
                 info = infos[win.call_id]
-                if info["status"] != "called":
+                if info["status"] != "called" or win.w == "X":     # A17-R9: a time window is no trade
                     continue
                 call = info["call"]
                 m = int(r.managed[win.call_id].timestamp()) if win.call_id in r.managed else None
-                mins = settle.Minutes(store, win)
+                # A17-R9: x_exit = day_end(d) for an extended trade, else exit_utc
+                x_exit = int(de.timestamp()) if de is not None and win.call_id in r.extended else None
+                mins = settle.Minutes(store, win, x_exit)
                 out = settle.settle_side(mins, call["side"], call["S_dimes"], call["T_dimes"], void, m)
                 res[win.call_id] = {"out": out, "m": m, "mins": mins,
                                     "x_end": settle.x_end(out, mins, m)}
@@ -2810,6 +3013,14 @@ class Judge:
                 cls = "counted" if (self.first_day is not None and d >= self.first_day) else "shakedown"
             row = self.ledger_row(win, info, cls)
             term = info["term"]
+            if win.w == "X":
+                # §16.18 A17-R9 (judge decision J-D74): a time window has no settled record and no twin
+                for p_x, kind in ((sp, "settled_mismatch"), (tp, "twin_mismatch")):
+                    rx = (settled if kind == "settled_mismatch" else twins_r).get(p_x)
+                    if rx is not None:
+                        self.F.w("A11", kind, p_x, rx.commit, "a time window has no settled record and no twin")
+                rows.append(row)
+                continue
             if info["status"] == "called":
                 sr = settled.get(sp)
                 x = res.get(cid)
@@ -2821,7 +3032,7 @@ class Judge:
                     self.F.w("A11", "settled_unverifiable", sp, sr.commit, "inputs at HEAD not final")
                 else:
                     self._n_checked += 1
-                    extra = self.settled_extras(cid, x, ws, r)
+                    extra = self.settled_extras(cid, x, ws, r, win, store, void, de)
                     mm = self.compare_settled(sr, x["out"], x["mins"], info["call"]["side"], info["call"], info,
                                               cls, days, mode=mode, extra=extra, m=x["m"])
                     if mm:
@@ -2848,13 +3059,18 @@ class Judge:
             rows.append(row)
         return processable and have_all
 
-    def settled_extras(self, cid, x, ws, r):
-        """R-AN-93's new fields of trade cid: managed_utc, closed_by, x_end_utc, weight, cluster, unmanaged, reviews."""
+    def settled_extras(self, cid, x, ws, r, win=None, store=None, void=False, de=None):
+        """R-AN-93's new fields of trade cid: managed_utc, closed_by, x_end_utc, weight, cluster, unmanaged, reviews.
+        (§16.18 A17-R9, judge decision J-D73) de: day_end(d) for a model day >= a17_from (`analyst-settled/3`):
+        `unmanaged` over [t0, x_exit), `reviews` as before (O(X) is empty, so no time window is listed, A17-R7), and
+        the `time` block: X(w)'s call_id and terminal status (null without one), extended, x_exit_utc, and, for a
+        trade with exit_utc <= day_end(d) − 60 min, the descriptive `at_4h` over [t0, exit_utc) and `to_day_end`
+        over [t0, day_end(d)), both without a managed exit (null for a later trade)."""
         closer = r.closed_by.get(cid)
+        info = next(w["info"] for w in ws if w["cid"] == cid)
+        call = info["call"]
         un = None
         if closer is not None:
-            info = next(w["info"] for w in ws if w["cid"] == cid)
-            call = info["call"]
             un = settle.public(settle.settle_side(x["mins"], call["side"], call["S_dimes"], call["T_dimes"],
                                                   x["out"]["status"] == "void"))
         revs = []
@@ -2864,9 +3080,21 @@ class Judge:
                 plan = plan if isinstance(plan, dict) else {}
                 revs.append({"call_id": w["cid"], "status": w["info"].get("status"), "action": plan.get("action"),
                              "confidence": plan.get("confidence"), "reason_ar": plan.get("reason_ar")})
-        return {"managed_utc": fmt_utc(r.managed[cid]) if closer else None, "closed_by": closer,
-                "x_end_utc": fmt_utc(dt.datetime.fromtimestamp(x["x_end"], UTC)), "weight": x["weight"],
-                "cluster": x["cluster"], "unmanaged": un, "reviews": revs}
+        out = {"managed_utc": fmt_utc(r.managed[cid]) if closer else None, "closed_by": closer,
+               "x_end_utc": fmt_utc(dt.datetime.fromtimestamp(x["x_end"], UTC)), "weight": x["weight"],
+               "cluster": x["cluster"], "unmanaged": un, "reviews": revs}
+        if de is not None:
+            xw = r.time_of.get(cid)
+            xs = next((w["info"].get("status") for w in ws if w["cid"] == xw), None) if xw else None
+            a4 = td_ = None
+            if win is not None and win.exit <= de - review.MIN_EXTENSION:
+                args = (call["side"], call["S_dimes"], call["T_dimes"], void)
+                a4 = settle.public(settle.settle_side(settle.Minutes(store, win), *args))
+                td_ = settle.public(settle.settle_side(settle.Minutes(store, win, int(de.timestamp())), *args))
+            out["time"] = {"call_id": xw, "status": xs, "extended": cid in r.extended,
+                           "x_exit_utc": fmt_utc(dt.datetime.fromtimestamp(x["mins"].t1, UTC)), "at_4h": a4,
+                           "to_day_end": td_}
+        return out
 
     def compare_settled(self, sr, out, mins, s, call, info, cls, days, mode="live", extra=None, m=None):
         """A11 on one settled record. (§16.18 A15) extra: R-AN-93's new fields as recomputed (a model day >=
@@ -2875,8 +3103,9 @@ class Judge:
         mm = []
         if sr.raw != record_form(r):
             mm.append("record_form")
+        v3 = extra is not None and "time" in extra          # §16.18 A17-R9: `analyst-settled/3`
         if extra is not None:
-            if set(r) != SETTLED2_KEYS:
+            if set(r) != (SETTLED3_KEYS if v3 else SETTLED2_KEYS):
                 mm.append("keys")
             for k in ("managed_utc", "closed_by", "x_end_utc", "cluster", "reviews"):
                 if r.get(k) != extra[k]:
@@ -2888,7 +3117,10 @@ class Judge:
                     mm.append("unmanaged")
             else:
                 mm += [f"unmanaged.{x}" for x in _cmp_outcome(r.get("unmanaged"), extra["unmanaged"])]
-        exp_fixed = {"schema": "analyst-settled/2" if extra is not None else "analyst-settled/1",
+        if v3:
+            mm += _cmp_time(r.get("time"), extra["time"])
+        schema = "analyst-settled/3" if v3 else "analyst-settled/2" if extra is not None else "analyst-settled/1"
+        exp_fixed = {"schema": schema,
                      "call_id": info["win"].call_id, "mode": mode,
                      "window": info["win"].w, "model_day": info["win"].day.isoformat(), "class": cls,
                      "action": (call.get("plan") or {}).get("action"), "side": s,
@@ -3620,12 +3852,29 @@ def _cmp_outcome(rec, out):
     return mm
 
 
+def _cmp_time(rec, exp):
+    """§16.18 A17-R9: the settled record's `time` block (call_id, status, extended and x_exit_utc exact; at_4h and
+    to_day_end as outcomes, or null)."""
+    if not isinstance(rec, dict) or set(rec) != set(TIME_BLOCK_KEYS):
+        return ["time.keys"]
+    mm = [f"time.{k}" for k in ("call_id", "status", "x_exit_utc") if rec[k] != exp[k]]
+    if not (rec["extended"] is exp["extended"]):
+        mm.append("time.extended")
+    for k in ("at_4h", "to_day_end"):
+        if exp[k] is None:
+            if rec[k] is not None:
+                mm.append(f"time.{k}")
+        else:
+            mm += [f"time.{k}.{x}" for x in _cmp_outcome(rec[k], exp[k])]
+    return mm
+
+
 def _cmp_path(rec, ps):
     if not isinstance(rec, dict):
         return ["missing"]
     mm = []
     rb = rec.get("buckets")
-    if not isinstance(rb, list) or len(rb) != 16:
+    if not isinstance(rb, list) or len(rb) != len(ps["buckets"]):   # 16, or more for an extended trade (A17)
         mm.append("buckets")
     else:
         for a, b in zip(rb, ps["buckets"]):

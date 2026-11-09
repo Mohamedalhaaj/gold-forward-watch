@@ -16,13 +16,14 @@ def _clip(x, lo, hi):
 
 
 class Minutes:
-    """The store minutes of UTC days d−1 and d for one window (R-AN-41)."""
+    """The store minutes of UTC days d−1 and d for one window (R-AN-41). (§16.18 A17-R9) t1: the end of the path,
+    x_exit (epoch): day_end(d) for an extended trade; by default the window's exit_utc."""
 
-    def __init__(self, store: Store, win: Window):
+    def __init__(self, store: Store, win: Window, t1: int | None = None):
         self.store = store
         self.win = win
         self.t0 = int(win.entry.timestamp())
-        self.t1 = int(win.exit.timestamp())
+        self.t1 = int(win.exit.timestamp()) if t1 is None else int(t1)
         d = win.day
         self.mds = int(model_to_utc(dt.datetime(d.year, d.month, d.day)).timestamp())
 
@@ -155,7 +156,7 @@ def x_end(outcome: dict, mins: Minutes, m: int | None = None) -> int:
     """R-AN-93's x_end_utc (epoch): an exit inside the loop at minute i: i for an open fill, i + 1 min for a level
     fill; a time exit (reason `time`, or `gap` at X after the loop): exit_utc; a managed exit (reason `managed`, or
     the managed case's `gap` at X): m; status `void` or `no_quote`: m when a review closed the trade, else
-    exit_utc."""
+    exit_utc. (§16.18 A17-R9) x_exit in place of exit_utc: mins.t1."""
     if outcome.get("status") != "final":
         return m if m is not None else mins.t1
     if outcome["_where"] == "managed":
@@ -168,7 +169,8 @@ def x_end(outcome: dict, mins: Minutes, m: int | None = None) -> int:
 
 def path_summary(mins: Minutes, s: int, outcome: dict, m: int | None = None):
     """(§16.18 A15, R-AN-93) for reason `managed`, mfe_usd and mae_usd run from t0 through minute m − 1; the buckets
-    and range_mid_usd keep the full [t0, t1)."""
+    and range_mid_usd keep the full [t0, t1). (§16.18 A17-R9) the 16 buckets are R-AN-46's, the first 4 hours;
+    range_mid_usd runs over [t0, x_exit) (mins.t1); mfe_usd, mae_usd and exit_after_min follow the trade's own exit."""
     if outcome["status"] != "final":
         return None
     st = mins.store
@@ -189,6 +191,11 @@ def path_summary(mins: Minutes, s: int, outcome: dict, m: int | None = None):
         else:
             b = {"k": k, "o": None, "h": None, "l": None, "c": None, "n": 0}
         buckets.append(b)
+    for t in range(t0 + 240 * MIN, t1, MIN):          # §16.18 A17-R9: an extended trade's range runs to x_exit
+        mb = st.mid_bar(t)
+        if mb is not None:
+            hi_all = mb[1] if hi_all is None else max(hi_all, mb[1])
+            lo_all = mb[2] if lo_all is None else min(lo_all, mb[2])
     exit_side = "BID" if s == 1 else "ASK"
     pe = outcome["_pe_pts"]
     hs, ls = [], []

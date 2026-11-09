@@ -109,16 +109,19 @@ def add_months_12(d: dt.date) -> dt.date:
 
 FIXED = ("W1", "W2")
 SECOND_LOOK = {"W1b": "W1", "W2b": "W2"}           # §16.18 A14 (R-AN-8): entry = the parent's entry + 120 min
-KIND = {"W1": "fixed", "W2": "fixed", "W1b": "second_look", "W2b": "second_look", "T": "trigger"}
+KIND = {"W1": "fixed", "W2": "fixed", "W1b": "second_look", "W2b": "second_look", "T": "trigger",
+        "X": "time"}                                # §16.18 A17-R1: the time windows `X<hhmm>`, kind `time`
 HALF = dt.timedelta(minutes=30)
-WID_RE = re.compile(r"^(W[12]|W[12]b|T([01][0-9]|2[0-3])(00|30))$")
+WID_RE = re.compile(r"^(W[12]|W[12]b|[TX]([01][0-9]|2[0-3])(00|30))$")
 
 
 class Window:
-    """One window of a model day (R-AN-4, R-AN-8; §16.18 A14 adds W1b, W2b and the trigger windows `T<hhmm>`).
-    `w` is the call file's and the context's `window` (`T` for every trigger window), `wid` the call_id's suffix,
-    `check` = entry − 30 min (R-AN-89), `span_lo` the span start (entry − 45 min for W1 and W2, entry − 30 min for the
-    new kinds), `exchange` the holiday exchange (None for a trigger window: either exchange, R-AN-9)."""
+    """One window of a model day (R-AN-4, R-AN-8; §16.18 A14 adds W1b, W2b and the trigger windows `T<hhmm>`;
+    §16.18 A17-R1 the time windows `X<hhmm>`, timed as a trigger window: check T, entry T + 30 min, exit entry + 240
+    min, deadline entry − 15 min, span start T). `w` is the call file's and the context's `window` (`T` for every
+    trigger window, `X` for every time window), `wid` the call_id's suffix, `check` = entry − 30 min (R-AN-89),
+    `span_lo` the span start (entry − 45 min for W1 and W2, entry − 30 min for the new kinds), `exchange` the holiday
+    exchange (None for a trigger or a time window: either exchange, R-AN-9)."""
     __slots__ = ("day", "w", "wid", "kind", "entry", "exit", "deadline", "span_lo", "check", "call_id", "exchange",
                  "entry_server", "exit_server", "slot")
 
@@ -142,7 +145,7 @@ class Window:
             check = dt.datetime(base.year, base.month, base.day, hh, mm, tzinfo=UTC)
             entry = check + HALF
             exit_ = entry + dt.timedelta(minutes=240)
-            self.w = "T"
+            self.w = w[0]                                                # `T`, or (§16.18 A17) `X`
             self.exchange = None
         self.kind = KIND[self.w]
         self.entry = entry
@@ -171,8 +174,9 @@ class Window:
 
 
 def parse_call_id(call_id: str):
-    """(model_day, wid) of a call_id of R-AN-4's form on a weekday (§16.18 A14: W1b, W2b and T<hhmm> too), else
-    None. Whether a `T<hhmm>` is a check of G(d) is `trigger_valid`'s."""
+    """(model_day, wid) of a call_id of R-AN-4's form on a weekday (§16.18 A14: W1b, W2b and T<hhmm> too; §16.18
+    A17: X<hhmm>), else None. Whether a `T<hhmm>` is a check of G(d) is `trigger_valid`'s, an `X<hhmm>` one of G_X(d)
+    `time_valid`'s."""
     try:
         day_s, w = call_id.split("_")
         d = dt.date.fromisoformat(day_s)
@@ -240,6 +244,36 @@ def trigger_wid(t: dt.datetime) -> str:
 def trigger_valid(win: Window) -> bool:
     """A `T<hhmm>` window whose check is in G(d) and is not a scheduled check (R-AN-33, R-AN-89)."""
     return win.w == "T" and win.check in check_grid(win.day) and win.check not in scheduled_checks(win.day)
+
+
+# ---------------------------------------------------------------- §16.18 A17: the time decision (A17-R1)
+
+
+def day_end(d: dt.date) -> dt.datetime:
+    """day_end(d) = model_to_utc((d+1) 00:00) = 17:00 New York on d (R-AN-40, A17)."""
+    n = d + dt.timedelta(days=1)
+    return model_to_utc(dt.datetime(n.year, n.month, n.day))
+
+
+def check_grid_x(d: dt.date) -> list:
+    """G_X(d) (A17-R1): G(d) plus the checks L_d + 30 min, L_d + 60 min, ..., day_end(d) − 90 min."""
+    g = check_grid(d)
+    if not g:
+        return []
+    t, end = g[-1] + HALF, day_end(d) - dt.timedelta(minutes=90)
+    while t <= end:
+        g.append(t)
+        t += HALF
+    return g
+
+
+def time_wid(t: dt.datetime) -> str:
+    return f"X{t.hour:02d}{t.minute:02d}"
+
+
+def time_valid(win: Window) -> bool:
+    """An `X<hhmm>` window whose check is in G_X(d) and is not a scheduled check (A17-R1, A17-R8)."""
+    return win.w == "X" and win.check in check_grid_x(win.day) and win.check not in scheduled_checks(win.day)
 
 
 # ---------------------------------------------------------------- holidays (R-AN-9)

@@ -281,6 +281,7 @@ uv run --frozen --group dev pytest -p no:cacheprovider judge_analyst/tests
 | A13 | A7, the session guard (R-AN-85, R-AN-86). From each runs export's `tool_log` (owner-attested; runs from PINS.inbox_from_utc on, file by file): each logged call decided by the guard's string rules (`jlib/sessionguard.py`; P from the log, else C20.json) and classed harmless or forbidden. `forbidden_attempt` (a forbidden call refused or of unknown outcome) and `forbidden_executed` (one that ran): integrity; `guard_not_enforced` (a harmless refused call that ran, or a refused call whose denial holds no guard message; in `analyst-probe`, any refused call that ran): operational; WARNINGs `guard_denied_benign` (a harmless call refused), `allowed_call_refused` (an allowed call refused), `scan_unclassifiable` (no decision can be formed, or a harmless refused call of unknown outcome), `probe_elsewhere` (the probe line run outside `analyst-probe`), `tool_log_missing` (a run without a readable log). Keys `A13\|<code>\|<export path>\|<run_id>#<seq>` (`<run_id>` alone for `tool_log_missing`). `guard_config` (operational, from git at main's head): the guard's settings missing or not R-AN-85's object, `guard.py` missing, any other `.claude/` file, a `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md` anywhere; key `<path>\|<blob sha or absent>` (J-D36, J-D40). Third review of A7 (decisions 21, 22), operational: `routine_project` (owner-attested: in a judged version of `analyst/ROUTINE_CONFIG.json`, a routine's `project` not null or a `raw` field named like `project` with a value, and, in a version committed at or after PINS.inbox_from_utc, a routine without `project`; in a runs export, a `routines` entry without `project` or with one not null; key `<export path>\|<commit>`; J-D41, J-D42); `cc_version_below` (self-reported: a guarded session's attempt record or call file whose `self_reported.cc_version` is below 2.1.295 by R-AN-85's rule) and `cc_version_unknown` (such an attempt record whose version is unknown); key `<record path>\|<commit that added it>` (J-D43) | VIOLATION (`guard_denied_benign`, `allowed_call_refused`, `scan_unclassifiable`, `probe_elsewhere`, `tool_log_missing`: WARNING) |
 | A14 | §16.18 A14, watching (R-AN-89, R-AN-90; `jlib/watch.py`). E(T) and O(T) from main (accepted attempt witnesses, their attempt records, terminals). Integrity: `not_triggered` (a trigger window's first accepted attempt whose `wake` is not what R(T) gives, rebuilt from its own `wake.td.bars`: no window, another reason, a gate, a holiday day, a check outside G(d) or a scheduled one, or bars that are not `ok`), `trade_open` and `day_cap` (the first accepted attempt of a W1, W2, W1b or W2b window of a day >= a14_from while O(check) is not empty or \|E(check)\| >= 6), `wake_record` (an `analyst-attempt/2` `wake` that breaks R-AN-90, or, from a14_from on, a call attempt that is not `/2`). Operational: `skipped_wrong` (a `skipped:trade_open` or `skipped:day_cap` terminal whose condition does not hold, or a W1, W2, W1b or W2b `missed:trigger` while one holds) and `a14_from` (MODE.json `a14_from` not a weekday, changed after it was set, or not valid at 22:00Z of the day before; a W1b, W2b or trigger push accepted before it). WARNINGs: `wake_missed` (key `<model day>\|T<hhmm>`: the judge's R(T) on its own fetch gives a trigger where d has no window with that check; pause intervals and mode `off` left out), `m30_mismatch` (a trigger's recorded bars against the judge's fetch, 1e-3, and bars in [A, T − 30 min] in one set only), `m30_unchecked` (no `ok` fetch of d once it is more than 3 weekdays old). The o and c of d's recorded bars are cross-checked against Dukascopy half hours (A11 `td_mismatch`, `td_unchecked`). Also: `analyst-context/4` (A4, J-D53), W1b, W2b and trigger windows in A2's span, A8's expected windows and A10's run matching (J-D59) | VIOLATION (`wake_missed`, `m30_mismatch`, `m30_unchecked`: WARNING) |
 | A15 | §16.18 A15, reviews and canary learning (R-AN-92..R-AN-95; `jlib/review.py`). The open sets recomputed from main's terminals and call files (a trade is a `called` window; a `review_close`, or a `called` reverse, closes the trades of its O that its context's `review.open` names; a stop never shortens a trade). Operational VIOLATIONs: `review_open` (a call of a model day >= a15_from whose `review` is null where O is not empty or the reverse, names other call_ids, or other `options`), `open_cap` (key `<model day>\|<mode>`: a window whose recomputed O has more than two trades), `a15_from` (MODE.json `a15_from` not a weekday, changed after it was set, not valid at 22:00Z of the day before by R-AN-5's rule with A15_BUILD_COMMIT, a14_from null or later; a non-null `review`, a `review_hold` or `review_close` terminal, a canary settled record or twin for a model day before it), `lesson_source` (a canary lesson pushed from a15_from on whose settled record is the fixture, or a canary lesson of a day >= a15_from without a canary settled record). WARNINGs: `unsettled` (a terminal of a day >= a15_from, either mode, without its settled record or twin more than 2 weekdays after d's final mirror rows), `m30r_mismatch` (a call's `XAUUSD_M30R` bars against the judge's own fetch, 1e-3, and bars in [A, B − 30 min] in one set only). Also: `analyst-context/5` and its `review` block (A4, J-D61), `analyst-plan/3` and `action_not_allowed` (A5, integrity, J-D62), A1's answers `review_hold` and `review_close`, A14's `trade_open` only before a15_from and R(T) without step 1 from it, and A11's managed exits, `unmanaged`, `reviews`, x_end, weights, clusters, the weighted statistics and canary settlement (J-D63, J-D65) | VIOLATION (`unsettled`, `m30r_mismatch`: WARNING) |
+| A17 | §16.18 A17, the time decision (A17-R1..R12; `jlib/clock.py` G_X(d) and the `X<hhmm>` windows, `jlib/watch.py` R(T)'s step 4b, `jlib/review.py` the subject, the open set with extensions and the `/6` block). Integrity: `not_due` (a time window's first accepted attempt whose `wake` is not what R(T) gives at its check with the time step, E(T) and the subject from main: no subject or another one, a gate, a holiday day, a scheduled check or a check outside G_X(d); J-D72). Operational: `a17_from` (MODE.json `a17_from` not a weekday, changed after it was set, not valid at 22:00Z of the day before by R-AN-5's rule with A17_BUILD_COMMIT, a16_from null or later; an accepted time-window push, a `review_extend` terminal, an `analyst-settled/3` record, or an attempt record or call file on the A17 build (A17-D5's order), of a model day before it; J-D67). WARNING: `time_missed` (key `<model day>\|X<hhmm>`: the judge's R(T) with the time step gives a time window at a check of G_X(d) where d has no window; pause intervals and mode `off` left out; J-D72). Also: A0 `a17_unpinned`; `analyst-context/6` paired with the model day (A4, J-D68); the `/6` block against the open set with extensions (A15 `review_open`, J-D70); `analyst-plan/4`, `extend`, `review_extend` and a time window's statuses (A5, A1, A2, J-D71); A14 `wake_record` for the `wake` of kind `time` and `wake_missed` with the time step (J-D69, J-D72); settlement to x_exit, `at_4h`, `to_day_end`, `analyst-settled/3` and no settled record or twin for a time window (A11, J-D73, J-D74) | VIOLATION (`time_missed`: WARNING) |
 
 Independence: E_n and K are recomputed in pure Python (the test suite checks them against the lab's frozen
 `eproc.py`, sha256 ee8d456a…, kept in `tests/fixtures/` only); the holiday rows are the register's own (R-AN-9), the
@@ -674,6 +675,83 @@ aged out); a cleared key never clears another (R-JV-4).
   `day_cap` at an accepted attempt's check, the closer's `skipped:day_cap` gate, a trigger's `not_triggered` rule and
   `wake_missed`. A16 `a16_from` (operational) is R-AN-5's rule with `A16_BUILD_COMMIT`, plus a15_from set and
   a16_from >= a15_from; an a16_from set while the build is unpinned is the A0 WARNING `a16_unpinned`.
+- J-D67 (§16.18 A17; R-AN-5, R-AN-55, R-AN-67, A17-D5 as amended, A17-D6) A17 `a17_from` (operational) is R-AN-5's
+  rule with `jlib/config.py` `A17_BUILD_COMMIT`, plus a16_from set and a17_from >= a16_from. The pin is the A17 build
+  commit (6c90691, the head of gold-analyst branch a17-time-decision), which reaches main as the second parent of a
+  --no-ff merge: the judge asks git whether inbox main holds it, and the Worker's WATCHER_CONFIG.json may name the
+  merge commit (a later main commit with the same `watcher/` tree). Anything but a full 40-hex sha is no pin, and an
+  a17_from set while there is none is the A0 WARNING `a17_unpinned` (and, as for a14_from, `a17_from_unverified` when
+  inbox main at 22:00:00Z of the day before is unknown). For a model day before a17_from (any day while it is null),
+  in either mode, A17 `a17_from` also reports an accepted attempt or call push of a time window, a `review_extend`
+  terminal and an `analyst-settled/3` record, read from the folders (a time window before a17_from is no expected
+  window), and, for A17-D5's order (the build merged after the last lock of the day before a17_from, so no window of
+  an A16-only day reads A17's system.md), an attempt record or a call file whose repo_head_sha is the A17 build commit
+  or descends from it (checked once the pinned commit is in the clone). The key's commit is the witness's, or the
+  commit that added the record (a terminal committed with its call shares the call witness's key). Days before
+  a17_from keep A16's rules everywhere else.
+- J-D68 (§16.18 A17-R5; R-AN-23, A4) `analyst-context/6` is paired with the model day, not with the build commit: a
+  call of a model day >= a17_from must carry `/6` whatever its repo_head_sha, an earlier one keeps the A12/A14/A15
+  pairing (so `/6` there is A4 `context_schema`). `/6` keeps `/5`'s keys, `sources` note, memory, `wake` and requests;
+  only `review` changes. A time window's `wake` block is the attempt's (kind `time`, reason its subject) with values,
+  r20_days and bars_m30 null, as for `fixed` and `second_look`. A time window whose recorded block is null makes
+  `no_call:data` with detail `time_subject` the expected status (another applicable no_call:data detail is accepted
+  too, as for every detail), and its requests are judged as a prefix of R-AN-87's plan: the text does not say where
+  such a context stops.
+- J-D69 (§16.18 A17-R1..R4; R-AN-4, R-AN-33, R-AN-89, R-AN-90) Time windows `X<hhmm>` (hours 00-23, minutes 00 or
+  30) are timed as trigger windows (an `X` at 22:00-23:59 would belong to the next date's model day, as a `T`; none can
+  be due), window `X`, kind `time`, span start entry − 30 min, holiday exchange none. G_X(d) = G(d) plus L_d + 30 min
+  .. day_end(d) − 90 min; a time window's nominal exit (entry + 240 min) may lie after day_end(d) and settles nothing
+  (A17-R1). From a17_from R(T) is steps 2, 3, 4, then 4b, then steps 5 and 6 for T in G(d) only; step 4b's result
+  carries no condition (consumed(T) takes only kind `trigger`) and the attempt's `wake.reason` must be the subject's
+  call_id (A17-R3, A17-R4). A time window in E(T) counts for the cap and the gaps. The subject at T, from main: the
+  `called` window w of d (never
+  a time window) with exit_utc(w) = T + 30 min that no earlier window closed (R-AN-92 with A17-R7), when exit_utc(w)
+  <= day_end(d) − 60 min. A14 `wake_record` (unchanged code) reads A17-R4's form: kind `time`, check_utc T, `td` null,
+  and a reason that is a call_id of model day d, not a time window, whose window exits at the time window's entry.
+- J-D70 (§16.18 A17-R5, A17-R7; R-AN-92, A4, A15 `review_open`) The open sets of a model day >= a17_from carry the
+  extensions: a time window with terminal `review_extend` whose context's `review.open` names its subject (the trade
+  exiting at its entry, not closed before, extended at most once) gives it eff_exit = day_end(d) for the later
+  windows, where a closing window may still close it (a managed exit after exit_utc). A time window closes nothing and
+  is never a trade, whatever its status; O(X) is empty by definition (A17-R7), so a time window is in no `reviews`
+  list and counts for nothing in A15 `open_cap`. A15 `review_open` (operational) compares each `/6` block with that
+  recomputation: a window's block is null where O(R) is empty, else of kind `review` naming O(R) with each trade's
+  `extended` as at R and R-AN-92's options; a time window's is of kind `time` naming its subject, not extended, with
+  options `extend` and `close`, and null without a subject. A4 rebuilds the block's values from the recorded names and
+  recorded `extended` flags (a non-bool counts as false) with the call files at main, kind from the window (`time` for
+  `X`), exit_utc and minutes_left from the current exit (a time window's subject has minutes_left 0) and
+  extend_until_utc; whether a trade was extended is `review_open`'s, never A4's (as J-D61).
+- J-D71 (§16.18 A17-R6, A17-R8; R-AN-26, R-AN-29, R-AN-33, R-AN-36, A1, A2, A5) `analyst-plan/4` (a `/6` call):
+  `extend` has exactly hold's keys and gives `review_extend`, side 0 and no trade fields. A5 `call_status`: a
+  `review_extend` call without a `/6` context whose `review.kind` is `time`, or a time window's call whose status is
+  not `review_extend`, `review_close` or `no_call:*`; an action outside `review.options` is A5 `action_not_allowed`
+  (integrity, J-D62). `review_extend` is an answer in time with `review_hold` and `review_close` (A1 `late_lock`, A2),
+  which A17 does not say in words; R-AN-36 step 4 never gives it `no_call:invalid` (`underivable`). A time window's
+  terminals are `review_extend`, `review_close` or `no_call:*` (A17-R7, A17-R8): the closer's is expected
+  `no_call:run`, no gate of the closer applies, and another closer status is A11 `terminal_status` (a `skipped:*`
+  one A14 `skipped_wrong`).
+- J-D72 (§16.18 A17-R2..R4, A17-R10; R-AN-67, R-AN-89) A17 `not_due` is A14 `not_triggered`'s rule for a time
+  window: its first accepted attempt's `wake` must be what R(T) gives at its check with E(T) and the subject from main
+  (cap of the day, J-D66); an integrity VIOLATION, since R-AN-55 names only `a17_from` operational. A17 `time_missed`
+  (WARNING + ADJUDICATIONS row) is `wake_missed`'s rule for a time window, key `<model day>|X<hhmm>`, checked once
+  now >= day_end(d) + 60 min, with A10's pause intervals and mode `off` left out; it needs no bars, since step 4b
+  comes before the conditions. From a17_from A14 `wake_missed` gives no trigger where a subject's time window is due.
+- J-D73 (§16.18 A17-R9; R-AN-40, R-AN-46, R-AN-93, R-AN-94) For a model day >= a17_from each trade's minutes run to
+  x_exit (day_end(d) when extended, else exit_utc): the outcome, `opposite` and the managed exit of a closing window
+  (which may lie after exit_utc), `unmanaged` over [t0, x_exit) as if nothing had closed it, x_end_utc with x_exit in
+  place of exit_utc; the path summary keeps R-AN-46's 16 buckets (the first 4 hours), range_mid_usd runs over [t0,
+  x_exit), and mfe_usd, mae_usd and exit_after_min are R-AN-93's on the trade's own exit (A17-R9 as amended).
+  `analyst-settled/3` = `/2`'s keys plus `time` = {call_id (X(w): the
+  expected time window entering at w's exit, else null), status (its terminal status, else null), extended,
+  x_exit_utc, at_4h, to_day_end}, the last two outcome objects over [t0, exit_utc) and [t0, day_end(d)) with no
+  managed exit for a trade with exit_utc <= day_end(d) − 60 min (A17-R9 and A17-D7 name the same trades), null for a
+  later one; exit_utc stays the call file's. Weights and clusters use x_end as before.
+- J-D74 (§16.18 A17-R9; R-AN-47, R-AN-58) A time window has no settled record and no twin: one that is there is the
+  A11 WARNING `settled_mismatch` or `twin_mismatch` on its path. Its ledger row is a terminal window's row like any
+  other (R-AN-58 is not amended), without settlement cells or d_W; it adds no twin to P4.
+- J-D75 (§16.18 A17-R10..R12, A17-D5, A17-D7, A17-D8) Not judged: the watcher's time step, reads and log decision
+  `time` (no judge input holds them; `time_missed` sees a missed fire), the canary report's `time_decisions` and the
+  page (the judge builds neither), the canary end rule of A17-D5 (at least 5 time windows that ended `review_extend` or
+  `review_close`), the exam (A17-D8), and the system prompt's text (A11 `frozen_drift` hashes it).
 
 ## Open points
 
@@ -795,3 +873,16 @@ aged out); a cleared key never clears another (R-JV-4).
     main (with None every `/5` call is reported). The judge produces no canary report, so the report's `/4` fields
     (A15-D15) are not judged; the exam's reviews (A15-D19) wait for the exam. Not verified against real records: the
     session's `XAUUSD_M30R` request and the first `/5` contexts and `analyst-settled/2` records.
+21. **A17 (2026-11-06), not merged or pushed.** Built test-first (`tests/test_judge_a17.py`: unit tests of G_X(d),
+    the `X<hhmm>` windows, R(T)'s step 4b and the subject, the open set with extensions, the `/6` block, `analyst-plan/4`,
+    settlement to day_end(d), `a17_from`, `not_due` and `time_missed`, and a world whose canary day 12-03 and live day
+    12-04 extend, close, close an extended trade after its exit and reverse one, with a day before a17_from on A16's
+    rules) on the local branch `judge-a17` (from origin/main 2470a97) from register §16.18 A17 and the items it marks,
+    without reading the analyst or its watcher; then aligned with the register's amendment of A17 (xauusd-quant
+    9f3ed81: a17_from 2026-11-10 after a16_from 2026-11-09, O(X) empty, R-AN-46's 16 buckets with range_mid_usd to
+    x_exit, A17-D5's order) and `A17_BUILD_COMMIT` pinned to 6c90691. The world runs A14, A15, A16 and A17 from
+    consecutive days (11-30, 12-01, 12-02, 12-03), each build with its own `watcher/` tree and WATCHER_CONFIG.json the
+    evening before; the A17 build is a --no-ff merge after 12-02's last lock. To log in the register before the
+    freeze: J-D67..J-D75. Not verified against real records: the first `/6` contexts, the time windows' attempts and
+    `analyst-settled/3` records. gold-analyst must show no branch but main when the judge reads it (A12 `ga_branch`),
+    so the branch a17-time-decision is merged without being left on GitHub.
