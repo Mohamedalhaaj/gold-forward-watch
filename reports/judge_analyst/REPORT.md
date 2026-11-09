@@ -1,7 +1,7 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-09T19:02:12Z
-- head_sha (gold-analyst main checked): 1eaa3bd0e7d089caa415d87de91652838d0c373f
+- asof_utc: 2026-11-09T19:54:04Z
+- head_sha (gold-analyst main checked): a3851c680ba1f78d35cd2c69c00220b60b4cd565
 - judge code_sha8: 7789ee85
 - **analyst_verdict: SOUND**
 
@@ -23,7 +23,7 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 
 - none
 
-## Adjudicated WARNINGs (88)
+## Adjudicated WARNINGs (175)
 
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-02_T1500_1.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6`
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0400_1.json|ee5bbb5557be0da2c0ddd95a273e6fa5cb692d03`
@@ -113,6 +113,93 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_01NgnPZU2HxBRsNDJvGRmpyc#1`
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_01NgnPZU2HxBRsNDJvGRmpyc#4`
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_01U5CnNJcvxmm11dLL3q25Dt#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54hBRMHRP7vgpyfERj#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54hBRMHRP7vgpyfERj#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54hYzcJ3YcArVMEkA9#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54hYzcJ3YcArVMEkA9#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54pCMn1YyfKhFm4hq9#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54pCMn1YyfKhFm4hq9#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54pf8dfrahnBno9yZT#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54pf8dfrahnBno9yZT#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54rHcFFdLs4F2jJcV3#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54sU4StSEUQ2VMrxbq#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54sU4StSEUQ2VMrxbq#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54yLn9Nf73ph122PtD#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54yLn9Nf73ph122PtD#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55Hjomqh966CSL971n#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55Hjomqh966CSL971n#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55K7uAzSaFASTiLWxm#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55K7uAzSaFASTiLWxm#9`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55SokrgfDJAe1dTUcw#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55U3BPiWPqpVzvKSPJ#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55U3BPiWPqpVzvKSPJ#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55biY9JJQNwqazakeD#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55cRhmSTuD6son1cDj#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55cRhmSTuD6son1cDj#7`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55joDockiD9XGN4PV4#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55joDockiD9XGN4PV4#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55qBuz1gpb4TsVMrBS#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz55qBuz1gpb4TsVMrBS#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz568YwP9AfUV68QZ6Y9#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz568YwP9AfUV68QZ6Y9#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz5697AxpjpKtokYwnzR#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz5697AxpjpKtokYwnzR#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56EEk8hgGrGgGsLauL#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56EEk8hgGrGgGsLauL#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56Z8J2ucp3Heg8yuCK#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56Z8J2ucp3Heg8yuCK#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56avSrmEbwE4TsGvUi#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56avSrmEbwE4TsGvUi#10`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56dZShqGZ1Dqi3vC9H#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56dZShqGZ1Dqi3vC9H#10`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56j27kawpeQHDRCD7Z#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56j27kawpeQHDRCD7Z#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56kWAZ3Mh8ZQDGPJTs#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56kWAZ3Mh8ZQDGPJTs#10`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56ki4jByMdF9Qma1RU#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56ki4jByMdF9Qma1RU#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56nPXF3mrSSWAwAjqD#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56nPXF3mrSSWAwAjqD#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz56qwqEaC6t1bEJS3es#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz571JQYJbz4yACTKDiW#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57HK54uwDsK1amLP4f#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57HK54uwDsK1amLP4f#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57L51HH5MCTC8YK7Ma#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57L51HH5MCTC8YK7Ma#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57Q9Ko7yoTotCVUoYT#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57Q9Ko7yoTotCVUoYT#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57RqHHqk93tH2cn558#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57RqHHqk93tH2cn558#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57Za7gfzPKT3878bmM#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57Za7gfzPKT3878bmM#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57tSfmwMEwPEV8UYgn#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57tSfmwMEwPEV8UYgn#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57tepqvGAa6vZMSxAV#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57tepqvGAa6vZMSxAV#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57wxG3f3DHZduH7tDq#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz57wxG3f3DHZduH7tDq#7`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz586PmgwMxWkDxDPzpj#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz586PmgwMxWkDxDPzpj#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58E5dGq1uxDUxq4GJm#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58E5dGq1uxDUxq4GJm#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58FZfbq7GyaEZ8Yyza#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58FZfbq7GyaEZ8Yyza#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58SFN8Lb46xqsPaFaK#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58kCrQhhrp4cX2xo2h#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58kCrQhhrp4cX2xo2h#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58naVHoS77mokDWuy3#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58naVHoS77mokDWuy3#4`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xjRSR3qBuM6hGuV2#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xjRSR3qBuM6hGuV2#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xxp6iLawDFC5xJaN#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xxp6iLawDFC5xJaN#12`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xxp6iLawDFC5xJaN#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz596tK8WMU2aZCxEzjN#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz596tK8WMU2aZCxEzjN#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz599AEqrYUzAhR22C7V#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz599AEqrYUzAhR22C7V#8`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz59VEEQ3JT98UXtrJUk#1`
+- `A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz59VEEQ3JT98UXtrJUk#8`
 
 ## Run summary
 
@@ -121,11 +208,11 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - canary_terminals: 55
 - cc_version_records_checked: 111
 - contexts_rebuilt: 50
-- ga_runs_read: 66
-- head: 1eaa3bd0e7d089caa415d87de91652838d0c373f
-- inbox_activity_entries: 406
+- ga_runs_read: 67
+- head: a3851c680ba1f78d35cd2c69c00220b60b4cd565
+- inbox_activity_entries: 407
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-09T19:02:12Z
+- inbox_last_complete_read_utc: 2026-11-09T19:54:04Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 16
@@ -133,12 +220,12 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - probe_creations_max_day: 21
 - probe_records: 54
 - routine_config_versions_checked: 5
-- run_log_calls_scanned: 292
-- run_logs_scanned: 37
+- run_log_calls_scanned: 778
+- run_logs_scanned: 83
 - settled_checked: 9
-- td_compared: 2881
+- td_compared: 2907
 - td_outside: 60
-- td_pending: 35
+- td_pending: 9
 - td_unchecked: 0
 - witness_comments: 179
 - witness_files: 179
