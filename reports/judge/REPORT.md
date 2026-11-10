@@ -4,7 +4,7 @@
 
 **الحكم: تحذير** · السبب: سعر مصدر مستقل يخالف البيانات
 
-- وقت الفحص: 2026-11-10T11:20:20Z
+- وقت الفحص: 2026-11-10T17:11:43Z
 - الفحوص السليمة 8 من 9
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9
-- HEAD checked: `0546d6533f8d1ad20a2125475ea4aebefd37a2d2`
+- HEAD checked: `d427b9c3e939862056af29d542acb4512ee50391`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-10T11:20:20Z; data root repo
+- judge run 2026-11-10T17:11:43Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 3 (checked now: 3); older days sampled: 20; sides compared equal: 14; revised: 0; known revisions: 0; unverified downloads: 32
-- unverified: 32 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 25; revised: 0; known revisions: 0; unverified downloads: 15
+- unverified: 15 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -56,9 +56,9 @@
 - v1 raw files checked against their days.csv rows: 140 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
 - raw folders: 24 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 40 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- v1 append-only files: 15 files, 41 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 11 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 46 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 47 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,8 +68,8 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1151, 'compared': 1151}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 139}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 6, 'trades': 6}, 'v2': {'days': 6, 'checked_days': ['2026-11-02', '2026-11-03', '2026-11-05', '2026-11-09'], 'trades': 8}, 'summary': {'asof': '2026-11-10T11:19:46Z'}, 'status': {'asof': '2026-11-10T11:13:28Z', 'lines': 28}}
-- lab v2 days recomputed this run: 4 (new 1, rotating sample 3); new adjudication rows: 0
+- recomputed: {'forecasts': {'store_rows': 1151, 'compared': 1151}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 139}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 6, 'trades': 6}, 'v2': {'days': 6, 'checked_days': ['2026-11-02', '2026-11-04', '2026-11-06'], 'trades': 2}, 'summary': {'asof': '2026-11-10T17:11:17Z'}, 'status': {'asof': '2026-11-10T17:04:42Z', 'lines': 28}}
+- lab v2 days recomputed this run: 3 (new 0, rotating sample 3); new adjudication rows: 0
 
 ### J6: OK
 
@@ -83,17 +83,17 @@
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: a698def0980e at 2026-11-10T11:19:43Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: f75fc1898ed4 at 2026-11-10T17:11:14Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 21b95dee0e12 is an ancestor of HEAD 0546d6533f8d
-- the published VolMapJudge.csv head 21b95dee0e12 is an ancestor of HEAD 0546d6533f8d
-- the deployed VolMapJudge.csv head 21b95dee0e12 is an ancestor of HEAD 0546d6533f8d
+- the previous VERDICTS.csv row head 0546d6533f8d is an ancestor of HEAD d427b9c3e939
+- the published VolMapJudge.csv head 0546d6533f8d is an ancestor of HEAD d427b9c3e939
+- the deployed VolMapJudge.csv head 0546d6533f8d is an ancestor of HEAD d427b9c3e939
 
 ### J9: WARNING
 
-- 2026-11-09: exceeds; credits 1
+- 2026-11-09 already checked (exceeds); no request sent
 - the two most recent checked days 2026-11-06 and 2026-11-09 both exceed the limits (median > $0.50 or max > $5)
