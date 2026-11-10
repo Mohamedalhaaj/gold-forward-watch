@@ -1,12 +1,12 @@
 {
- "updated_utc": "2026-11-10T17:47Z",
+ "updated_utc": "2026-11-10T21:47Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-11-10 19:37",
- "last_price": 4023.0,
- "days_done": 16,
+ "last_price_time_server": "2026-11-10 23:37",
+ "last_price": 4035.0,
+ "days_done": 17,
  "in_sample": {
   "causal_M15": {
    "avg_day": 0.48,
@@ -123,6 +123,11 @@
      "day": "2026-11-09",
      "net": -9.29,
      "trades": 6
+    },
+    {
+     "day": "2026-11-10",
+     "net": 0,
+     "trades": 0
     }
    ],
    "trades": [
@@ -1444,14 +1449,14 @@
     }
    ],
    "stats": {
-    "days": 16,
+    "days": 17,
     "total": 145.66,
-    "avg_day": 9.1,
+    "avg_day": 8.57,
     "days_pos": 0.625,
     "best_day": 44.57,
     "worst_day": -19.03,
-    "t": 1.85,
-    "p": 0.032,
+    "t": 1.84,
+    "p": 0.0327,
     "trades": 94,
     "win": 0.606
    }
@@ -1537,6 +1542,11 @@
      "day": "2026-11-09",
      "net": -32.77,
      "trades": 5
+    },
+    {
+     "day": "2026-11-10",
+     "net": 0,
+     "trades": 0
     }
    ],
    "trades": [
@@ -2144,14 +2154,14 @@
     }
    ],
    "stats": {
-    "days": 16,
+    "days": 17,
     "total": 51.67,
-    "avg_day": 3.23,
+    "avg_day": 3.04,
     "days_pos": 0.571,
     "best_day": 33.53,
     "worst_day": -32.77,
     "t": 0.73,
-    "p": 0.2329,
+    "p": 0.2327,
     "trades": 43,
     "win": 0.558
    }
@@ -2237,6 +2247,11 @@
      "day": "2026-11-09",
      "net": -35.42,
      "trades": 4
+    },
+    {
+     "day": "2026-11-10",
+     "net": 0,
+     "trades": 0
     }
    ],
    "trades": [
@@ -3110,14 +3125,14 @@
     }
    ],
    "stats": {
-    "days": 16,
+    "days": 17,
     "total": 55.1,
-    "avg_day": 3.44,
+    "avg_day": 3.24,
     "days_pos": 0.625,
     "best_day": 35.34,
     "worst_day": -35.42,
     "t": 0.78,
-    "p": 0.2171,
+    "p": 0.2169,
     "trades": 62,
     "win": 0.548
    }
@@ -3203,6 +3218,11 @@
      "day": "2026-11-09",
      "net": -30.3,
      "trades": 3
+    },
+    {
+     "day": "2026-11-10",
+     "net": 0,
+     "trades": 0
     }
    ],
    "trades": [
@@ -3614,14 +3634,14 @@
     }
    ],
    "stats": {
-    "days": 16,
+    "days": 17,
     "total": 6.66,
-    "avg_day": 0.42,
+    "avg_day": 0.39,
     "days_pos": 0.5,
     "best_day": 19.42,
     "worst_day": -30.3,
     "t": 0.14,
-    "p": 0.4462,
+    "p": 0.4461,
     "trades": 29,
     "win": 0.483
    }
