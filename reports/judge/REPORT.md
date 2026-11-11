@@ -4,7 +4,7 @@
 
 **الحكم: تحذير** · السبب: سعر مصدر مستقل يخالف البيانات
 
-- وقت الفحص: 2026-11-10T20:26:57Z
+- وقت الفحص: 2026-11-11T11:06:52Z
 - الفحوص السليمة 8 من 9
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9
-- HEAD checked: `7822e21fdfb4ce1e6018721f3382ce5277cccdb7`
+- HEAD checked: `5cf53b8278be7de5977728c24b456c679d3d3dd0`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-10T20:26:57Z; data root repo
+- judge run 2026-11-11T11:06:52Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 23; revised: 0; known revisions: 0; unverified downloads: 17
-- unverified: 17 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 1 (checked now: 1); older days sampled: 20; sides compared equal: 36; revised: 0; known revisions: 0; unverified downloads: 5
+- unverified: 5 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -53,12 +53,12 @@
 
 ### J3: OK
 
-- v1 raw files checked against their days.csv rows: 140 (0 problems)
+- v1 raw files checked against their days.csv rows: 141 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
-- raw folders: 24 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 41 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- raw folders: 25 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
+- v1 append-only files: 15 files, 42 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
 - v2 append-only files: 11 files, 11 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 48 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- judge records: 9 append-only files, 49 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,7 +68,7 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1151, 'compared': 1151}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 139}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 6, 'trades': 6}, 'v2': {'days': 6, 'checked_days': ['2026-11-03', '2026-11-05', '2026-11-09'], 'trades': 7}, 'summary': {'asof': '2026-11-10T17:11:17Z'}, 'status': {'asof': '2026-11-10T17:04:42Z', 'lines': 28}}
+- recomputed: {'forecasts': {'store_rows': 1151, 'compared': 1151}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 139}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 6, 'trades': 6}, 'v2': {'days': 6, 'checked_days': ['2026-11-02', '2026-11-04', '2026-11-06'], 'trades': 2}, 'summary': {'asof': '2026-11-11T11:06:28Z'}, 'status': {'asof': '2026-11-11T10:58:24Z', 'lines': 28}}
 - lab v2 days recomputed this run: 3 (new 0, rotating sample 3); new adjudication rows: 0
 
 ### J6: OK
@@ -83,15 +83,15 @@
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: f75fc1898ed4 at 2026-11-10T17:11:14Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: fb858e350706 at 2026-11-11T11:06:25Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head d427b9c3e939 is an ancestor of HEAD 7822e21fdfb4
-- the published VolMapJudge.csv head d427b9c3e939 is an ancestor of HEAD 7822e21fdfb4
-- the deployed VolMapJudge.csv head d427b9c3e939 is an ancestor of HEAD 7822e21fdfb4
+- the previous VERDICTS.csv row head 7822e21fdfb4 is an ancestor of HEAD 5cf53b8278be
+- the published VolMapJudge.csv head 7822e21fdfb4 is an ancestor of HEAD 5cf53b8278be
+- the deployed VolMapJudge.csv head 7822e21fdfb4 is an ancestor of HEAD 5cf53b8278be
 
 ### J9: WARNING
 
