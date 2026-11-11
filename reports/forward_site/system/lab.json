@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-11-10T17:04:42Z",
+ "generated_utc": "2026-11-11T10:58:24Z",
  "lab_state": "RUNNING",
  "halted": false,
  "start": "2026-11-02",
@@ -109,10 +109,10 @@
   }
  },
  "data": {
-  "ok_days": 70,
+  "ok_days": 71,
   "missing": [],
   "complete_through_utc": "2026-11-10 00:00",
-  "lag_trading_days": 0,
+  "lag_trading_days": 1,
   "revisions": 0,
   "store_rows": 1151,
   "store_defined": 894,

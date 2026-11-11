@@ -1,10 +1,10 @@
 # Gold support system v1: status
 
-Updated 2026-11-10T17:04:42Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
+Updated 2026-11-11T10:58:24Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
 
 ## Data and forecasts
 
-- Raw Dukascopy days stored: 70 (missing sides: 0); complete through 2026-11-10 00:00 UTC (exclusive); lag 0 trading day(s)
+- Raw Dukascopy days stored: 71 (missing sides: 0); complete through 2026-11-10 00:00 UTC (exclusive); lag 1 trading day(s)
 - Revisions logged (never used): 0
 - Forecast store: 1151 slots (894 defined); 0 new this run
 - START: 2026-11-02
@@ -12,7 +12,7 @@ Updated 2026-11-10T17:04:42Z. Binding spec: xauusd-quant `research/system/SYSTEM
 
 ## L1 green suppression (D1)
 
-- l1_green_ok = 1 (as of 2026-11-10)
+- l1_green_ok = 1 (as of 2026-11-11)
 - Block 1 2026-11-02 .. 2027-02-01: complete 0, green origins 129, hit rate 12.8%
 
 Descriptive (D2-D4 deferred, §8): base state counts and pooled mid k10 hit rates
