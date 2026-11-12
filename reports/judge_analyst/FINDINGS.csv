@@ -180,3 +180,6 @@ first_seen_utc,severity,check,key
 2026-11-09T19:54:04Z,WARNING,A13,A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xxp6iLawDFC5xJaN#8
 2026-11-09T19:54:04Z,WARNING,A13,A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz58xxp6iLawDFC5xJaN#12
 2026-11-09T19:54:04Z,WARNING,A13,A13|guard_denied_benign|analyst/runs/2026-W45.json|cse_018qMz54rHcFFdLs4F2jJcV3#1
+2026-11-12T22:42:47Z,WARNING,A11,A11|td_mismatch|analyst/canary/attempts/2026-11-12_T1330_1.json|c40ad6f9a8c513a8359d0f64246d6bbcef80ab95
+2026-11-12T22:42:47Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-12_W2b.json|cac3b631599f4dea36f7626ff5b8abef5f2903a4
+2026-11-12T22:42:47Z,WARNING,A11,A11|td_mismatch|analyst/canary/calls/2026-11-12_X1730.json|cac3b631599f4dea36f7626ff5b8abef5f2903a4
