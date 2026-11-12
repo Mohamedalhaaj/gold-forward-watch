@@ -1,7 +1,7 @@
 key,value
 version,1
-asof_utc,2026-11-12T11:17:24Z
-head_sha,63fdeac534cf20579e21ca4fbf2fef3ff0e6cc75
+asof_utc,2026-11-12T17:38:25Z
+head_sha,833f4375e0a3552e76e462dfc66c970cf3ab4126
 verdict,WARNING
 reason_ar,سعر مصدر مستقل يخالف البيانات
 checks_ok,8
