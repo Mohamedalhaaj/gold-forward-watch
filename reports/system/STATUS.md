@@ -1,32 +1,32 @@
 # Gold support system v1: status
 
-Updated 2026-11-11T17:11:52Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
+Updated 2026-11-12T11:11:50Z. Binding spec: xauusd-quant `research/system/SYSTEM_V1_PREREG.md` (with Amendment A1).
 
 ## Data and forecasts
 
-- Raw Dukascopy days stored: 71 (missing sides: 0); complete through 2026-11-10 00:00 UTC (exclusive); lag 1 trading day(s)
+- Raw Dukascopy days stored: 72 (missing sides: 0); complete through 2026-11-12 00:00 UTC (exclusive); lag 0 trading day(s)
 - Revisions logged (never used): 0
-- Forecast store: 1151 slots (894 defined); 0 new this run
+- Forecast store: 1197 slots (940 defined); 46 new this run
 - START: 2026-11-02
 - Event calendars cover through 2027-12-03 (the earliest of the last NFP, CPI and FOMC dates); extension lines accepted 0, rejected 0
 
 ## L1 green suppression (D1)
 
-- l1_green_ok = 1 (as of 2026-11-11)
-- Block 1 2026-11-02 .. 2027-02-01: complete 0, green origins 129, hit rate 12.8%
+- l1_green_ok = 1 (as of 2026-11-12)
+- Block 1 2026-11-02 .. 2027-02-01: complete 0, green origins 172, hit rate 11.9%
 
 Descriptive (D2-D4 deferred, §8): base state counts and pooled mid k10 hit rates
 
 | state | origins | hit rate |
 |---|---|---|
-| GREEN | 129 | 0.128 |
-| YELLOW | 8 | 0.062 |
-| RED | 2 | 0.250 |
+| GREEN | 172 | 0.119 |
+| YELLOW | 10 | 0.100 |
+| RED | 3 | 0.333 |
 
 ## L3 calibration
 
 - z* = 7.75 (reports/system/L3_ZSTAR.json); last update: none yet (first in 2027-01)
-- Observations since START: 139
+- Observations since START: 185
 
 | bucket | n | m in force |
 |---|---|---|
@@ -40,7 +40,7 @@ Descriptive (D2-D4 deferred, §8): base state counts and pooled mid k10 hit rate
 
 ## L2 lab
 
-- State: RUNNING; lab_days 6; lab_n_paper 1; LIVE: 0; best progress E/E* over PAPER rules: 0.012
+- State: RUNNING; lab_days 8; lab_n_paper 1; LIVE: 0; best progress E/E* over PAPER rules: 0.012
 - INTERPRETER_NEEDED: no
 
 What the status-file counts mean:
@@ -55,4 +55,4 @@ A promoted rule (LIVE, SUSPENDED, DEMOTED) shows its post-promotion record and i
 |---|---|---|---|---|---|---|
 | S1 | PAPER | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 of E* 83.3 |
 | S1R | REF | 2026-11-02 | since first_day | 0 | 0.00 | E 1.000 (REF) |
-| C1 | REF | 2026-11-02 | since first_day | 6 | -32.69 | E 0.831 (REF) |
+| C1 | REF | 2026-11-02 | since first_day | 8 | -18.15 | E 0.821 (REF) |
