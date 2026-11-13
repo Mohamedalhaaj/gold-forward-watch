@@ -1,11 +1,11 @@
 {
- "updated_utc": "2026-11-12T22:15Z",
+ "updated_utc": "2026-11-13T03:34Z",
  "start": "2026-10-19",
  "n_days": 20,
  "primary": "causal_M15",
  "secondary": "strict_M15",
- "last_price_time_server": "2026-11-12 23:59",
- "last_price": 3881.7,
+ "last_price_time_server": "2026-11-13 05:24",
+ "last_price": 3918.5,
  "days_done": 19,
  "in_sample": {
   "causal_M15": {
@@ -1532,13 +1532,13 @@
      "tf": "M15",
      "day": "2026-11-12",
      "fill_time": "2026-11-12 02:45",
-     "fill": 3999.62,
-     "stop": 4006.01,
-     "target": 3993.8,
+     "fill": "3999.62",
+     "stop": "4006.01",
+     "target": "3993.8",
      "exit_time": "2026-11-12 03:30",
-     "exit": 3993.8,
+     "exit": "3993.8",
      "reason": "target",
-     "net": 5.56,
+     "net": "5.56",
      "recorded_at": "2026-11-12T22:15Z"
     }
    ],
@@ -3326,13 +3326,13 @@
      "tf": "M15",
      "day": "2026-11-12",
      "fill_time": "2026-11-12 02:45",
-     "fill": 3999.62,
-     "stop": 4006.01,
-     "target": 3993.8,
+     "fill": "3999.62",
+     "stop": "4006.01",
+     "target": "3993.8",
      "exit_time": "2026-11-12 03:30",
-     "exit": 3993.8,
+     "exit": "3993.8",
      "reason": "target",
-     "net": 5.56,
+     "net": "5.56",
      "recorded_at": "2026-11-12T22:15Z"
     }
    ],
@@ -3911,7 +3911,36 @@
    }
   }
  },
- "open_trades": [],
+ "open_trades": [
+  {
+   "tf": "M15",
+   "day": "2026-11-13",
+   "fill_time": "2026-11-13 03:15",
+   "fill": 3912.28,
+   "stop": 3930.09,
+   "target": 3896.09,
+   "exit_time": "2026-11-13 05:24",
+   "exit": 3918.5,
+   "reason": "open",
+   "net": -6.47,
+   "final": false,
+   "mode": "causal"
+  },
+  {
+   "tf": "M15",
+   "day": "2026-11-13",
+   "fill_time": "2026-11-13 03:15",
+   "fill": 3912.28,
+   "stop": 3930.09,
+   "target": 3896.09,
+   "exit_time": "2026-11-13 05:24",
+   "exit": 3918.5,
+   "reason": "open",
+   "net": -6.47,
+   "final": false,
+   "mode": "strict"
+  }
+ ],
  "wick": {
   "days": 20,
   "triggers": 5,
