@@ -1,9 +1,9 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-13T17:18:23Z
-- head_sha (gold-analyst main checked): c53878f439052756b10c807ea224b6f1b43784b1
+- asof_utc: 2026-11-13T22:34:57Z
+- head_sha (gold-analyst main checked): 88d0c26ae5d6ac453df8212b5cbd8b427d289061
 - judge code_sha8: 7789ee85
-- **analyst_verdict: SOUND**
+- **analyst_verdict: WARNING**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
 
@@ -19,9 +19,9 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 - `A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 
-## WARNINGs needing an ADJUDICATIONS row or a fix (0)
+## WARNINGs needing an ADJUDICATIONS row or a fix (1)
 
-- none
+- `A11|td_mismatch|analyst/canary/calls/2026-11-13_W2b.json|88d0c26ae5d6ac453df8212b5cbd8b427d289061` (outside 1e-3: XAUUSD 2026-11-13T03:00:00Z o td=3908.68288 dk=3915.8115 rel=1.820e-03; within: XAUUSD 2026-11-12T00:00:00Z o td=3980.32113 dk=3978.8725 rel=3.641e-04; XAUUSD 2026-11-12T00:00:00Z c td=3994.93112 dk=3994.386 rel=1.365e-04; XAUUSD 2026-11-12T01:00:00Z o td=3994.69612 dk=3994.425 rel=6.787e-05; XAUUSD 2026-11-12T01:00:00Z c td=3984.65015 dk=3985.708 rel=2.654e-04; XAUUSD 2026-11-12T02:00:00Z o td=3983.50711 dk=3985.7115 rel=5.531e-04; XAUUSD 2026-11-12T02:00:00Z c td=3980.21014 dk=3980.6385 rel=1.076e-04; XAUUSD 2026-11-12T03:00:00Z o td=3980.11888 dk=3980.6375 rel=1.303e-04; XAUUSD 2026-11-12T03:00:00Z c td=3982.88228 dk=3982.809 rel=1.840e-05; XAUUSD 2026-11-12T04:00:00Z o td=3982.34725 dk=3982.854 rel=1.272e-04; XAUUSD 2026-11-12T04:00:00Z c td=3975.03112 dk=3975.4995 rel=1.178e-04; XAUUSD 2026-11-12T05:00:00Z o td=3974.53131 dk=3975.489 rel=2.409e-04; XAUUSD 2026-11-12T05:00:00Z c td=3979.12407 dk=3979.707 rel=1.465e-04; XAUUSD 2026-11-12T06:00:00Z o td=3980.3881 dk=3979.723 rel=1.671e-04; XAUUSD 2026-11-12T06:00:00Z c td=3966.33741 dk=3965.8925 rel=1.122e-04; XAUUSD 2026-11-12T07:00:00Z o td=3965.85378 dk=3965.85 rel=9.531e-07; XAUUSD 2026-11-12T07:00:00Z c td=3966.45828 dk=3965.09 rel=3.451e-04; XAUUSD 2026-11-12T08:00:00Z o td=3965.99513 dk=3965.0325 rel=2.428e-04; XAUUSD 2026-11-12T08:00:00Z c td=3931.4858 dk=3928.681 rel=7.139e-04; XAUUSD 2026-11-12T09:00:00Z o td=3931.35474 dk=3928.673 rel=6.826e-04; XAUUSD 2026-11-12T09:00:00Z c td=3942.64523 dk=3943.925 rel=3.245e-04; XAUUSD 2026-11-12T10:00:00Z o td=3942.60095 dk=3943.852 rel=3.172e-04; XAUUSD 2026-11-12T10:00:00Z c td=3953.75997 dk=3954.0135 rel=6.412e-05; XAUUSD 2026-11-12T11:00:00Z o td=3953.61933 dk=3954.0525 rel=1.096e-04; XAUUSD 2026-11-12T11:00:00Z c td=3944.3843 dk=3944.27 rel=2.898e-05; XAUUSD 2026-11-12T12:00:00Z o td=3944.20274 dk=3944.3535 rel=3.822e-05; XAUUSD 2026-11-12T12:00:00Z c td=3936.18446 dk=3936.795 rel=1.551e-04; XAUUSD 2026-11-12T13:00:00Z o td=3936.17788 dk=3936.745 rel=1.441e-04; XAUUSD 2026-11-12T13:00:00Z c td=3890.57617 dk=3890.091 rel=1.247e-04; XAUUSD 2026-11-12T14:00:00Z o td=3890.19215 dk=3890.141 rel=1.315e-05; XAUUSD 2026-11-12T14:00:00Z c td=3871.20075 dk=3870.1 rel=2.844e-04; XAUUSD 2026-11-12T15:00:00Z o td=3870.58611 dk=3869.97 rel=1.592e-04; XAUUSD 2026-11-12T15:00:00Z c td=3868.78612 dk=3870.1675 rel=3.569e-04; XAUUSD 2026-11-12T16:00:00Z o td=3868.06466 dk=3870.194 rel=5.502e-04; XAUUSD 2026-11-12T16:00:00Z c td=3879.25439 dk=3879.204 rel=1.299e-05; XAUUSD 2026-11-12T17:00:00Z o td=3879.47561 dk=3879.2195 rel=6.602e-05; XAUUSD 2026-11-12T17:00:00Z c td=3872.57019 dk=3874.17 rel=4.129e-04; XAUUSD 2026-11-12T18:00:00Z o td=3872.97109 dk=3874.21 rel=3.198e-04; XAUUSD 2026-11-12T18:00:00Z c td=3883.44885 dk=3882.88 rel=1.465e-04; XAUUSD 2026-11-12T19:00:00Z o td=3883.04293 dk=3882.93 rel=2.908e-05; XAUUSD 2026-11-12T19:00:00Z c td=3883.65515 dk=3884.6025 rel=2.439e-04; XAUUSD 2026-11-12T20:00:00Z o td=3883.75047 dk=3884.5975 rel=2.180e-04; XAUUSD 2026-11-12T20:00:00Z c td=3875.17542 dk=3874.7725 rel=1.040e-04; XAUUSD 2026-11-12T21:00:00Z o td=3875.47711 dk=3874.8275 rel=1.676e-04; XAUUSD 2026-11-12T21:00:00Z c td=3877.47531 dk=3876.7425 rel=1.890e-04; XAUUSD 2026-11-12T23:00:00Z o td=3877.04645 dk=3878.95 rel=4.907e-04; XAUUSD 2026-11-12T23:00:00Z c td=3881.29294 dk=3880.68 rel=1.579e-04; XAUUSD 2026-11-13T00:00:00Z o td=3881.51776 dk=3880.7575 rel=1.959e-04; XAUUSD 2026-11-13T00:00:00Z c td=3886.45987 dk=3885.685 rel=1.994e-04; XAUUSD 2026-11-13T01:00:00Z o td=3886.176 dk=3885.7475 rel=1.103e-04; XAUUSD 2026-11-13T01:00:00Z c td=3909.82834 dk=3908.045 rel=4.563e-04; XAUUSD 2026-11-13T02:00:00Z o td=3911.57842 dk=3907.9875 rel=9.189e-04; XAUUSD 2026-11-13T02:00:00Z c td=3913.03597 dk=3915.815 rel=7.097e-04; XAUUSD 2026-11-13T03:00:00Z c td=3920.84093 dk=3920.635 rel=5.252e-05; XAUUSD 2026-11-13T04:00:00Z o td=3920.38314 dk=3920.6325 rel=6.360e-05; XAUUSD 2026-11-13T04:00:00Z c td=3912.88275 dk=3912.675 rel=5.310e-05; XAUUSD 2026-11-13T05:00:00Z o td=3912.64142 dk=3912.6675 rel=6.666e-06; XAUUSD 2026-11-13T05:00:00Z c td=3903.87183 dk=3904.36 rel=1.250e-04; XAUUSD 2026-11-13T06:00:00Z o td=3903.04663 dk=3904.29 rel=3.185e-04; XAUUSD 2026-11-13T06:00:00Z c td=3898.25334 dk=3900.643 rel=6.126e-04; XAUUSD 2026-11-13T07:00:00Z o td=3897.10594 dk=3900.6405 rel=9.061e-04; XAUUSD 2026-11-13T07:00:00Z c td=3899.76843 dk=3897.275 rel=6.398e-04; XAUUSD 2026-11-13T12:00:00Z c td=3888.57342 dk=3889.1125 rel=1.386e-04; XAUUSD 2026-11-13T13:00:00Z c td=3880.75432 dk=3881.1115 rel=9.203e-05; XAUUSD 2026-11-13T14:00:00Z o td=3880.84563 dk=3881.2225 rel=9.710e-05; XAUUSD 2026-11-13T14:00:00Z c td=3893.95284 dk=3894.346 rel=1.010e-04; EURUSD 2026-11-12T22:00:00Z p0 td=1.10561 dk=1.105485 rel=1.131e-04; EURUSD 2026-11-13T14:00:00Z p1 td=1.10564 dk=1.105685 rel=4.070e-05; USDJPY 2026-11-12T22:00:00Z p0 td=159.85362 dk=159.84 rel=8.521e-05; GBPUSD 2026-11-12T22:00:00Z p0 td=1.32373 dk=1.32367 rel=4.533e-05; USDCAD 2026-11-12T22:00:00Z p0 td=1.42562 dk=1.42572 rel=7.014e-05; USDCHF 2026-11-12T22:00:00Z p0 td=0.83538 dk=0.83535 rel=3.591e-05; USDCHF 2026-11-13T14:00:00Z p1 td=0.83651 dk=0.83654 rel=3.586e-05; AUDJPY 2026-11-12T22:00:00Z p0 td=108.84525 dk=108.8245 rel=1.907e-04)
 
 ## Adjudicated WARNINGs (180)
 
@@ -209,28 +209,28 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 ## Run summary
 
 - accepted_push_diffs_unverified: 0
-- canary_expected_windows: 72
-- canary_terminals: 84
-- cc_version_records_checked: 174
-- contexts_rebuilt: 78
-- ga_runs_read: 83
-- head: c53878f439052756b10c807ea224b6f1b43784b1
-- inbox_activity_entries: 593
+- canary_expected_windows: 75
+- canary_terminals: 86
+- cc_version_records_checked: 176
+- contexts_rebuilt: 79
+- ga_runs_read: 92
+- head: 88d0c26ae5d6ac453df8212b5cbd8b427d289061
+- inbox_activity_entries: 594
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-13T17:18:23Z
+- inbox_last_complete_read_utc: 2026-11-13T22:34:57Z
 - live_expected_windows: 0
 - live_terminals: 0
 - m30_compared: 25
 - m30r_compared: 24
 - probe_creations_max_day: 27
-- probe_records: 82
+- probe_records: 83
 - routine_config_versions_checked: 5
 - run_log_calls_scanned: 778
 - run_logs_scanned: 83
-- settled_checked: 15
-- td_compared: 5432
-- td_outside: 62
-- td_pending: 0
+- settled_checked: 17
+- td_compared: 5506
+- td_outside: 63
+- td_pending: 14
 - td_unchecked: 0
 - witness_comments: 281
-- witness_files: 277
+- witness_files: 281
