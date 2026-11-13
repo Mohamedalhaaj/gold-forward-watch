@@ -7,12 +7,12 @@
    "start": "2026-11-02",
    "end": "2027-02-01",
    "complete": 0,
-   "n_origins": 185,
+   "n_origins": 208,
    "expected": 1403,
-   "n_green": 172,
-   "hits": 41,
-   "trials": 344,
-   "hit_rate": 0.11918604651162791,
+   "n_green": 194,
+   "hits": 46,
+   "trials": 388,
+   "hit_rate": 0.11855670103092783,
    "green_ok_after": 1
   }
  ]
