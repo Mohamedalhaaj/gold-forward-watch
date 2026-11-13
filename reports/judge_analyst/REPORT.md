@@ -1,9 +1,9 @@
 # Analyst judge report
 
-- asof_utc: 2026-11-12T22:42:47Z
+- asof_utc: 2026-11-12T23:52:45Z
 - head_sha (gold-analyst main checked): cac3b631599f4dea36f7626ff5b8abef5f2903a4
 - judge code_sha8: 7789ee85
-- **analyst_verdict: WARNING**
+- **analyst_verdict: SOUND**
 
 Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_REGISTER section 16 (with amendments 16.18 A6, the agent inbox, and A7, the session guard). Model text is never printed here: findings carry enums, field names, hashes and numbers only. Findings marked (owner-attested) rest on the owner's weekly runs export (R-AN-60), with its copy of the run logs (A13, R-AN-86) and of the security log, or routine config export (R-AN-61). Session probe outcomes (A12 probe_failed, probe_incomplete) are self-reported by the session (R-AN-84), and so is the Claude Code version of A13 cc_version_below and cc_version_unknown (R-AN-25, R-AN-85).
 
@@ -19,18 +19,17 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A3|agent_scope|analyst/canary/witness/000001.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 - `A3|agent_scope|analyst/canary/witness/000002.json|91a52ec7034425a14e27b68988b9dcabce266a9f` cleared 2026-10-26T04:50:00Z
 
-## WARNINGs needing an ADJUDICATIONS row or a fix (3)
+## WARNINGs needing an ADJUDICATIONS row or a fix (0)
 
-- `A11|td_mismatch|analyst/canary/attempts/2026-11-12_T1330_1.json|c40ad6f9a8c513a8359d0f64246d6bbcef80ab95` (outside 1e-3: XAUUSD 2026-11-12T13:00:00Z c td=3905.04316 dk=3910.3195 rel=1.349e-03; within: XAUUSD 2026-11-11T23:00:00Z o td=3987.66312 dk=3989.055 rel=3.489e-04; XAUUSD 2026-11-11T23:00:00Z c td=3982.31745 dk=3982.1065 rel=5.297e-05; XAUUSD 2026-11-11T23:30:00Z o td=3982.30106 dk=3982.1465 rel=3.881e-05; XAUUSD 2026-11-11T23:30:00Z c td=3979.68143 dk=3978.8205 rel=2.164e-04; XAUUSD 2026-11-12T00:00:00Z o td=3980.32113 dk=3978.8725 rel=3.641e-04; XAUUSD 2026-11-12T00:00:00Z c td=3982.09685 dk=3982.729 rel=1.587e-04; XAUUSD 2026-11-12T00:30:00Z o td=3982.5877 dk=3982.911 rel=8.117e-05; XAUUSD 2026-11-12T00:30:00Z c td=3994.93112 dk=3994.386 rel=1.365e-04; XAUUSD 2026-11-12T01:00:00Z o td=3994.69612 dk=3994.425 rel=6.787e-05; XAUUSD 2026-11-12T01:00:00Z c td=3993.78629 dk=3995.1435 rel=3.397e-04; XAUUSD 2026-11-12T01:30:00Z o td=3994.04428 dk=3995.1595 rel=2.791e-04; XAUUSD 2026-11-12T01:30:00Z c td=3984.65015 dk=3985.708 rel=2.654e-04; XAUUSD 2026-11-12T02:00:00Z o td=3983.50711 dk=3985.7115 rel=5.531e-04; XAUUSD 2026-11-12T02:00:00Z c td=3986.91868 dk=3986.6525 rel=6.677e-05; XAUUSD 2026-11-12T02:30:00Z o td=3987.38998 dk=3986.6515 rel=1.852e-04; XAUUSD 2026-11-12T02:30:00Z c td=3980.21014 dk=3980.6385 rel=1.076e-04; XAUUSD 2026-11-12T03:00:00Z o td=3980.11888 dk=3980.6375 rel=1.303e-04; XAUUSD 2026-11-12T03:00:00Z c td=3980.87192 dk=3981.9785 rel=2.779e-04; XAUUSD 2026-11-12T03:30:00Z o td=3980.01085 dk=3981.9145 rel=4.781e-04; XAUUSD 2026-11-12T03:30:00Z c td=3982.88228 dk=3982.809 rel=1.840e-05; XAUUSD 2026-11-12T04:00:00Z o td=3982.34725 dk=3982.854 rel=1.272e-04; XAUUSD 2026-11-12T04:00:00Z c td=3977.667 dk=3976.0425 rel=4.086e-04; XAUUSD 2026-11-12T04:30:00Z o td=3977.81759 dk=3976.052 rel=4.441e-04; XAUUSD 2026-11-12T04:30:00Z c td=3975.03112 dk=3975.4995 rel=1.178e-04; XAUUSD 2026-11-12T05:00:00Z o td=3974.53131 dk=3975.489 rel=2.409e-04; XAUUSD 2026-11-12T05:00:00Z c td=3970.93231 dk=3971.553 rel=1.563e-04; XAUUSD 2026-11-12T05:30:00Z o td=3970.89642 dk=3971.52 rel=1.570e-04; XAUUSD 2026-11-12T05:30:00Z c td=3979.12407 dk=3979.707 rel=1.465e-04; XAUUSD 2026-11-12T06:00:00Z o td=3980.3881 dk=3979.723 rel=1.671e-04; XAUUSD 2026-11-12T06:00:00Z c td=3977.46857 dk=3977.966 rel=1.250e-04; XAUUSD 2026-11-12T06:30:00Z o td=3977.8583 dk=3977.9265 rel=1.714e-05; XAUUSD 2026-11-12T06:30:00Z c td=3966.33741 dk=3965.8925 rel=1.122e-04; XAUUSD 2026-11-12T07:00:00Z o td=3965.85378 dk=3965.85 rel=9.531e-07; XAUUSD 2026-11-12T07:00:00Z c td=3960.28674 dk=3960.6795 rel=9.916e-05; XAUUSD 2026-11-12T07:30:00Z o td=3960.20075 dk=3960.6295 rel=1.083e-04; XAUUSD 2026-11-12T07:30:00Z c td=3966.45828 dk=3965.09 rel=3.451e-04; XAUUSD 2026-11-12T08:00:00Z o td=3965.99513 dk=3965.0325 rel=2.428e-04; XAUUSD 2026-11-12T08:00:00Z c td=3946.46982 dk=3946.0555 rel=1.050e-04; XAUUSD 2026-11-12T08:30:00Z o td=3947.02413 dk=3946.035 rel=2.507e-04; XAUUSD 2026-11-12T08:30:00Z c td=3931.4858 dk=3928.681 rel=7.139e-04; XAUUSD 2026-11-12T09:00:00Z o td=3931.35474 dk=3928.673 rel=6.826e-04; XAUUSD 2026-11-12T09:00:00Z c td=3937.61612 dk=3938.152 rel=1.361e-04; XAUUSD 2026-11-12T09:30:00Z o td=3936.63511 dk=3938.132 rel=3.801e-04; XAUUSD 2026-11-12T09:30:00Z c td=3942.64523 dk=3943.925 rel=3.245e-04; XAUUSD 2026-11-12T10:00:00Z o td=3942.60095 dk=3943.852 rel=3.172e-04; XAUUSD 2026-11-12T10:00:00Z c td=3947.21293 dk=3945.817 rel=3.538e-04; XAUUSD 2026-11-12T10:30:00Z o td=3948.37148 dk=3945.7975 rel=6.523e-04; XAUUSD 2026-11-12T10:30:00Z c td=3953.75997 dk=3954.0135 rel=6.412e-05; XAUUSD 2026-11-12T11:00:00Z o td=3953.61933 dk=3954.0525 rel=1.096e-04; XAUUSD 2026-11-12T11:00:00Z c td=3947.83483 dk=3948.49 rel=1.659e-04; XAUUSD 2026-11-12T11:30:00Z o td=3947.70676 dk=3948.48 rel=1.958e-04; XAUUSD 2026-11-12T11:30:00Z c td=3944.3843 dk=3944.27 rel=2.898e-05; XAUUSD 2026-11-12T13:00:00Z o td=3936.17788 dk=3936.745 rel=1.441e-04)
-- `A11|td_mismatch|analyst/canary/calls/2026-11-12_W2b.json|cac3b631599f4dea36f7626ff5b8abef5f2903a4` (outside 1e-3: XAUUSD 2026-11-12T15:00:00Z c td=3854.59074 dk=3860.196 rel=1.452e-03; XAUUSD 2026-11-12T15:30:00Z o td=3855.62887 dk=3860.2175 rel=1.189e-03; within: XAUUSD 2026-11-12T14:00:00Z o td=3890.19215 dk=3890.141 rel=1.315e-05; XAUUSD 2026-11-12T14:00:00Z c td=3905.13703 dk=3903.565 rel=4.027e-04; XAUUSD 2026-11-12T14:30:00Z o td=3905.79977 dk=3903.617 rel=5.592e-04; XAUUSD 2026-11-12T14:30:00Z c td=3871.20075 dk=3870.1 rel=2.844e-04; XAUUSD 2026-11-12T15:00:00Z o td=3870.58611 dk=3869.97 rel=1.592e-04; XAUUSD 2026-11-12T15:30:00Z c td=3868.78612 dk=3870.1675 rel=3.569e-04)
-- `A11|td_mismatch|analyst/canary/calls/2026-11-12_X1730.json|cac3b631599f4dea36f7626ff5b8abef5f2903a4` (outside 1e-3: XAUUSD 2026-11-12T15:00:00Z c td=3854.59074 dk=3860.196 rel=1.452e-03; XAUUSD 2026-11-12T15:30:00Z o td=3855.62887 dk=3860.2175 rel=1.189e-03; within: XAUUSD 2026-11-12T14:00:00Z o td=3890.19215 dk=3890.141 rel=1.315e-05; XAUUSD 2026-11-12T14:00:00Z c td=3905.13703 dk=3903.565 rel=4.027e-04; XAUUSD 2026-11-12T14:30:00Z o td=3905.79977 dk=3903.617 rel=5.592e-04; XAUUSD 2026-11-12T14:30:00Z c td=3871.20075 dk=3870.1 rel=2.844e-04; XAUUSD 2026-11-12T15:00:00Z o td=3870.58611 dk=3869.97 rel=1.592e-04; XAUUSD 2026-11-12T15:30:00Z c td=3868.78612 dk=3870.1675 rel=3.569e-04; XAUUSD 2026-11-12T16:00:00Z o td=3868.06466 dk=3870.194 rel=5.502e-04; XAUUSD 2026-11-12T16:00:00Z c td=3875.69398 dk=3874.275 rel=3.663e-04; XAUUSD 2026-11-12T16:30:00Z o td=3875.42776 dk=3874.27 rel=2.988e-04; XAUUSD 2026-11-12T16:30:00Z c td=3879.25439 dk=3879.204 rel=1.299e-05; XAUUSD 2026-11-12T17:00:00Z o td=3879.47561 dk=3879.2195 rel=6.602e-05; XAUUSD 2026-11-12T17:00:00Z c td=3871.33017 dk=3873.0635 rel=4.475e-04)
+- none
 
-## Adjudicated WARNINGs (175)
+## Adjudicated WARNINGs (178)
 
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-02_T1500_1.json|172d3be7f38f8a3ed966d4cff40d29c59d7274e6`
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0400_1.json|ee5bbb5557be0da2c0ddd95a273e6fa5cb692d03`
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-03_T0830_1.json|9ae12d19765b63dce9f4e7658ec242d3ac94be69`
 - `A11|td_mismatch|analyst/canary/attempts/2026-11-04_T0830_1.json|bbcdf88435fd170fe16582de03eab6c60aadc6aa`
+- `A11|td_mismatch|analyst/canary/attempts/2026-11-12_T1330_1.json|c40ad6f9a8c513a8359d0f64246d6bbcef80ab95`
 - `A11|td_mismatch|analyst/canary/calls/2026-10-26_W1.json|43bbb42e58a4dd66e768a86e84b32a335c6eb79c`
 - `A11|td_mismatch|analyst/canary/calls/2026-10-26_W2.json|e6008594960ece17a99cd9837c68c4782900b8da`
 - `A11|td_mismatch|analyst/canary/calls/2026-10-27_W2.json|80cbca5d9e610f5235c4c6dbecf2132d41881c26`
@@ -56,6 +55,8 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - `A11|td_mismatch|analyst/canary/calls/2026-11-05_T2300.json|f8ea7f9853b9b722b8a993f40c69991cf54a56d8`
 - `A11|td_mismatch|analyst/canary/calls/2026-11-05_W1.json|0d773ca669638f219bd5bd7e9d0a602f20757330`
 - `A11|td_mismatch|analyst/canary/calls/2026-11-05_W1b.json|0d773ca669638f219bd5bd7e9d0a602f20757330`
+- `A11|td_mismatch|analyst/canary/calls/2026-11-12_W2b.json|cac3b631599f4dea36f7626ff5b8abef5f2903a4`
+- `A11|td_mismatch|analyst/canary/calls/2026-11-12_X1730.json|cac3b631599f4dea36f7626ff5b8abef5f2903a4`
 - `A12|probe_incomplete|analyst/canary/calls/2026-11-03_W2b.json|985c6a90adaa1012568d0afba6c4d545fca100ea`
 - `A12|probe_incomplete|analyst/canary/calls/2026-11-05_W2b.json|ce22bf8b9740e7db82243bbe32dec424e2fe58f0`
 - `A13|guard_denied_benign|analyst/runs/2026-W44.json|cse_0117UL6f45qWcGmYWLXvVHBf#1`
@@ -214,20 +215,20 @@ Built blind from ANALYST_V1_PREREG.md section 8 (DRAFT v0.6) and IMPLEMENTATION_
 - head: cac3b631599f4dea36f7626ff5b8abef5f2903a4
 - inbox_activity_entries: 567
 - inbox_activity_oldest_listed_utc: 2026-10-23T09:52:15Z
-- inbox_last_complete_read_utc: 2026-11-12T22:42:47Z
+- inbox_last_complete_read_utc: 2026-11-12T23:52:45Z
 - live_expected_windows: 0
 - live_terminals: 0
-- m30_compared: 22
-- m30r_compared: 19
+- m30_compared: 25
+- m30r_compared: 24
 - probe_creations_max_day: 27
 - probe_records: 79
 - routine_config_versions_checked: 5
 - run_log_calls_scanned: 778
 - run_logs_scanned: 83
 - settled_checked: 15
-- td_compared: 5202
+- td_compared: 5214
 - td_outside: 60
-- td_pending: 12
+- td_pending: 0
 - td_unchecked: 0
 - witness_comments: 267
 - witness_files: 267
