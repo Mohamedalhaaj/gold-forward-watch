@@ -4,7 +4,7 @@
 
 **الحكم: تحذير** · السبب: سعر مصدر مستقل يخالف البيانات
 
-- وقت الفحص: 2026-11-13T20:27:55Z
+- وقت الفحص: 2026-11-14T10:28:08Z
 - الفحوص السليمة 8 من 9
 
 | الفحص | ما يتحقق منه | النتيجة |
@@ -26,16 +26,16 @@
 ## Evidence
 
 - Verdict: **WARNING** (reason code `j9_price`), checks ok 8 of 9
-- HEAD checked: `efd074c973e43baa29bf5a8eeff2be0e78803a4c`
+- HEAD checked: `7da9bbc48718546a3f24c61ab972748b27421a70`
 - Judge code sha256 (live manifest): `7f61f148af6d424626748434ba4aa1f49dc9a1d009bdb9d523d4d41920327c72`
 - Binding spec: xauusd-quant `research/system/SYSTEM_V2_PREREG.md` §3 with Amendments B1 item 2 and B2 items 5-7, SYSTEM_V1_PREREG.md with Amendment A1, research/system/IMPLEMENTATION_REGISTER.md
 
-- judge run 2026-11-13T20:27:55Z; data root repo
+- judge run 2026-11-14T10:28:08Z; data root repo
 
 ### J1: OK
 
-- days new since the last judge run: 0 (checked now: 0); older days sampled: 20; sides compared equal: 15; revised: 0; known revisions: 0; unverified downloads: 25
-- unverified: 25 downloads failed (unverified, not a mismatch)
+- days new since the last judge run: 1 (checked now: 1); older days sampled: 20; sides compared equal: 9; revised: 0; known revisions: 0; unverified downloads: 33
+- unverified: 33 downloads failed (unverified, not a mismatch)
 
 ### J2: OK
 
@@ -53,12 +53,12 @@
 
 ### J3: OK
 
-- v1 raw files checked against their days.csv rows: 146 (0 problems)
+- v1 raw files checked against their days.csv rows: 148 (0 problems)
 - lookback raw files checked against their days.csv rows: 486 (0 problems)
-- raw folders: 27 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
-- v1 append-only files: 15 files, 47 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
-- v2 append-only files: 11 files, 13 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
-- judge records: 9 append-only files, 56 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
+- raw folders: 28 commits of the whole history checked for a modified, deleted, renamed or retyped raw file (0 problems)
+- v1 append-only files: 15 files, 48 commits since v1 freeze 6cd6d57ef62d checked (0 problems)
+- v2 append-only files: 11 files, 14 commits since v2 freeze 7a5ce4d22da2 checked (0 problems)
+- judge records: 9 append-only files, 57 commits since judge-v1-freeze c2f43d043f8b checked (0 problems)
 
 ### J4: OK
 
@@ -68,35 +68,35 @@
 
 ### J5: OK
 
-- recomputed: {'forecasts': {'store_rows': 1220, 'compared': 1220}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 208}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 9, 'trades': 11}, 'v2': {'days': 9, 'checked_days': ['2026-11-03', '2026-11-04', '2026-11-06'], 'trades': 3}, 'summary': {'asof': '2026-11-13T17:17:25Z'}, 'status': {'asof': '2026-11-13T17:14:34Z', 'lines': 28}}
-- lab v2 days recomputed this run: 3 (new 0, rotating sample 3); new adjudication rows: 0
+- recomputed: {'forecasts': {'store_rows': 1242, 'compared': 1242}, 'l1': {'blocks': 1, 'green_ok': 1, 'trials': 230}, 'l3': {'months': 0, 'rows': 0}, 'v1': {'days': 10, 'trades': 12}, 'v2': {'days': 10, 'checked_days': ['2026-11-02', '2026-11-10', '2026-11-11', '2026-11-13'], 'trades': 7}, 'summary': {'asof': '2026-11-14T10:27:35Z'}, 'status': {'asof': '2026-11-14T10:26:45Z', 'lines': 28}}
+- lab v2 days recomputed this run: 4 (new 1, rotating sample 3); new adjudication rows: 0
 
 ### J6: OK
 
-- (a) complete weeks 1, hour trials 115, pooled hit rate 0.1261 (95% CI nan .. nan)
-- (b) QLIKE hours 208; DM stat 1.554; one-sided p (forecast worse) 0.9399
-- (c) hit rate green 0.1186, red 0.3333
-- (d) v1 C1: 9 trades, net -48.00 $/oz, mean -5.334
+- (a) complete weeks 2, hour trials 230, pooled hit rate 0.1152 (95% CI 0.0939 .. 0.1365)
+- (b) QLIKE hours 230; DM stat 1.253; one-sided p (forecast worse) 0.8949
+- (c) hit rate green 0.1145, red 0.3333
+- (d) v1 C1: 10 trades, net -53.14 $/oz, mean -5.314
 - (d) v1 S1: 1 trades, net -0.15 $/oz, mean -0.150
 - (d) v1 S1R: 1 trades, net -0.92 $/oz, mean -0.925
-- (d) v2 S2: 10 trades, net 104.09 $/oz, mean 10.409
+- (d) v2 S2: 12 trades, net 107.47 $/oz, mean 8.956
 - (d) v2 S3: 2 trades, net 30.45 $/oz, mean 15.225
 - (d) v2 S4: 4 trades, net 3.42 $/oz, mean 0.856
 - (d) v2 S5: 2 trades, net 10.24 $/oz, mean 5.121
 
 ### J7: OK
 
-- latest commit of reports/forward_site/system/VolMapSystem.csv: 5abee84cc5ff at 2026-11-13T17:17:22Z
+- latest commit of reports/forward_site/system/VolMapSystem.csv: 6cf1c464d57f at 2026-11-14T10:27:31Z
 - age 0 trading day(s) (limit 2)
 - STATUS.md lists no operational failure
 
 ### J8: OK
 
-- the previous VERDICTS.csv row head 01c3bdfa84f3 is an ancestor of HEAD efd074c973e4
-- the published VolMapJudge.csv head 01c3bdfa84f3 is an ancestor of HEAD efd074c973e4
-- the deployed VolMapJudge.csv head 01c3bdfa84f3 is an ancestor of HEAD efd074c973e4
+- the previous VERDICTS.csv row head efd074c973e4 is an ancestor of HEAD 7da9bbc48718
+- the published VolMapJudge.csv head efd074c973e4 is an ancestor of HEAD 7da9bbc48718
+- the deployed VolMapJudge.csv head efd074c973e4 is an ancestor of HEAD 7da9bbc48718
 
 ### J9: WARNING
 
-- 2026-11-12 already checked (exceeds); no request sent
-- the two most recent checked days 2026-11-11 and 2026-11-12 both exceed the limits (median > $0.50 or max > $5)
+- 2026-11-13: exceeds; credits 1
+- the two most recent checked days 2026-11-12 and 2026-11-13 both exceed the limits (median > $0.50 or max > $5)
