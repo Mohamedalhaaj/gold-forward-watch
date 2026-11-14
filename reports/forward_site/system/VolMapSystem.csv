@@ -1,8 +1,8 @@
 key,value
 version,1
-asof_utc,2026-11-13T17:14:34Z
+asof_utc,2026-11-14T10:26:45Z
 l1_green_ok,1
-l1_asof,2026-11-13
+l1_asof,2026-11-14
 l3_asof,-
 l3_m_CPI,1.0000
 l3_n_CPI,0
@@ -19,12 +19,12 @@ l3_n_N_LONDON,0
 l3_m_N_NY,1.0000
 l3_n_N_NY,0
 lab_state,RUNNING
-lab_days,9
+lab_days,10
 lab_n_paper,1
 lab_n_live,0
 lab_best_progress,0.012
 lab2_state,RUNNING
-lab2_days,8
+lab2_days,9
 lab2_n_paper,4
 lab2_best_progress,0.002
 end,29
